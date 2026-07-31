@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alpine-llm-gateway"
+version = "0.1.0"
+description = "Dependency-free LLM gateway for Alpine Linux sandboxes"
+requires-python = ">=3.11"
+
+[project.scripts]
+llmctl = "alpine_llm.cli:main"
+llm-gatewayd = "alpine_llm.cli:main"
