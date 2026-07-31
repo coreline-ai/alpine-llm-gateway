@@ -14,16 +14,19 @@
 - Host Bridge session token과 OAuth Provider token의 분리
 - OpenAI-compatible completion HTTP adapter
 - Anthropic Messages 및 Gemini generateContent protocol adapter
+- OpenAI-compatible, Anthropic, Gemini SSE event normalization
+- Claude/Gemini inline image와 function tool request/response 변환
 - ID token의 표시용 account/plan/email claim metadata adapter
-- Host Bridge bounded concurrency, overload 429, request ID
+- Host Bridge bounded concurrency, overload 429, request timeout, request ID와 누적 지표
+- retry/backoff/`Retry-After`, circuit breaker와 closed-schema 운영 event
 
 ## Provider별 후속 작업
 
 | Provider 유형 | 현재 조합 가능한 설정 | 추가 구현이 필요한 부분 |
 |---|---|---|
-| Claude/Anthropic 계열 | JSON token request, state echo, Messages request/response adapter, version/beta header | 공식 client registration, 실제 endpoint/scope/account 검증 |
+| Claude/Anthropic 계열 | JSON token request, state echo, Messages request/response/SSE adapter, image/tool 변환, version/beta header | 공식 client registration, 실제 endpoint/scope/account 검증 |
 | OpenAI/Codex 계열 | JSON token request, extra authorization params, ID token account/plan metadata | account header 규칙, 공식 client registration과 실제 endpoint 검증 |
-| Gemini/Google 계열 | form token request, BODY client auth, generateContent adapter, offline/consent params | userinfo 조회, GCP project discovery/onboarding 및 실제 계정 검증 |
+| Gemini/Google 계열 | form token request, BODY client auth, generateContent/SSE adapter, inlineData/function 변환, offline/consent params | userinfo 조회, GCP project discovery/onboarding 및 실제 계정 검증 |
 | Kimi 계열 | refresh coordinator와 encrypted token store 재사용 가능 | Authorization Code가 아닌 RFC 8628 Device Authorization Grant, polling interval/`slow_down`, device identity 구현 |
 | xAI 계열 | request adapter로 nonce/challenge echo 가능, token metadata 저장 가능 | OIDC discovery, `*.x.ai` endpoint allowlist 검증, nonce 검증, callback CORS preflight, ID token claim adapter |
 
@@ -38,10 +41,10 @@
 ## 다음 구현 우선순위
 
 1. 실제 Provider 하나의 client registration과 physical-device E2E
-2. upstream token delta를 Host Bridge/Alpine까지 전달하는 SSE streaming
-3. Gemini userinfo/GCP project discovery
-4. 앱 process death와 Keystore invalidation instrumentation test
-5. Kimi device flow 또는 xAI OIDC discovery
+2. Gemini userinfo/GCP project discovery
+3. 앱 process death와 Keystore invalidation instrumentation test를 emulator/실기기에서 실행
+4. Kimi device flow 또는 xAI OIDC discovery
+5. 실제 Provider tool/image/stream physical-device E2E
 
 ## 배포 전 필수 검증
 

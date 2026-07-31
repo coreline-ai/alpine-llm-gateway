@@ -1,8 +1,16 @@
 package dev.alpine.llm
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.job
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
@@ -18,7 +26,22 @@ data class ProviderHttpRequest(
 data class ProviderHttpResponse(
     val statusCode: Int,
     val bodyJson: String,
+    val headers: Map<String, String> = emptyMap(),
 )
+
+data class ProviderSseEvent(
+    val event: String?,
+    val data: String,
+)
+
+data class ProviderHttpStreamResponse(
+    val statusCode: Int,
+    val events: Flow<ProviderSseEvent>,
+    val errorBodyJson: String = "",
+    val headers: Map<String, String> = emptyMap(),
+)
+
+class ProviderStreamException(message: String) : Exception(message)
 
 /**
  * Provider adapters transform protocol data only. They never receive the
@@ -31,8 +54,18 @@ interface OAuthProviderHttpAdapter {
         HostLlmResult(response.bodyJson, response.statusCode)
 }
 
+interface OAuthStreamingProviderHttpAdapter : OAuthProviderHttpAdapter {
+    fun createStreamRequest(requestJson: String): ProviderHttpRequest
+
+    fun createStreamEvent(event: ProviderSseEvent): HostLlmStreamEvent?
+}
+
 fun interface OAuthHttpTransport {
     suspend fun execute(request: ProviderHttpRequest): ProviderHttpResponse
+}
+
+fun interface OAuthStreamingHttpTransport {
+    suspend fun executeStream(request: ProviderHttpRequest): ProviderHttpStreamResponse
 }
 
 /**
@@ -41,20 +74,57 @@ fun interface OAuthHttpTransport {
  */
 class OAuthHttpLlmBridge(
     private val adapter: OAuthProviderHttpAdapter,
+    private val streamingTransport: OAuthStreamingHttpTransport? = null,
     private val transport: OAuthHttpTransport = UrlConnectionOAuthHttpTransport(),
 ) : HostLlmBridge {
     override suspend fun complete(
         requestJson: String,
         credential: OAuthCredential,
     ): HostLlmResult {
-        val adapted = adapter.createRequest(requestJson)
-        require(adapted.headers.keys.none { it.equals(AUTHORIZATION, ignoreCase = true) }) {
+        val adapted = authenticated(adapter.createRequest(requestJson), credential)
+        return adapter.createResult(transport.execute(adapted))
+    }
+
+    override suspend fun stream(
+        requestJson: String,
+        credential: OAuthCredential,
+    ): HostLlmStreamResult {
+        val streamAdapter = adapter as? OAuthStreamingProviderHttpAdapter
+            ?: return super<HostLlmBridge>.stream(requestJson, credential)
+        val streamTransport = streamingTransport ?: transport as? OAuthStreamingHttpTransport
+            ?: return super<HostLlmBridge>.stream(requestJson, credential)
+        val adapted = authenticated(streamAdapter.createStreamRequest(requestJson), credential)
+        val response = streamTransport.executeStream(adapted)
+        if (response.statusCode !in 200..299) {
+            val mapped = adapter.createResult(
+                ProviderHttpResponse(
+                    statusCode = response.statusCode,
+                    bodyJson = response.errorBodyJson,
+                    headers = response.headers,
+                ),
+            )
+            return HostLlmStreamResult(
+                statusCode = mapped.statusCode,
+                errorBodyJson = mapped.bodyJson,
+            )
+        }
+        return HostLlmStreamResult(
+            statusCode = response.statusCode,
+            events = response.events.mapNotNull(streamAdapter::createStreamEvent),
+        )
+    }
+
+    private fun authenticated(
+        request: ProviderHttpRequest,
+        credential: OAuthCredential,
+    ): ProviderHttpRequest {
+        require(request.headers.keys.none { it.equals(AUTHORIZATION, ignoreCase = true) }) {
             "Provider adapter must not set Authorization"
         }
-        val authenticated = adapted.copy(
-            headers = adapted.headers + (AUTHORIZATION to "${credential.tokenType} ${credential.accessToken}"),
+        return request.copy(
+            headers = request.headers +
+                (AUTHORIZATION to "${credential.tokenType} ${credential.accessToken}"),
         )
-        return adapter.createResult(transport.execute(authenticated))
     }
 
     private companion object {
@@ -69,21 +139,49 @@ class OAuthHttpLlmBridge(
 class OpenAiCompatibleOAuthAdapter(
     private val completionEndpoint: String,
     private val extraHeaders: Map<String, String> = emptyMap(),
-) : OAuthProviderHttpAdapter {
+) : OAuthStreamingProviderHttpAdapter {
     init {
         require(completionEndpoint.startsWith("https://")) {
             "completionEndpoint must use HTTPS"
         }
-        require(extraHeaders.keys.none { it.equals("Authorization", ignoreCase = true) }) {
-            "extraHeaders must not contain Authorization"
+        ProviderAdapterJson.requireSafeHeaders(extraHeaders)
+    }
+
+    override fun createRequest(requestJson: String): ProviderHttpRequest =
+        request(requestJson, stream = false)
+
+    override fun createStreamRequest(requestJson: String): ProviderHttpRequest =
+        request(requestJson, stream = true)
+
+    override fun createStreamEvent(event: ProviderSseEvent): HostLlmStreamEvent? {
+        if (event.data == "[DONE]") return null
+        return runCatching {
+            val json = JSONObject(event.data)
+            val choice = json.optJSONArray("choices")?.optJSONObject(0)
+            val delta = choice?.optJSONObject("delta")
+            val text = delta?.optString("content").orEmpty()
+            val toolCalls = delta?.optJSONArray("tool_calls")
+            val finishReason = choice?.optString("finish_reason")
+                ?.takeIf { it.isNotBlank() && it != "null" }
+            val usage = json.optJSONObject("usage")
+            if (text.isEmpty() && finishReason == null && usage == null &&
+                toolCalls == null
+            ) {
+                null
+            } else {
+                HostLlmStreamEvent.delta(text, finishReason, usage, toolCalls)
+            }
+        }.getOrElse {
+            throw ProviderStreamException("OpenAI-compatible Provider returned an invalid SSE event")
         }
     }
 
-    override fun createRequest(requestJson: String): ProviderHttpRequest {
+    private fun request(requestJson: String, stream: Boolean): ProviderHttpRequest {
         val body = runCatching { JSONObject(requestJson) }.getOrElse {
             throw HostLlmRequestException("requestJson must be a JSON object")
         }
-        body.put("stream", false)
+        ProviderAdapterJson.validateOpenAiExtensions(body)
+        body.put("stream", stream)
         return ProviderHttpRequest(
             url = completionEndpoint,
             bodyJson = body.toString(),
@@ -96,33 +194,25 @@ class UrlConnectionOAuthHttpTransport(
     private val connectTimeoutMs: Int = 15_000,
     private val readTimeoutMs: Int = 180_000,
     private val maxResponseBytes: Int = 8 * 1024 * 1024,
-) : OAuthHttpTransport {
+    private val maxStreamEventBytes: Int = 1 * 1024 * 1024,
+    private val maxStreamBytes: Long = 32L * 1024 * 1024,
+) : OAuthHttpTransport, OAuthStreamingHttpTransport {
     init {
         require(connectTimeoutMs > 0) { "connectTimeoutMs must be positive" }
         require(readTimeoutMs > 0) { "readTimeoutMs must be positive" }
         require(maxResponseBytes > 0) { "maxResponseBytes must be positive" }
+        require(maxStreamEventBytes > 0) { "maxStreamEventBytes must be positive" }
+        require(maxStreamBytes > 0) { "maxStreamBytes must be positive" }
     }
 
     override suspend fun execute(request: ProviderHttpRequest): ProviderHttpResponse =
         withContext(Dispatchers.IO) {
-            val url = URL(request.url)
-            require(url.protocol == "https") { "OAuth Provider requests must use HTTPS" }
-            val connection = url.openConnection() as HttpURLConnection
+            val connection = configure(request, accept = "application/json")
+            val cancellation = currentCoroutineContext().job.invokeOnCompletion {
+                connection.disconnect()
+            }
             try {
-                connection.requestMethod = "POST"
-                connection.doOutput = true
-                connection.connectTimeout = connectTimeoutMs
-                connection.readTimeout = readTimeoutMs
-                connection.setRequestProperty("Content-Type", "application/json")
-                connection.setRequestProperty("Accept", "application/json")
-                request.headers.forEach { (name, value) ->
-                    require(name.none { it == '\r' || it == '\n' }) { "invalid HTTP header name" }
-                    require(value.none { it == '\r' || it == '\n' }) { "invalid HTTP header value" }
-                    connection.setRequestProperty(name, value)
-                }
-                connection.outputStream.use {
-                    it.write(request.bodyJson.toByteArray(StandardCharsets.UTF_8))
-                }
+                writeBody(connection, request.bodyJson)
                 val status = connection.responseCode
                 val stream = if (status in 200..299) {
                     connection.inputStream
@@ -132,11 +222,96 @@ class UrlConnectionOAuthHttpTransport(
                 ProviderHttpResponse(
                     statusCode = status,
                     bodyJson = stream?.use { readLimited(it, maxResponseBytes) }.orEmpty(),
+                    headers = responseHeaders(connection),
                 )
             } finally {
+                cancellation.dispose()
                 connection.disconnect()
             }
         }
+
+    override suspend fun executeStream(
+        request: ProviderHttpRequest,
+    ): ProviderHttpStreamResponse = withContext(Dispatchers.IO) {
+        val connection = configure(request, accept = "text/event-stream")
+        val openingCancellation = currentCoroutineContext().job.invokeOnCompletion {
+            connection.disconnect()
+        }
+        try {
+            writeBody(connection, request.bodyJson)
+            val status = connection.responseCode
+            val headers = responseHeaders(connection)
+            if (status !in 200..299) {
+                val body = connection.errorStream
+                    ?.use { readLimited(it, maxResponseBytes) }
+                    .orEmpty()
+                openingCancellation.dispose()
+                connection.disconnect()
+                return@withContext ProviderHttpStreamResponse(
+                    statusCode = status,
+                    events = flow { },
+                    errorBodyJson = body,
+                    headers = headers,
+                )
+            }
+            val input = connection.inputStream
+            openingCancellation.dispose()
+            val events = flow {
+                val cancellation = currentCoroutineContext().job.invokeOnCompletion {
+                    connection.disconnect()
+                }
+                try {
+                    SseEventParser.parse(
+                        input = input,
+                        maxEventBytes = maxStreamEventBytes,
+                        maxTotalBytes = maxStreamBytes,
+                    ).collect { emit(it) }
+                } finally {
+                    cancellation.dispose()
+                    runCatching { input.close() }
+                    connection.disconnect()
+                }
+            }.flowOn(Dispatchers.IO)
+            ProviderHttpStreamResponse(status, events, headers = headers)
+        } catch (error: Exception) {
+            openingCancellation.dispose()
+            connection.disconnect()
+            throw error
+        }
+    }
+
+    private fun configure(request: ProviderHttpRequest, accept: String): HttpURLConnection {
+        val url = URL(request.url)
+        require(url.protocol == "https") { "OAuth Provider requests must use HTTPS" }
+        return (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            doOutput = true
+            connectTimeout = connectTimeoutMs
+            readTimeout = readTimeoutMs
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", accept)
+            request.headers.forEach { (name, value) ->
+                require(name.none { it == '\r' || it == '\n' }) {
+                    "invalid HTTP header name"
+                }
+                require(value.none { it == '\r' || it == '\n' }) {
+                    "invalid HTTP header value"
+                }
+                setRequestProperty(name, value)
+            }
+        }
+    }
+
+    private fun writeBody(connection: HttpURLConnection, bodyJson: String) {
+        connection.outputStream.use {
+            it.write(bodyJson.toByteArray(StandardCharsets.UTF_8))
+        }
+    }
+
+    private fun responseHeaders(connection: HttpURLConnection): Map<String, String> =
+        SAFE_RESPONSE_HEADERS.mapNotNull { name ->
+            connection.getHeaderField(name)?.let { name.lowercase() to it }
+        }.toMap()
 
     private fun readLimited(input: InputStream, limit: Int): String {
         val output = ByteArrayOutputStream()
@@ -150,5 +325,91 @@ class UrlConnectionOAuthHttpTransport(
             output.write(buffer, 0, count)
         }
         return output.toString(StandardCharsets.UTF_8.name())
+    }
+
+    private companion object {
+        val SAFE_RESPONSE_HEADERS = listOf("Retry-After", "Content-Type", "X-Request-Id")
+    }
+}
+
+internal object SseEventParser {
+    fun parse(
+        input: InputStream,
+        maxEventBytes: Int,
+        maxTotalBytes: Long,
+    ): Flow<ProviderSseEvent> = flow {
+        val buffered = BufferedInputStream(input)
+        var totalBytes = 0L
+        var eventName: String? = null
+        var eventBytes = 0
+        val dataLines = mutableListOf<String>()
+
+        suspend fun emitPending() {
+            if (dataLines.isNotEmpty()) {
+                emit(ProviderSseEvent(eventName, dataLines.joinToString("\n")))
+            }
+            eventName = null
+            eventBytes = 0
+            dataLines.clear()
+        }
+
+        while (true) {
+            currentCoroutineContext().ensureActive()
+            val line = readLine(buffered, maxEventBytes) { consumed ->
+                totalBytes += consumed
+                if (totalBytes > maxTotalBytes) {
+                    throw ProviderStreamException("Provider SSE response exceeds limit")
+                }
+            }
+            if (line == null) {
+                emitPending()
+                break
+            }
+            if (line.isEmpty()) {
+                emitPending()
+                continue
+            }
+            if (line.startsWith(":")) continue
+
+            val separator = line.indexOf(':')
+            val field = if (separator >= 0) line.substring(0, separator) else line
+            val rawValue = if (separator >= 0) line.substring(separator + 1) else ""
+            val value = rawValue.removePrefix(" ")
+            when (field) {
+                "event" -> eventName = value
+                "data" -> {
+                    eventBytes += value.toByteArray(StandardCharsets.UTF_8).size
+                    if (eventBytes > maxEventBytes) {
+                        throw ProviderStreamException("Provider SSE event exceeds limit")
+                    }
+                    dataLines += value
+                }
+            }
+        }
+    }
+
+    private fun readLine(
+        input: InputStream,
+        maxBytes: Int,
+        consumed: (Long) -> Unit,
+    ): String? {
+        val output = ByteArrayOutputStream()
+        while (true) {
+            val value = input.read()
+            if (value < 0) {
+                return if (output.size() == 0) null else decodeLine(output.toByteArray())
+            }
+            consumed(1)
+            if (value == '\n'.code) return decodeLine(output.toByteArray())
+            output.write(value)
+            if (output.size() > maxBytes) {
+                throw ProviderStreamException("Provider SSE line exceeds limit")
+            }
+        }
+    }
+
+    private fun decodeLine(bytes: ByteArray): String {
+        val length = if (bytes.lastOrNull() == '\r'.code.toByte()) bytes.size - 1 else bytes.size
+        return String(bytes, 0, length, StandardCharsets.UTF_8)
     }
 }

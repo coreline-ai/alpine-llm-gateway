@@ -3,6 +3,7 @@ package dev.alpine.llm
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.After
@@ -191,6 +192,46 @@ class HostBridgeServerTest {
     }
 
     @Test
+    fun providerTimeoutReturns504AndReleasesPermit() {
+        val calls = AtomicInteger(0)
+        val endpoint = startServer(
+            maxConcurrentRequests = 1,
+            requestTimeoutMs = 25,
+        ) {
+            if (calls.incrementAndGet() == 1) delay(250)
+            HostLlmResult("{}")
+        }
+
+        val timedOut = post(endpoint.url, "{}", endpoint.sessionToken)
+        val recovered = post(endpoint.url, "{}", endpoint.sessionToken)
+
+        assertEquals(504, timedOut.status)
+        assertTrue(timedOut.body.contains("request_timeout"))
+        assertEquals(200, recovered.status)
+    }
+
+    @Test
+    fun metricsAndEventsExcludeRequestBodyAndCredential() {
+        val events = mutableListOf<GatewayEvent>()
+        val endpoint = startServer(
+            eventSink = GatewayEventSink(events::add),
+        ) {
+            HostLlmResult("{}")
+        }
+        val secretBody = """{"prompt":"body-secret-value"}"""
+
+        assertEquals(200, post(endpoint.url, secretBody, endpoint.sessionToken).status)
+        val health = JSONObject(get(endpoint.url).body)
+        val serializedEvents = events.joinToString()
+
+        assertEquals(1, health.getLong("successful_requests"))
+        assertEquals(0, health.getLong("failed_requests"))
+        assertEquals(2, events.size)
+        assertTrue(!serializedEvents.contains("body-secret-value"))
+        assertTrue(!serializedEvents.contains(endpoint.sessionToken))
+    }
+
+    @Test
     fun restartGetsFreshLimiterWhileOldRequestIsCancelled() = runBlocking<Unit> {
         val entered = CountDownLatch(1)
         val calls = AtomicInteger(0)
@@ -220,12 +261,16 @@ class HostBridgeServerTest {
         maxRequestBytes: Int = 1024,
         maxConcurrentRequests: Int = 4,
         overloadRetryAfterSeconds: Int = 1,
+        requestTimeoutMs: Long = 180_000L,
+        eventSink: GatewayEventSink = GatewayEventSink.NONE,
         executor: suspend (String) -> HostLlmResult = { HostLlmResult("{}") },
     ): HostBridgeServer.Endpoint {
         val instance = HostBridgeServer(
             maxRequestBytes = maxRequestBytes,
             maxConcurrentRequests = maxConcurrentRequests,
             overloadRetryAfterSeconds = overloadRetryAfterSeconds,
+            requestTimeoutMs = requestTimeoutMs,
+            eventSink = eventSink,
             requestExecutor = executor,
         )
         server = instance

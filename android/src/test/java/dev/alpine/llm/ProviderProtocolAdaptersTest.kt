@@ -135,17 +135,188 @@ class ProviderProtocolAdaptersTest {
     }
 
     @Test
-    fun unsupportedMessageContentFailsBeforeTransport() {
+    fun invalidMessageContentFailsBeforeTransport() {
         val adapter = AnthropicMessagesOAuthAdapter("https://api.example.com/messages")
 
         assertThrows(HostLlmRequestException::class.java) {
             adapter.createRequest(
-                """{"model":"test","messages":[{"role":"user","content":[{"type":"text","text":"x"}]}]}""",
+                """
+                {
+                  "model":"test",
+                  "messages":[{
+                    "role":"user",
+                    "content":[{"type":"image_url","image_url":{"url":"https://example.com/a.png"}}]
+                  }]
+                }
+                """.trimIndent(),
             )
         }
         assertThrows(HostLlmRequestException::class.java) {
             adapter.createRequest(
                 """{"model":"test","messages":[{"role":"user","content":"  "}]}""",
+            )
+        }
+    }
+
+    @Test
+    fun mapsInlineImageToolsCallsAndResults() {
+        val inlineImage = "data:image/png;base64,${Base64.getEncoder().encodeToString("png".toByteArray())}"
+        val requestJson = """
+            {
+              "model":"tool-model",
+              "messages":[
+                {"role":"user","content":[
+                  {"type":"text","text":"inspect"},
+                  {"type":"image_url","image_url":{"url":"$inlineImage"}}
+                ]},
+                {"role":"assistant","content":null,"tool_calls":[{
+                  "id":"call_1","type":"function",
+                  "function":{"name":"lookup","arguments":"{\"key\":\"value\"}"}
+                }]},
+                {"role":"tool","tool_call_id":"call_1","name":"lookup","content":"{\"result\":1}"}
+              ],
+              "tools":[{
+                "type":"function",
+                "function":{
+                  "name":"lookup",
+                  "description":"Lookup",
+                  "parameters":{"type":"object","properties":{"key":{"type":"string"}}}
+                }
+              }],
+              "tool_choice":{"type":"function","function":{"name":"lookup"}}
+            }
+        """.trimIndent()
+
+        val anthropic = JSONObject(
+            AnthropicMessagesOAuthAdapter("https://api.example.com/messages")
+                .createRequest(requestJson).bodyJson,
+        )
+        val userContent = anthropic.getJSONArray("messages")
+            .getJSONObject(0).getJSONArray("content")
+        assertEquals("image", userContent.getJSONObject(1).getString("type"))
+        assertEquals(
+            "tool_use",
+            anthropic.getJSONArray("messages").getJSONObject(1)
+                .getJSONArray("content").getJSONObject(0).getString("type"),
+        )
+        assertEquals(
+            "tool_result",
+            anthropic.getJSONArray("messages").getJSONObject(2)
+                .getJSONArray("content").getJSONObject(0).getString("type"),
+        )
+        assertEquals("lookup", anthropic.getJSONArray("tools").getJSONObject(0).getString("name"))
+        assertEquals("tool", anthropic.getJSONObject("tool_choice").getString("type"))
+
+        val gemini = JSONObject(
+            GeminiGenerateContentOAuthAdapter(
+                "https://api.example.com/models/{model}:generateContent",
+            ).createRequest(requestJson).bodyJson,
+        )
+        assertEquals(
+            "image/png",
+            gemini.getJSONArray("contents").getJSONObject(0)
+                .getJSONArray("parts").getJSONObject(1)
+                .getJSONObject("inlineData").getString("mimeType"),
+        )
+        assertEquals(
+            "lookup",
+            gemini.getJSONArray("contents").getJSONObject(1)
+                .getJSONArray("parts").getJSONObject(0)
+                .getJSONObject("functionCall").getString("name"),
+        )
+        assertEquals(
+            "lookup",
+            gemini.getJSONArray("contents").getJSONObject(2)
+                .getJSONArray("parts").getJSONObject(0)
+                .getJSONObject("functionResponse").getString("name"),
+        )
+        assertEquals(
+            "ANY",
+            gemini.getJSONObject("toolConfig").getJSONObject("functionCallingConfig")
+                .getString("mode"),
+        )
+    }
+
+    @Test
+    fun normalizesProviderToolCalls() {
+        val anthropic = AnthropicMessagesOAuthAdapter("https://api.example.com/messages")
+            .createResult(
+                ProviderHttpResponse(
+                    200,
+                    """
+                    {
+                      "id":"m1","model":"claude","stop_reason":"tool_use",
+                      "content":[{"type":"tool_use","id":"call_1","name":"lookup","input":{"q":"x"}}],
+                      "usage":{"input_tokens":1,"output_tokens":2}
+                    }
+                    """.trimIndent(),
+                ),
+            )
+        val anthropicCall = JSONObject(anthropic.bodyJson)
+            .getJSONArray("choices").getJSONObject(0)
+            .getJSONObject("message").getJSONArray("tool_calls").getJSONObject(0)
+        assertEquals("lookup", anthropicCall.getJSONObject("function").getString("name"))
+        assertEquals("""{"q":"x"}""", anthropicCall.getJSONObject("function").getString("arguments"))
+
+        val gemini = GeminiGenerateContentOAuthAdapter(
+            "https://api.example.com/models/{model}:generateContent",
+        ).createResult(
+            ProviderHttpResponse(
+                200,
+                """
+                {
+                  "responseId":"r1","modelVersion":"gemini",
+                  "candidates":[{
+                    "content":{"parts":[{"functionCall":{"name":"lookup","args":{"q":"x"}}}]},
+                    "finishReason":"STOP"
+                  }]
+                }
+                """.trimIndent(),
+            ),
+        )
+        val geminiCall = JSONObject(gemini.bodyJson)
+            .getJSONArray("choices").getJSONObject(0)
+            .getJSONObject("message").getJSONArray("tool_calls").getJSONObject(0)
+        assertEquals("lookup", geminiCall.getJSONObject("function").getString("name"))
+    }
+
+    @Test
+    fun rejectsMalformedToolArgumentsAndOversizedInlineImage() {
+        val adapter = GeminiGenerateContentOAuthAdapter(
+            "https://api.example.com/models/{model}:generateContent",
+        )
+        assertThrows(HostLlmRequestException::class.java) {
+            adapter.createRequest(
+                """
+                {
+                  "model":"m",
+                  "messages":[{
+                    "role":"assistant","content":null,
+                    "tool_calls":[{
+                      "id":"c","type":"function",
+                      "function":{"name":"lookup","arguments":"not-json"}
+                    }]
+                  }]
+                }
+                """.trimIndent(),
+            )
+        }
+
+        val large = Base64.getEncoder().encodeToString(ByteArray(5 * 1024 * 1024 + 1))
+        assertThrows(HostLlmRequestException::class.java) {
+            adapter.createRequest(
+                """
+                {
+                  "model":"m",
+                  "messages":[{
+                    "role":"user",
+                    "content":[{
+                      "type":"image_url",
+                      "image_url":{"url":"data:image/png;base64,$large"}
+                    }]
+                  }]
+                }
+                """.trimIndent(),
             )
         }
     }

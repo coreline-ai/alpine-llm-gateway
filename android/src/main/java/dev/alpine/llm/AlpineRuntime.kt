@@ -1,9 +1,11 @@
 package dev.alpine.llm
 
 import android.content.Context
+import android.os.Build
 import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.nio.file.Files
@@ -31,6 +33,9 @@ class AlpineRuntime(
         val rootfsAsset: String = "alpine-rootfs.tar.gz",
         val prootAsset: String = "proot-aarch64",
         val rootfsVersion: String = "v1",
+        val rootfsSha256: String? = null,
+        val prootSha256: String? = null,
+        val runtimeAssets: List<AlpineRuntimeAssetSet> = emptyList(),
         val gatewayCommand: List<String> = listOf(
             "/usr/bin/python3",
             "-m",
@@ -40,14 +45,24 @@ class AlpineRuntime(
             "/etc/alpine-llm/config.json",
         ),
         val maxOutputBytes: Int = 2 * 1024 * 1024,
+        val maxRootfsArchiveBytes: Long = 256L * 1024 * 1024,
         val maxRootfsBytes: Long = 512L * 1024 * 1024,
         val maxRootfsEntries: Int = 100_000,
+        val maxProotBytes: Long = 64L * 1024 * 1024,
     ) {
         init {
+            require(rootfsAsset.isNotBlank()) { "rootfsAsset must not be blank" }
+            require(prootAsset.isNotBlank()) { "prootAsset must not be blank" }
             require(rootfsVersion.isNotBlank()) { "rootfsVersion must not be blank" }
+            rootfsSha256?.let { RuntimeAssetIntegrity.requireSha256(it, "rootfsSha256") }
+            prootSha256?.let { RuntimeAssetIntegrity.requireSha256(it, "prootSha256") }
             require(maxOutputBytes > 0) { "maxOutputBytes must be positive" }
+            require(maxRootfsArchiveBytes > 0) {
+                "maxRootfsArchiveBytes must be positive"
+            }
             require(maxRootfsBytes > 0) { "maxRootfsBytes must be positive" }
             require(maxRootfsEntries > 0) { "maxRootfsEntries must be positive" }
+            require(maxProotBytes > 0) { "maxProotBytes must be positive" }
         }
     }
 
@@ -81,17 +96,34 @@ class AlpineRuntime(
         runtimeDir.mkdirs()
         workspaceDir.mkdirs()
         binDir.mkdirs()
-        if (markerFile.readTextOrNull() != config.rootfsVersion || !File(rootfsDir, "bin/sh").exists()) {
+        val assets = resolvedAssets()
+        if (markerFile.readTextOrNull() != assets.marker ||
+            !File(rootfsDir, "bin/sh").exists()
+        ) {
             val staging = File(runtimeDir, "rootfs.installing")
+            val rootfsArchive = File(runtimeDir, "rootfs.installing.tar.gz")
             staging.deleteRecursively()
+            rootfsArchive.delete()
             staging.mkdirs()
-            appContext.assets.open(config.rootfsAsset).use { input ->
-                TarGzExtractor.extract(
-                    input = input,
-                    destination = staging,
-                    maxExtractedBytes = config.maxRootfsBytes,
-                    maxEntries = config.maxRootfsEntries,
-                )
+            try {
+                appContext.assets.open(assets.rootfsAsset).use { input ->
+                    RuntimeAssetIntegrity.copyVerified(
+                        input,
+                        rootfsArchive,
+                        assets.rootfsSha256,
+                        config.maxRootfsArchiveBytes,
+                    )
+                }
+                FileInputStream(rootfsArchive).use { input ->
+                    TarGzExtractor.extract(
+                        input = input,
+                        destination = staging,
+                        maxExtractedBytes = config.maxRootfsBytes,
+                        maxEntries = config.maxRootfsEntries,
+                    )
+                }
+            } finally {
+                rootfsArchive.delete()
             }
             val backup = File(runtimeDir, "rootfs.previous")
             backup.deleteRecursively()
@@ -104,10 +136,26 @@ class AlpineRuntime(
                 throw IllegalStateException("failed to activate Alpine rootfs")
             }
             backup.deleteRecursively()
-            markerFile.writeText(config.rootfsVersion)
+            markerFile.writeText(assets.marker)
         }
-        copyExecutableAssetIfNeeded(config.prootAsset)
+        copyExecutableAssetIfNeeded(assets.prootAsset, assets.prootSha256)
         return rootfsDir
+    }
+
+    fun installationStatus(): AlpineRuntimeInstallStatus {
+        val assets = resolvedAssets()
+        val rootfsPresent = File(rootfsDir, "bin/sh").isFile
+        val prootFile = File(binDir, assets.prootAsset.substringAfterLast('/'))
+        val prootPresent = RuntimeAssetIntegrity.verify(prootFile, assets.prootSha256)
+        return AlpineRuntimeInstallStatus(
+            installed = markerFile.readTextOrNull() == assets.marker &&
+                rootfsPresent &&
+                prootPresent,
+            version = markerFile.readTextOrNull()?.substringBefore('|'),
+            abi = assets.abi,
+            rootfsPresent = rootfsPresent,
+            prootPresent = prootPresent,
+        )
     }
 
     @Synchronized
@@ -168,13 +216,13 @@ class AlpineRuntime(
         gatewayProcess = null
     }
 
-    fun isInstalled(): Boolean = markerFile.readTextOrNull() == config.rootfsVersion && File(rootfsDir, "bin/sh").exists()
+    fun isInstalled(): Boolean = installationStatus().installed
 
     private fun startInRoot(
         command: List<String>,
         extraEnvironment: Map<String, String>,
     ): Process {
-        val proot = File(binDir, config.prootAsset)
+        val proot = File(binDir, resolvedAssets().prootAsset.substringAfterLast('/'))
         val processCommand = mutableListOf(
             proot.absolutePath,
             "-0",
@@ -204,15 +252,74 @@ class AlpineRuntime(
         return process
     }
 
-    private fun copyExecutableAssetIfNeeded(assetName: String): File {
+    private fun copyExecutableAssetIfNeeded(
+        assetName: String,
+        expectedSha256: String?,
+    ): File {
         val destination = File(binDir, assetName.substringAfterLast('/'))
-        if (!destination.exists() || destination.length() == 0L) {
+        if (!RuntimeAssetIntegrity.verify(destination, expectedSha256)) {
+            val staging = File(binDir, "${destination.name}.installing")
+            staging.delete()
             appContext.assets.open(assetName).use { input ->
-                FileOutputStream(destination).use { output -> input.copyTo(output) }
+                RuntimeAssetIntegrity.copyVerified(
+                    input,
+                    staging,
+                    expectedSha256,
+                    config.maxProotBytes,
+                )
             }
-            destination.setExecutable(true, false)
+            if (destination.exists() && !destination.delete()) {
+                staging.delete()
+                throw IllegalStateException("failed to replace PRoot runtime asset")
+            }
+            if (!staging.renameTo(destination)) {
+                staging.delete()
+                throw IllegalStateException("failed to activate PRoot runtime asset")
+            }
         }
+        destination.setExecutable(true, false)
         return destination
+    }
+
+    private fun resolvedAssets(): ResolvedAssets {
+        if (config.runtimeAssets.isEmpty()) {
+            return ResolvedAssets(
+                abi = null,
+                rootfsAsset = config.rootfsAsset,
+                rootfsVersion = config.rootfsVersion,
+                rootfsSha256 = config.rootfsSha256,
+                prootAsset = config.prootAsset,
+                prootSha256 = config.prootSha256,
+            )
+        }
+        val selected = AlpineRuntimeAssetSelector.select(
+            supportedAbis = Build.SUPPORTED_ABIS.toList(),
+            assets = config.runtimeAssets,
+        )
+        return ResolvedAssets(
+            abi = selected.abi,
+            rootfsAsset = selected.rootfsAsset,
+            rootfsVersion = selected.rootfsVersion,
+            rootfsSha256 = selected.rootfsSha256,
+            prootAsset = selected.prootAsset,
+            prootSha256 = selected.prootSha256,
+        )
+    }
+
+    private data class ResolvedAssets(
+        val abi: String?,
+        val rootfsAsset: String,
+        val rootfsVersion: String,
+        val rootfsSha256: String?,
+        val prootAsset: String,
+        val prootSha256: String?,
+    ) {
+        val marker: String
+            get() = if (abi == null && rootfsSha256 == null) {
+                rootfsVersion
+            } else {
+                "$rootfsVersion|${abi ?: "legacy"}|${rootfsSha256 ?: "unverified"}"
+            }
     }
 
     private fun drainInBackground(input: InputStream, threadName: String): Thread =

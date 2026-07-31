@@ -16,3 +16,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "alpine-llm-gateway"
 include(":android")
+include(":sample")
+include(":demo-chatbot")

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Alpine LLM Sample</string>
+    <string name="screen_title">Alpine LLM OAuth sample</string>
+    <string name="authorization_endpoint_hint">Authorization endpoint (https://…)</string>
+    <string name="token_endpoint_hint">Token endpoint (https://…)</string>
+    <string name="completion_endpoint_hint">Messages endpoint or Gemini …/{model}:generateContent</string>
+    <string name="client_id_hint">OAuth public client ID</string>
+    <string name="scopes_hint">Scopes separated by spaces</string>
+    <string name="default_scopes">openid profile offline_access</string>
+    <string name="model_hint">Provider model</string>
+    <string name="prompt_hint">Prompt</string>
+    <string name="oauth_login">OAuth login</string>
+    <string name="stream_completion">Stream completion</string>
+    <string name="logout">Logout</string>
+    <string name="logged_out">Logged out</string>
+    <string name="opening_authorization">Opening OAuth authorization…</string>
+    <string name="login_complete">OAuth login complete</string>
+    <string name="login_failed">OAuth login failed (%1$s)</string>
+    <string name="login_first">Login first</string>
+    <string name="streaming">Streaming…</string>
+    <string name="complete">Complete</string>
+    <string name="request_failed">Request failed (%1$s)</string>
+
+    <string-array name="providers">
+        <item>Claude</item>
+        <item>Gemini</item>
+    </string-array>
+</resources>

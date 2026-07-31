@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.AlpineLlmDemo" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/demo_primary</item>
+        <item name="colorPrimaryVariant">@color/demo_primary_dark</item>
+        <item name="colorSecondary">@color/demo_accent</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@color/demo_surface</item>
+        <item name="android:windowBackground">@color/demo_background</item>
+    </style>
+</resources>

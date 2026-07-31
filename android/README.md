@@ -66,16 +66,26 @@ Provider가 JSON token body를 요구하면 `tokenRequestEncoding = JSON`을 사
 OpenAI 호환 HTTPS endpoint는 기본 adapter로 바로 연결할 수 있습니다.
 
 ```kotlin
+val transport = ResilientOAuthHttpTransport(
+    retryPolicy = ProviderRetryPolicy(maxAttempts = 3),
+    circuitBreaker = ProviderCircuitBreaker(
+        ProviderCircuitBreakerConfig(failureThreshold = 5),
+    ),
+)
 val providerBridge = OAuthHttpLlmBridge(
-    OpenAiCompatibleOAuthAdapter(
+    adapter = OpenAiCompatibleOAuthAdapter(
         completionEndpoint = "https://provider.example.com/v1/chat/completions",
         extraHeaders = mapOf("X-Provider-Version" to "1"),
     ),
+    streamingTransport = transport,
+    transport = transport,
 )
 val session = OAuthLlmSession(oauth, providerBridge)
 val hostBridge = HostBridgeServer(
     maxConcurrentRequests = 4,
     overloadRetryAfterSeconds = 1,
+    requestTimeoutMs = 180_000,
+    streamExecutor = session::stream,
     requestExecutor = session::complete,
 )
 val endpoint = hostBridge.start()
@@ -93,11 +103,45 @@ hostBridge.stop()
 alpine.detachHostBridge()
 ```
 
-`OAuthHttpLlmBridge`는 Provider adapter가 JSON/headers를 만든 뒤 transport 단계에서만 Authorization을 추가합니다. Adapter가 Authorization을 직접 덮어쓸 수 없고, HTTPS가 아닌 Provider URL은 거부합니다. Claude/Gemini처럼 request/response 형식이 다른 Provider는 `OAuthProviderHttpAdapter`를 구현합니다.
+`OAuthHttpLlmBridge`는 Provider adapter가 JSON/headers를 만든 뒤 transport 단계에서만 Authorization을 추가합니다. Adapter가 Authorization을 직접 덮어쓸 수 없고, HTTPS가 아닌 Provider URL은 거부합니다. Claude/Gemini처럼 request/response 형식이 다른 Provider는 `OAuthProviderHttpAdapter`와 필요 시 `OAuthStreamingProviderHttpAdapter`를 구현합니다.
 
 Provider가 401을 반환하면 같은 access token에 대한 refresh를 single-flight로 한 번 수행하고 요청을 한 번만 재시도합니다. 재시도도 401이면 현재 credential을 제거하고 Alpine에는 재로그인 필요 응답을 반환합니다.
 
 동시 completion이 `maxConcurrentRequests`를 넘으면 Host Bridge는 Provider를 호출하지 않고 429, `Retry-After`, `X-Request-Id`를 반환합니다. `/healthz`의 `active_requests`와 `max_concurrent_requests`로 현재 상태를 확인할 수 있습니다.
+
+## Streaming·retry·운영 event
+
+request JSON에 `"stream": true`를 넣으면 Host Bridge는 `text/event-stream`으로 다음 공통 event를 전달합니다.
+
+```text
+data: {"type":"start",...}
+data: {"type":"delta","text":"..."}
+data: {"type":"done",...}
+data: [DONE]
+```
+
+`UrlConnectionOAuthHttpTransport`는 SSE multiline data, event/전체 크기 제한, coroutine 취소 시 connection disconnect를 처리합니다. `ResilientOAuthHttpTransport`는 408/429/일부 5xx와 `IOException`만 제한적으로 재시도합니다. stream은 HTTP open/status까지만 재시도하며 첫 delta 이후에는 재시도하지 않습니다.
+
+`GatewayEventSink`는 request ID, operation, status, attempt, elapsed time처럼 닫힌 필드만 제공합니다. Provider URL·header·body·exception message·credential을 받을 수 없는 구조이므로 앱의 metric backend에 연결할 수 있습니다.
+
+```kotlin
+val sink = GatewayEventSink { event ->
+    metrics.record(event.type.name, event.statusCode, event.elapsedMs)
+}
+```
+
+`/healthz`는 `successful_requests`, `failed_requests`, `overloaded_requests`, `stream_requests`를 추가로 반환합니다. 지표는 Host Bridge start lifecycle마다 초기화됩니다.
+
+## Image·function tools
+
+공통 OpenAI chat 형식의 다음 필드를 Claude와 Gemini 계약으로 변환합니다.
+
+- `content: [{"type":"text",...},{"type":"image_url",...}]`
+- top-level `tools`와 `tool_choice`
+- assistant `tool_calls`
+- `role: "tool"`의 `tool_call_id`, 선택적 `name`
+
+Android Host가 원격 URL을 대신 가져오지 않도록 image는 PNG/JPEG/GIF/WebP의 5 MiB 이하 base64 data URL만 허용합니다. Gemini function response는 message `name`을 우선 사용하고 없으면 `tool_call_id`를 이름으로 사용합니다.
 
 ## Claude·Gemini adapter
 
@@ -152,7 +196,7 @@ JWT claim 추출은 계정명 표시용이며 signature 검증이나 권한 판�
 
 ## Alpine runtime asset
 
-앱의 `src/main/assets`에 다음 파일이 필요합니다.
+단일 ABI 호환 모드는 앱의 `src/main/assets`에 다음 파일이 필요합니다.
 
 ```text
 alpine-rootfs.tar.gz
@@ -167,7 +211,38 @@ alpine.installIfNeeded()
 val result = alpine.exec("python3 --version")
 ```
 
-이 저장소는 rootfs/PRoot 바이너리를 배포하지 않습니다. 사용할 Alpine release와 PRoot binary의 checksum·서명·라이선스를 앱 빌드 파이프라인에서 검증해야 합니다.
+ABI별 asset과 checksum을 강제하려면 다음처럼 설정합니다.
+
+```kotlin
+val alpine = AlpineRuntime(
+    context,
+    AlpineRuntime.Config(
+        runtimeAssets = listOf(
+            AlpineRuntimeAssetSet(
+                abi = "arm64-v8a",
+                rootfsAsset = "runtime/alpine-arm64.tar.gz",
+                rootfsVersion = "3.22.1",
+                prootAsset = "runtime/proot-arm64-v8a",
+                rootfsSha256 = BuildConfig.ALPINE_ARM64_SHA256,
+                prootSha256 = BuildConfig.PROOT_ARM64_SHA256,
+            ),
+            AlpineRuntimeAssetSet(
+                abi = "x86_64",
+                rootfsAsset = "runtime/alpine-x86_64.tar.gz",
+                rootfsVersion = "3.22.1",
+                prootAsset = "runtime/proot-x86_64",
+                rootfsSha256 = BuildConfig.ALPINE_X86_64_SHA256,
+                prootSha256 = BuildConfig.PROOT_X86_64_SHA256,
+            ),
+        ),
+    ),
+)
+val status = alpine.installationStatus()
+```
+
+기기 `Build.SUPPORTED_ABIS` 순서로 asset을 선택하며 지원 항목이 없으면 설치 전에 실패합니다. rootfs는 app-private 임시 파일에 복사하며 SHA-256을 확인한 뒤에만 추출하고, PRoot도 검증된 임시 파일을 원자적으로 교체합니다.
+
+이 저장소는 rootfs/PRoot 바이너리를 배포하지 않습니다. 사용할 Alpine release와 PRoot binary의 checksum·서명·라이선스를 앱 공급 과정에서 검증해야 합니다.
 
 `exec()`는 stdout을 별도 thread에서 계속 drain하므로 timeout이 출력 대기 때문에 멈추지 않습니다. 출력 제한을 넘기면 `ExecResult.outputTruncated`가 `true`가 됩니다. rootfs extractor는 tar checksum, 경로 traversal, entry/총 크기 제한과 실행 권한을 검증하며 교체 실패 시 이전 rootfs를 복원합니다.
 
@@ -180,7 +255,7 @@ val result = alpine.exec("python3 --version")
 ## 운영 주의
 
 - `AlpineRuntime`은 Linux kernel/VM이 아니라 Android kernel 위의 Alpine user space입니다.
-- `proot-aarch64`는 arm64 전용입니다. 지원 ABI별 실행 파일과 asset 선택 로직이 추가로 필요합니다.
+- 단일 `proot-aarch64` 설정은 arm64 전용입니다. 여러 ABI를 지원하려면 `runtimeAssets`와 각 checksum을 제공해야 합니다.
 - rootfs 설치와 모든 네트워크/프로세스 호출은 UI thread 밖에서 실행해야 합니다.
 - 장시간 runtime을 유지하면 Foreground Service 및 사용자 알림 정책을 적용해야 합니다.
 - session token은 process environment에 있으므로 다른 앱과 공유되는 외부 저장소나 로그에 환경 전체를 출력하면 안 됩니다.
@@ -200,7 +275,7 @@ release AAR과 sources JAR를 프로젝트 내부 Maven repository에 생성할 
 
 ```text
 android/build/outputs/aar/android-release.aar
-android/build/repo/dev/alpine/llm/alpine-llm-android/0.2.0/
+android/build/repo/dev/alpine/llm/alpine-llm-android/0.3.0/
 ```
 
 다른 프로젝트에서 local Maven repository로 사용할 때:
@@ -211,6 +286,33 @@ repositories {
 }
 
 dependencies {
-    implementation("dev.alpine.llm:alpine-llm-android:0.2.0")
+    implementation("dev.alpine.llm:alpine-llm-android:0.3.0")
 }
 ```
+
+전체 로컬 검증과 배포용 bundle/checksum 생성:
+
+```bash
+./scripts/release-local.sh
+```
+
+`dist/alpine-llm-android-0.3.0/`에 AAR, sources JAR, POM, Gradle module metadata와 `SHA256SUMS`가 생성됩니다.
+
+## Sample·instrumentation
+
+credential을 포함하지 않는 샘플 앱은 `sample/`에 있습니다.
+
+```bash
+./gradlew :sample:assembleDebug
+./gradlew :android:assembleDebugAndroidTest
+```
+
+instrumentation source는 Android Keystore token 저장/재생성/삭제와 physical-device ABI selector를 검증합니다. 실제 실행에는 emulator 또는 연결된 Android 기기가 필요합니다.
+
+연결된 기기 하나를 명시적으로 선택해 실행하려면:
+
+```bash
+ANDROID_SERIAL=<device-serial> ./gradlew :android:connectedDebugAndroidTest
+```
+
+2026-07-31 기준 Samsung `SM-S931N`, Android 16(API 36), `arm64-v8a`에서 instrumentation 6건을 실행했습니다. 검증 범위는 Keystore token 저장·복원·삭제, 저장 파일의 token/PKCE verifier 평문 비노출, Android Keystore key 비추출성, 고정 runtime ABI fixture 선택, 실제 loopback Host Bridge의 session 인증·completion·SSE·재기동입니다. 실제 Provider OAuth/API와 PRoot/rootfs 실행은 별도 credential과 runtime asset이 필요하므로 이 결과에 포함되지 않습니다.
