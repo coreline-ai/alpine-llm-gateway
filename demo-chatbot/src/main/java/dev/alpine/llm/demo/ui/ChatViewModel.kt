@@ -9,8 +9,15 @@ import dev.alpine.llm.demo.llm.ProviderConnectionState
 import dev.alpine.llm.demo.model.ChatMessage
 import dev.alpine.llm.demo.model.ChatMessageState
 import dev.alpine.llm.demo.model.ChatRole
+import dev.alpine.llm.demo.ui.state.ChatFailure
+import dev.alpine.llm.demo.ui.state.ChatFailureMapper
+import dev.alpine.llm.demo.ui.state.ChatRecoveryAction
+import dev.alpine.llm.demo.ui.state.ChatRetryTarget
+import dev.alpine.llm.demo.ui.state.SafeProviderStatus
+import dev.alpine.llm.demo.ui.state.SafeProviderStatusException
 import java.util.concurrent.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,6 +38,8 @@ data class ChatUiState(
     val selectedProfileId: String? = null,
     val isStreaming: Boolean = false,
     val statusMessage: String? = null,
+    val failure: ChatFailure? = null,
+    val retryTarget: ChatRetryTarget? = null,
 )
 
 class ChatViewModel : ViewModel() {
@@ -38,6 +47,8 @@ class ChatViewModel : ViewModel() {
     val state: StateFlow<ChatUiState> = mutableState.asStateFlow()
 
     private var streamJob: Job? = null
+    private var failedAssistantId: String? = null
+    private var failedSession: ChatCompletionSession? = null
 
     fun updateConnections(connections: List<ProviderConnection>) {
         val providers = connections
@@ -77,7 +88,16 @@ class ChatViewModel : ViewModel() {
 
     fun clearConversation() {
         if (mutableState.value.isStreaming) return
-        mutableState.update { it.copy(messages = emptyList(), statusMessage = null) }
+        failedAssistantId = null
+        failedSession = null
+        mutableState.update {
+            it.copy(
+                messages = emptyList(),
+                statusMessage = null,
+                failure = null,
+                retryTarget = null,
+            )
+        }
     }
 
     fun send(text: String, session: ChatCompletionSession) {
@@ -92,6 +112,45 @@ class ChatViewModel : ViewModel() {
         }
 
         val userMessage = ChatMessage(role = ChatRole.USER, text = prompt)
+        val requestMessages = current.messages + userMessage
+        startStreaming(requestMessages, session)
+    }
+
+    /** Replays a failed request without duplicating its original user message. */
+    fun retry(session: ChatCompletionSession) {
+        val current = mutableState.value
+        val target = current.retryTarget ?: return
+        val failedId = failedAssistantId ?: return
+        if (
+            current.isStreaming ||
+            current.selectedProfileId != target.profileId ||
+            failedSession !== session ||
+            session.profile.id != target.profileId ||
+            session.profile.model != target.model
+        ) {
+            return
+        }
+
+        val remainingMessages = current.messages.filterNot { it.id == failedId }
+        // The stored retry target must still refer to the user message held in the conversation.
+        if (remainingMessages.none { it.role == ChatRole.USER && it.text == target.userText }) return
+        failedAssistantId = null
+        failedSession = null
+        startStreaming(remainingMessages, session)
+    }
+
+    fun dismissFailure() {
+        failedAssistantId = null
+        failedSession = null
+        mutableState.update { it.copy(failure = null, retryTarget = null) }
+    }
+
+    private fun startStreaming(
+        requestMessages: List<ChatMessage>,
+        session: ChatCompletionSession,
+    ) {
+        failedAssistantId = null
+        failedSession = null
         val assistantMessage = ChatMessage(
             role = ChatRole.ASSISTANT,
             text = "",
@@ -100,12 +159,13 @@ class ChatViewModel : ViewModel() {
             providerLabel = session.profile.label,
             model = session.profile.model,
         )
-        val requestMessages = current.messages + userMessage
         mutableState.update {
             it.copy(
                 messages = requestMessages + assistantMessage,
                 isStreaming = true,
                 statusMessage = "Streaming from ${session.profile.label} · ${session.profile.model}",
+                failure = null,
+                retryTarget = null,
             )
         }
 
@@ -114,7 +174,9 @@ class ChatViewModel : ViewModel() {
                 val result = session.stream(
                     ChatRequestBuilder.build(session.profile.model, requestMessages),
                 )
-                check(result.statusCode in 200..299) { "Provider request failed" }
+                if (result.statusCode !in 200..299) {
+                    throw SafeProviderStatusException(SafeProviderStatus(result.statusCode))
+                }
                 result.events.collect { event ->
                     val delta = JSONObject(event.dataJson).optString("text")
                     if (delta.isNotEmpty()) {
@@ -126,38 +188,18 @@ class ChatViewModel : ViewModel() {
                 updateAssistant(assistantMessage.id) { message ->
                     message.copy(state = ChatMessageState.COMPLETE)
                 }
-                mutableState.update { it.copy(statusMessage = null) }
+                mutableState.update { it.copy(statusMessage = null, failure = null, retryTarget = null) }
+            } catch (timeout: TimeoutCancellationException) {
+                recordFailure(assistantMessage.id, requestMessages, session, timeout)
             } catch (cancelled: CancellationException) {
                 updateAssistant(assistantMessage.id) { message ->
                     message.copy(state = ChatMessageState.CANCELLED)
                 }
-                mutableState.update { it.copy(statusMessage = "Stopped") }
-            } catch (_: Exception) {
-                updateAssistant(assistantMessage.id) { message ->
-                    message.copy(
-                        text = message.text.ifBlank {
-                            "The LLM request failed. Check the connection and profile settings."
-                        },
-                        state = ChatMessageState.FAILED,
-                    )
-                }
                 mutableState.update {
-                    it.copy(
-                        messages = if (
-                            it.messages.lastOrNull()?.id == assistantMessage.id
-                        ) {
-                            it.messages
-                        } else {
-                            it.messages + ChatMessage(
-                                role = ChatRole.ERROR,
-                                text = "The LLM request failed.",
-                                state = ChatMessageState.FAILED,
-                            )
-                        },
-                        statusMessage =
-                            "Request failed. Check the connection and profile settings.",
-                    )
+                    it.copy(statusMessage = "Stopped", failure = null, retryTarget = null)
                 }
+            } catch (error: Exception) {
+                recordFailure(assistantMessage.id, requestMessages, session, error)
             } finally {
                 mutableState.update { it.copy(isStreaming = false) }
                 streamJob = null
@@ -167,6 +209,36 @@ class ChatViewModel : ViewModel() {
 
     fun stopStreaming() {
         streamJob?.cancel()
+    }
+
+    private fun recordFailure(
+        assistantMessageId: String,
+        requestMessages: List<ChatMessage>,
+        session: ChatCompletionSession,
+        error: Throwable,
+    ) {
+        val failure = ChatFailureMapper.map(error)
+        val retryTarget = if (failure.recoveryAction == ChatRecoveryAction.RETRY) {
+            ChatRetryTarget(
+                userText = requestMessages.lastOrNull { it.role == ChatRole.USER }?.text.orEmpty(),
+                profileId = session.profile.id,
+                model = session.profile.model,
+            )
+        } else {
+            null
+        }
+        updateAssistant(assistantMessageId) { message ->
+            message.copy(state = ChatMessageState.FAILED)
+        }
+        failedAssistantId = assistantMessageId
+        failedSession = session
+        mutableState.update {
+            it.copy(
+                statusMessage = "Request failed.",
+                failure = failure,
+                retryTarget = retryTarget,
+            )
+        }
     }
 
     private fun updateAssistant(

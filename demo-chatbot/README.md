@@ -2,6 +2,11 @@
 
 `demo-chatbot`은 `:android` 라이브러리를 직접 사용하는 별도 Android 테스트 앱이다. 저장된 OAuth LLM 프로필 가운데 인증된 연결을 선택하고, 선택한 한 Provider에만 현재 대화와 새 메시지를 스트리밍 요청한다.
 
+UI는 Material 3 Compose로 구현되어 light/dark theme, Android 12+ dynamic color,
+840dp 최대 콘텐츠 폭과 작은 가로 화면의 스크롤을 지원한다. 세부 token,
+컴포넌트, 접근성 및 안정적인 test tag 계약은 [디자인 가이드](DESIGN.md)를
+참고한다.
+
 ## 포함된 GUI
 
 `LLM connections`에서 `Add LLM`을 누르면 OpenMinis의 Provider 선택·구성 흐름을 참고한 카드형 선택 화면이 열린다.
@@ -34,6 +39,10 @@ OAuth access/refresh token은 프로필 JSON에 저장하지 않고 `:android`�
 4. 응답 중에는 Provider 전환과 중복 전송이 비활성화된다.
 5. `Stop`은 수신한 부분 응답을 보존하고 스트림을 취소한다.
 6. assistant bubble에는 응답에 사용된 프로필과 모델이 고정 표시된다.
+7. timeout, 429, 일부 5xx, circuit open과 protocol 오류는 Provider 원문 없이
+   안전한 상태로 표시하며 실패한 요청만 한 번 재시도할 수 있다.
+8. 401, invalid grant와 token storage invalidation은 재시도 대신 OAuth 재연결을
+   안내한다.
 
 대화는 `ViewModel` 메모리에만 보관한다. 앱 프로세스가 종료되면 대화는 사라지지만, 비민감 프로필과 Keystore credential은 유지된다.
 
@@ -58,7 +67,16 @@ adb -s <serial> shell am instrument -w \
   dev.alpine.llm.demo.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-instrumentation test는 초기 빈 화면, 세 Provider별 동적 필드, Gemini 프로필 저장과 credential 비저장을 실제 앱 프로세스에서 검증한다. JVM test는 프로필 검증·JSON 왕복, 공통 요청 변환, 인증된 프로필 필터링, 선택 session 단독 호출, Provider 전환 metadata, 스트림 취소를 검증한다.
+JVM test 25개는 프로필 검증·JSON 왕복, 공통 요청 변환, 인증된 프로필
+필터링, Provider 전환 metadata, stream 취소, redacted 오류 매핑과 중복 없는
+retry를 검증한다. instrumentation test 12개는 초기 Compose 화면, light/dark
+brand theme, 세 Provider별 동적 필드, Gemini 프로필 저장·credential 비저장과
+fake 3-provider 선택 전송, profile CRUD, logout/delete 격리와 Activity 재생성을
+실제 앱 프로세스에서 검증한다. Fake session과
+fixture는 `androidTest` APK에만 포함되고 production APK에는 포함되지 않는다.
+
+2026-07-31 기준 Samsung `SM-S931N`, Android 16에서 데모 instrumentation
+12개를 2회 연속 통과했고, compact portrait·landscape·home 복귀를 smoke test했다.
 
 ## OAuth 적용 전 확인
 

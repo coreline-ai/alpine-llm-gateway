@@ -2,8 +2,10 @@ package dev.alpine.llm.demo.model
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.json.JSONObject
 
 class ProviderProfileTest {
     @Test
@@ -55,6 +57,81 @@ class ProviderProfileTest {
     }
 
     @Test
+    fun `validation rejects credentials embedded in endpoint and malformed urls`() {
+        val invalid = validProfile(ProviderType.OPENAI_COMPATIBLE).copy(
+            authorizationEndpoint = "https://user:password@identity.example.test/oauth/authorize",
+            tokenEndpoint = "not-a-url",
+            inferenceEndpoint = "https://",
+        )
+
+        val errors = invalid.validationErrors()
+
+        assertTrue(errors.containsKey(ProviderProfile.Field.AUTHORIZATION_ENDPOINT))
+        assertTrue(errors.containsKey(ProviderProfile.Field.TOKEN_ENDPOINT))
+        assertTrue(errors.containsKey(ProviderProfile.Field.INFERENCE_ENDPOINT))
+    }
+
+    @Test
+    fun `validation rejects blank and boundary callback ports`() {
+        val blank = validProfile(ProviderType.ANTHROPIC).copy(
+            label = " ",
+            scopes = listOf(" "),
+        )
+        assertTrue(blank.validationErrors().containsKey(ProviderProfile.Field.LABEL))
+        assertTrue(blank.validationErrors().containsKey(ProviderProfile.Field.SCOPES))
+
+        assertTrue(
+            validProfile(ProviderType.ANTHROPIC).copy(callbackPort = 0)
+                .validationErrors().containsKey(ProviderProfile.Field.CALLBACK_PORT),
+        )
+        assertTrue(
+            validProfile(ProviderType.ANTHROPIC).copy(callbackPort = 65534)
+                .validationErrors().containsKey(ProviderProfile.Field.CALLBACK_PORT),
+        )
+        assertTrue(
+            validProfile(ProviderType.ANTHROPIC).copy(callbackPort = 1)
+                .validationErrors().containsKey(ProviderProfile.Field.CALLBACK_PORT).not(),
+        )
+        assertTrue(
+            validProfile(ProviderType.ANTHROPIC).copy(callbackPort = 65533)
+                .validationErrors().containsKey(ProviderProfile.Field.CALLBACK_PORT).not(),
+        )
+    }
+
+    @Test
+    fun `malformed profile json fails closed`() {
+        assertThrows(Exception::class.java) {
+            ProviderProfile.fromJson(JSONObject("{\"id\":\"missing-fields\"}"))
+        }
+        assertThrows(Exception::class.java) {
+            ProviderProfile.fromJson(
+                JSONObject(validProfile(ProviderType.GEMINI).toJson().toString()).put(
+                    "type",
+                    "unsupported",
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `profile json contains no credential field names or values`() {
+        val profile = validProfile(ProviderType.ANTHROPIC)
+        val raw = profile.toJson().toString()
+
+        listOf(
+            "access_token",
+            "refresh_token",
+            "token_type",
+            "expires_at",
+            "client_secret",
+            "authorization_code",
+            "super-secret-token-value",
+        ).forEach { forbidden ->
+            assertFalse("Unexpected credential material: $forbidden", raw.contains(forbidden))
+        }
+    }
+
+    @Test
     fun `oauth identity edits require login but model and endpoint edits do not`() {
         val original = validProfile(ProviderType.ANTHROPIC)
 
@@ -64,6 +141,20 @@ class ProviderProfileTest {
         )
         assertTrue(
             original.copy(scopes = original.scopes + "models.read")
+                .requiresReauthenticationComparedTo(original),
+        )
+        assertTrue(
+            original.copy(
+                authorizationEndpoint = "https://identity-2.example.test/oauth/authorize",
+            ).requiresReauthenticationComparedTo(original),
+        )
+        assertTrue(
+            original.copy(
+                tokenEndpoint = "https://identity-2.example.test/oauth/token",
+            ).requiresReauthenticationComparedTo(original),
+        )
+        assertTrue(
+            original.copy(callbackPort = original.callbackPort + 1)
                 .requiresReauthenticationComparedTo(original),
         )
         assertFalse(

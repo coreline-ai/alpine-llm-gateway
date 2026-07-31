@@ -1,18 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="demo_primary">#2855D9</color>
-    <color name="demo_primary_dark">#17399B</color>
-    <color name="demo_accent">#3D72F2</color>
     <color name="demo_background">#F6F7FB</color>
     <color name="demo_surface">#FFFFFF</color>
-    <color name="demo_text_primary">#1A1D26</color>
-    <color name="demo_text_secondary">#606777</color>
-    <color name="demo_user_bubble">#2855D9</color>
-    <color name="demo_assistant_bubble">#E9ECF4</color>
-    <color name="demo_error_bubble">#FFE8E8</color>
-    <color name="demo_connected">#1B8A4B</color>
-    <color name="demo_warning">#B56A00</color>
-    <color name="demo_anthropic">#B55B36</color>
-    <color name="demo_gemini">#2F6FE4</color>
-    <color name="demo_openai">#16856A</color>
 </resources>
