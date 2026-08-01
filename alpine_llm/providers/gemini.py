@@ -6,15 +6,40 @@ import json
 from typing import Any, Iterator
 from urllib.parse import quote
 
-from .base import ProviderError, json_request, stream_request, text_content
+from .base import (
+    DEFAULT_MAX_RESPONSE_BYTES,
+    DEFAULT_MAX_STREAM_BYTES,
+    DEFAULT_MAX_STREAM_EVENT_BYTES,
+    ProviderCircuitBreaker,
+    ProviderError,
+    RetryPolicy,
+    json_request,
+    stream_request,
+    text_content,
+)
 from ..protocol import CompletionDelta, CompletionRequest, CompletionResult, Usage
 
 
 class GeminiProvider:
-    def __init__(self, base_url: str, api_key: str, timeout: float = 120.0):
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        timeout: float = 120.0,
+        max_response_bytes: int = DEFAULT_MAX_RESPONSE_BYTES,
+        max_stream_event_bytes: int = DEFAULT_MAX_STREAM_EVENT_BYTES,
+        max_stream_bytes: int = DEFAULT_MAX_STREAM_BYTES,
+        retry_policy: RetryPolicy | None = None,
+        circuit_breaker: ProviderCircuitBreaker | None = None,
+    ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
+        self.max_response_bytes = max_response_bytes
+        self.max_stream_event_bytes = max_stream_event_bytes
+        self.max_stream_bytes = max_stream_bytes
+        self.retry_policy = retry_policy or RetryPolicy()
+        self.circuit_breaker = circuit_breaker or ProviderCircuitBreaker()
 
     def complete(self, request: CompletionRequest) -> CompletionResult:
         url = self._url(request.model, stream=False)
@@ -23,6 +48,9 @@ class GeminiProvider:
             headers={"Content-Type": "application/json"},
             body=self._body(request),
             timeout=self.timeout,
+            max_response_bytes=self.max_response_bytes,
+            retry_policy=self.retry_policy,
+            circuit_breaker=self.circuit_breaker,
         )
         text = self._text(response)
         usage = response.get("usageMetadata", {})
@@ -38,6 +66,11 @@ class GeminiProvider:
             headers={"Content-Type": "application/json"},
             body=self._body(request),
             timeout=self.timeout,
+            max_event_bytes=self.max_stream_event_bytes,
+            max_stream_bytes=self.max_stream_bytes,
+            max_error_bytes=self.max_response_bytes,
+            retry_policy=self.retry_policy,
+            circuit_breaker=self.circuit_breaker,
         ):
             try:
                 value = json.loads(data)

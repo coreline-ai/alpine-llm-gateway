@@ -42,3 +42,32 @@ class PolicyTests(unittest.TestCase):
         })
         with self.assertRaises(PolicyError):
             self.policy.validate(request)
+
+    def test_empty_allowlist_rejects_unknown_model_by_default(self):
+        policy = Policy(allowed_models=(), default_model="gpt-default")
+        request = CompletionRequest.from_dict({
+            "model": "gpt-other",
+            "messages": [{"role": "user", "content": "hello"}],
+        })
+        with self.assertRaises(PolicyError):
+            policy.validate(request)
+
+    def test_default_model_is_allowed_without_explicit_allowlist(self):
+        policy = Policy(allowed_models=(), default_model="gpt-default")
+        request = CompletionRequest.from_dict({
+            "model": "auto",
+            "messages": [{"role": "user", "content": "hello"}],
+        })
+        self.assertEqual("gpt-default", policy.validate(request).model)
+
+    def test_passthrough_explicitly_allows_unknown_model(self):
+        policy = Policy(
+            allowed_models=(),
+            default_model="gpt-default",
+            allow_passthrough=True,
+        )
+        request = CompletionRequest.from_dict({
+            "model": "gpt-dynamic",
+            "messages": [{"role": "user", "content": "hello"}],
+        })
+        self.assertEqual("gpt-dynamic", policy.validate(request).model)

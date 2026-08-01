@@ -22,8 +22,58 @@ class Settings:
     max_input_bytes: int = 1_048_576
     max_output_tokens: int = 4096
     max_messages: int = 64
+    max_response_bytes: int = 8 * 1024 * 1024
+    max_stream_event_bytes: int = 1 * 1024 * 1024
+    max_stream_bytes: int = 32 * 1024 * 1024
     timeout_seconds: float = 120.0
+    provider_retry_max_attempts: int = 3
+    provider_retry_initial_backoff_seconds: float = 0.5
+    provider_retry_max_backoff_seconds: float = 8.0
+    provider_retry_jitter_ratio: float = 0.2
+    provider_circuit_failure_threshold: int = 5
+    provider_circuit_recovery_seconds: float = 30.0
     allow_passthrough: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.host:
+            raise ValueError("host must not be empty")
+        if not 1 <= self.port <= 65535:
+            raise ValueError("port must be between 1 and 65535")
+        if not self.provider:
+            raise ValueError("provider must not be empty")
+        if not self.base_url:
+            raise ValueError("base_url must not be empty")
+        if self.max_input_bytes <= 0:
+            raise ValueError("max_input_bytes must be positive")
+        if self.max_output_tokens <= 0:
+            raise ValueError("max_output_tokens must be positive")
+        if self.max_messages <= 0:
+            raise ValueError("max_messages must be positive")
+        if self.max_response_bytes <= 0:
+            raise ValueError("max_response_bytes must be positive")
+        if self.max_stream_event_bytes <= 0:
+            raise ValueError("max_stream_event_bytes must be positive")
+        if self.max_stream_bytes <= 0:
+            raise ValueError("max_stream_bytes must be positive")
+        if self.timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        if not 1 <= self.provider_retry_max_attempts <= 10:
+            raise ValueError("provider_retry_max_attempts must be between 1 and 10")
+        if self.provider_retry_initial_backoff_seconds < 0:
+            raise ValueError("provider_retry_initial_backoff_seconds must not be negative")
+        if self.provider_retry_max_backoff_seconds < self.provider_retry_initial_backoff_seconds:
+            raise ValueError(
+                "provider_retry_max_backoff_seconds must be at least "
+                "provider_retry_initial_backoff_seconds",
+            )
+        if not 0 <= self.provider_retry_jitter_ratio <= 1:
+            raise ValueError("provider_retry_jitter_ratio must be between 0 and 1")
+        if self.provider_circuit_failure_threshold <= 0:
+            raise ValueError("provider_circuit_failure_threshold must be positive")
+        if self.provider_circuit_recovery_seconds <= 0:
+            raise ValueError("provider_circuit_recovery_seconds must be positive")
+        if not isinstance(self.allow_passthrough, bool):
+            raise ValueError("allow_passthrough must be a boolean")
 
     @classmethod
     def from_file(cls, path: str | None = None) -> "Settings":
@@ -49,6 +99,30 @@ class Settings:
             max_input_bytes=int(raw.get("max_input_bytes", 1_048_576)),
             max_output_tokens=int(raw.get("max_output_tokens", 4096)),
             max_messages=int(raw.get("max_messages", 64)),
+            max_response_bytes=int(raw.get("max_response_bytes", 8 * 1024 * 1024)),
+            max_stream_event_bytes=int(raw.get("max_stream_event_bytes", 1 * 1024 * 1024)),
+            max_stream_bytes=int(raw.get("max_stream_bytes", 32 * 1024 * 1024)),
             timeout_seconds=float(raw.get("timeout_seconds", 120.0)),
-            allow_passthrough=bool(raw.get("allow_passthrough", False)),
+            provider_retry_max_attempts=int(raw.get("provider_retry_max_attempts", 3)),
+            provider_retry_initial_backoff_seconds=float(
+                raw.get("provider_retry_initial_backoff_seconds", 0.5),
+            ),
+            provider_retry_max_backoff_seconds=float(
+                raw.get("provider_retry_max_backoff_seconds", 8.0),
+            ),
+            provider_retry_jitter_ratio=float(raw.get("provider_retry_jitter_ratio", 0.2)),
+            provider_circuit_failure_threshold=int(
+                raw.get("provider_circuit_failure_threshold", 5),
+            ),
+            provider_circuit_recovery_seconds=float(
+                raw.get("provider_circuit_recovery_seconds", 30.0),
+            ),
+            allow_passthrough=_boolean(raw, "allow_passthrough", default=False),
         )
+
+
+def _boolean(raw: dict[str, Any], name: str, *, default: bool) -> bool:
+    value = raw.get(name, default)
+    if not isinstance(value, bool):
+        raise ValueError(f"{name} must be a boolean")
+    return value

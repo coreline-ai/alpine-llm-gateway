@@ -4,18 +4,24 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 VERSION="$(sed -n 's/^VERSION_NAME=//p' "$PROJECT_DIR/gradle.properties")"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
 
 if [[ -z "$VERSION" ]]; then
   echo "VERSION_NAME is missing from gradle.properties" >&2
   exit 1
 fi
 
+if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+  echo "Python executable not found: $PYTHON_BIN" >&2
+  exit 1
+fi
+
 cd "$PROJECT_DIR"
 PYTHONPYCACHEPREFIX="$PROJECT_DIR/build/python-cache" \
-  python3 -m unittest discover -s tests -v
+  "$PYTHON_BIN" -m unittest discover -s tests -v
 PYTHONPYCACHEPREFIX="$PROJECT_DIR/build/python-cache" \
-  python3 -m compileall -q alpine_llm
-python3 -B -m alpine_llm.cli run --help >/dev/null
+  "$PYTHON_BIN" -m compileall -q alpine_llm
+"$PYTHON_BIN" -B -m alpine_llm.cli run --help >/dev/null
 
 ./gradlew \
   :android:testDebugUnitTest \
@@ -25,6 +31,10 @@ python3 -B -m alpine_llm.cli run --help >/dev/null
   :android:publishReleasePublicationToProjectRepository \
   :sample:assembleDebug \
   :sample:lintDebug \
+  :demo-chatbot:testDebugUnitTest \
+  :demo-chatbot:assembleDebug \
+  :demo-chatbot:assembleDebugAndroidTest \
+  :demo-chatbot:lintDebug \
   --no-daemon
 
 REPOSITORY_DIR="$PROJECT_DIR/android/build/repo/dev/alpine/llm/alpine-llm-android/$VERSION"

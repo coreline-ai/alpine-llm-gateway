@@ -42,7 +42,6 @@ class StandardOAuthTokenResponseAdapter(
 
     private companion object {
         val DEFAULT_METADATA_FIELDS = setOf(
-            "id_token",
             "account_id",
             "plan_type",
             "email",

@@ -20,6 +20,18 @@
                 <data android:host="localhost" />
                 <data android:path="/oauth/callback" />
             </intent-filter>
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:scheme="http"
+                    android:host="localhost"
+                    android:port="1455"
+                    android:path="/auth/callback" />
+            </intent-filter>
         </activity>
     </application>
 </manifest>

@@ -15,6 +15,7 @@ class PolicyError(ValueError):
 class Policy:
     allowed_models: tuple[str, ...]
     default_model: str
+    allow_passthrough: bool = False
     max_input_bytes: int = 1_048_576
     max_output_tokens: int = 4096
     max_messages: int = 64
@@ -23,7 +24,10 @@ class Policy:
         model = self.default_model if requested == "auto" else requested
         if not model:
             raise PolicyError("no default model is configured")
-        if self.allowed_models and model not in self.allowed_models:
+        configured_models = set(self.allowed_models)
+        if self.default_model:
+            configured_models.add(self.default_model)
+        if model not in configured_models and not self.allow_passthrough:
             raise PolicyError(f"model '{model}' is not allowed")
         return model
 

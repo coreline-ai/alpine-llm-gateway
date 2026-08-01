@@ -9,18 +9,36 @@ fun testProfile(
     type: ProviderType,
     model: String,
     createdAtMs: Long,
-): ProviderProfile = ProviderProfile(
-    id = id,
-    label = label,
-    type = type,
-    authorizationEndpoint = "https://identity.example.test/oauth/authorize",
-    tokenEndpoint = "https://identity.example.test/oauth/token",
-    inferenceEndpoint = type.inferenceEndpointPlaceholder,
-    clientId = "android-public-client",
-    scopes = type.defaultScopes.split(" "),
-    model = model,
-    callbackPort = ProviderProfile.DEFAULT_CALLBACK_PORT,
-    anthropicBeta = if (type == ProviderType.ANTHROPIC) "oauth-test" else null,
-    googleProjectId = if (type == ProviderType.GEMINI) "test-project" else null,
-    createdAtMs = createdAtMs,
-)
+): ProviderProfile = ProviderProfile.draft(type, label).let { draft ->
+    draft.copy(
+        id = id,
+        authorizationEndpoint = if (
+            type == ProviderType.ANTHROPIC || type == ProviderType.GEMINI ||
+                type == ProviderType.CODEX || type == ProviderType.XAI
+        ) {
+            draft.authorizationEndpoint
+        } else {
+            "https://identity.example.test/oauth/authorize"
+        },
+        tokenEndpoint = if (
+            type == ProviderType.ANTHROPIC || type == ProviderType.GEMINI ||
+            type == ProviderType.CODEX || type == ProviderType.XAI
+        ) {
+            draft.tokenEndpoint
+        } else {
+            "https://identity.example.test/oauth/token"
+        },
+        clientId = if (
+            type == ProviderType.ANTHROPIC ||
+                type == ProviderType.CODEX || type == ProviderType.XAI
+        ) {
+            draft.clientId
+        } else {
+            "android-public-client"
+        },
+        model = model,
+        anthropicBeta = draft.anthropicBeta,
+        googleProjectId = if (type == ProviderType.GEMINI) "test-project" else null,
+        createdAtMs = createdAtMs,
+    )
+}

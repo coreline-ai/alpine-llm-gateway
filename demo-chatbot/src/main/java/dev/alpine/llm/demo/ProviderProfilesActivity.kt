@@ -2,6 +2,7 @@ package dev.alpine.llm.demo
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,6 +18,7 @@ import dev.alpine.llm.demo.llm.ProviderConnectionState
 import dev.alpine.llm.demo.model.ProviderType
 import dev.alpine.llm.demo.ui.screens.provider.ProviderProfilesScreen
 import dev.alpine.llm.demo.ui.theme.AlpineChatTheme
+import dev.alpine.llm.OAuthException
 import java.util.concurrent.CancellationException
 import kotlinx.coroutines.launch
 
@@ -97,8 +99,18 @@ class ProviderProfilesActivity : ComponentActivity() {
                 ).show()
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Exception) {
+            } catch (error: Exception) {
                 // Never expose Provider bodies, endpoints, or OAuth details in UI/logcat.
+                if (error is OAuthException) {
+                    Log.w(
+                        LOG_TAG,
+                        "OAuth authorization failed: kind=${error.kind}, " +
+                            "message=${error.message}, " +
+                            "cause=${error.cause?.javaClass?.simpleName ?: "none"}",
+                    )
+                } else {
+                    Log.w(LOG_TAG, "OAuth authorization failed: ${error.javaClass.simpleName}")
+                }
                 Toast.makeText(
                     this@ProviderProfilesActivity,
                     R.string.connection_failed_generic,
@@ -122,5 +134,9 @@ class ProviderProfilesActivity : ComponentActivity() {
     override fun onDestroy() {
         activeAuthorization?.cancelAuthorization()
         super.onDestroy()
+    }
+
+    private companion object {
+        const val LOG_TAG = "AlpineOAuth"
     }
 }

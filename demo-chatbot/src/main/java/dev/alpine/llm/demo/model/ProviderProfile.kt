@@ -1,5 +1,9 @@
 package dev.alpine.llm.demo.model
 
+import dev.alpine.llm.AnthropicOAuthContract
+import dev.alpine.llm.CodexOAuthContract
+import dev.alpine.llm.GeminiOAuthContract
+import dev.alpine.llm.XaiOAuthContract
 import org.json.JSONObject
 import java.net.URI
 import java.util.UUID
@@ -14,17 +18,16 @@ enum class ProviderType(
     ANTHROPIC(
         wireName = "anthropic",
         displayName = "Claude / Anthropic",
-        description = "Anthropic Messages-compatible OAuth endpoint",
-        inferenceEndpointPlaceholder = "https://api.anthropic.com/v1/messages",
-        defaultScopes = "openid profile offline_access",
+        description = "Claude account OAuth with the Anthropic Messages protocol",
+        inferenceEndpointPlaceholder = AnthropicOAuthContract.MESSAGES_ENDPOINT,
+        defaultScopes = AnthropicOAuthContract.SCOPES.joinToString(" "),
     ),
     GEMINI(
         wireName = "gemini",
         displayName = "Google Gemini",
-        description = "Gemini generateContent OAuth endpoint",
-        inferenceEndpointPlaceholder =
-            "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-        defaultScopes = "openid profile https://www.googleapis.com/auth/cloud-platform",
+        description = "Official Gemini API with app-owned Google OAuth",
+        inferenceEndpointPlaceholder = GeminiOAuthContract.GENERATE_CONTENT_ENDPOINT,
+        defaultScopes = GeminiOAuthContract.SCOPES.joinToString(" "),
     ),
     OPENAI_COMPATIBLE(
         wireName = "openai_compatible",
@@ -32,6 +35,20 @@ enum class ProviderType(
         description = "OAuth-enabled Chat Completions endpoint",
         inferenceEndpointPlaceholder = "https://provider.example.com/v1/chat/completions",
         defaultScopes = "openid profile offline_access",
+    ),
+    CODEX(
+        wireName = "codex",
+        displayName = "Codex / ChatGPT",
+        description = "ChatGPT account OAuth with the Codex Responses protocol",
+        inferenceEndpointPlaceholder = CodexOAuthContract.RESPONSES_ENDPOINT,
+        defaultScopes = CodexOAuthContract.SCOPES.joinToString(" "),
+    ),
+    XAI(
+        wireName = "xai",
+        displayName = "xAI / Grok",
+        description = "SuperGrok or X Premium+ browser OAuth",
+        inferenceEndpointPlaceholder = XaiOAuthContract.CHAT_COMPLETIONS_ENDPOINT,
+        defaultScopes = XaiOAuthContract.SCOPES.joinToString(" "),
     );
 
     companion object {
@@ -93,6 +110,116 @@ data class ProviderProfile(
         if (type == ProviderType.GEMINI && !inferenceEndpoint.contains("{model}")) {
             put(Field.INFERENCE_ENDPOINT, "Gemini endpoint must contain {model}")
         }
+        if (type == ProviderType.GEMINI) {
+            if (authorizationEndpoint != GeminiOAuthContract.AUTHORIZATION_ENDPOINT) {
+                put(
+                    Field.AUTHORIZATION_ENDPOINT,
+                    "Gemini authorization endpoint is fixed by the Provider contract",
+                )
+            }
+            if (tokenEndpoint != GeminiOAuthContract.TOKEN_ENDPOINT) {
+                put(
+                    Field.TOKEN_ENDPOINT,
+                    "Gemini token endpoint is fixed by the Provider contract",
+                )
+            }
+            if (inferenceEndpoint != GeminiOAuthContract.GENERATE_CONTENT_ENDPOINT) {
+                put(
+                    Field.INFERENCE_ENDPOINT,
+                    "Gemini inference endpoint is fixed by the Provider contract",
+                )
+            }
+            if (scopes != GeminiOAuthContract.SCOPES) {
+                put(Field.SCOPES, "Gemini OAuth scopes are fixed by the Provider contract")
+            }
+            if (callbackPort != GeminiOAuthContract.CALLBACK_PORT) {
+                put(Field.CALLBACK_PORT, "Gemini callback port must be 8085")
+            }
+        }
+        if (type == ProviderType.ANTHROPIC) {
+            if (authorizationEndpoint != AnthropicOAuthContract.AUTHORIZATION_ENDPOINT) {
+                put(
+                    Field.AUTHORIZATION_ENDPOINT,
+                    "Claude authorization endpoint is fixed by the Provider contract",
+                )
+            }
+            if (tokenEndpoint != AnthropicOAuthContract.TOKEN_ENDPOINT) {
+                put(
+                    Field.TOKEN_ENDPOINT,
+                    "Claude token endpoint is fixed by the Provider contract",
+                )
+            }
+            if (inferenceEndpoint != AnthropicOAuthContract.MESSAGES_ENDPOINT) {
+                put(
+                    Field.INFERENCE_ENDPOINT,
+                    "Claude inference endpoint is fixed by the Provider contract",
+                )
+            }
+            if (clientId != AnthropicOAuthContract.PUBLIC_CLIENT_ID) {
+                put(Field.CLIENT_ID, "Claude public client ID is fixed by the compatibility contract")
+            }
+            if (scopes != AnthropicOAuthContract.SCOPES) {
+                put(Field.SCOPES, "Claude OAuth scopes are fixed by the Provider contract")
+            }
+            if (callbackPort != AnthropicOAuthContract.CALLBACK_PORT) {
+                put(Field.CALLBACK_PORT, "Claude callback port must be 54545")
+            }
+            if (anthropicBeta != AnthropicOAuthContract.OAUTH_BETA) {
+                put(Field.ANTHROPIC_BETA, "Claude OAuth beta header is fixed by the Provider contract")
+            }
+        }
+        if (type == ProviderType.CODEX) {
+            if (authorizationEndpoint != CodexOAuthContract.AUTHORIZATION_ENDPOINT) {
+                put(
+                    Field.AUTHORIZATION_ENDPOINT,
+                    "Codex authorization endpoint is fixed by the Provider contract",
+                )
+            }
+            if (tokenEndpoint != CodexOAuthContract.TOKEN_ENDPOINT) {
+                put(
+                    Field.TOKEN_ENDPOINT,
+                    "Codex token endpoint is fixed by the Provider contract",
+                )
+            }
+            if (inferenceEndpoint != CodexOAuthContract.RESPONSES_ENDPOINT) {
+                put(
+                    Field.INFERENCE_ENDPOINT,
+                    "Codex inference endpoint is fixed by the Provider contract",
+                )
+            }
+            if (scopes != CodexOAuthContract.SCOPES) {
+                put(Field.SCOPES, "Codex OAuth scopes are fixed by the Provider contract")
+            }
+            if (callbackPort != CodexOAuthContract.CALLBACK_PORT) {
+                put(Field.CALLBACK_PORT, "Codex callback port must be 1455")
+            }
+        }
+        if (type == ProviderType.XAI) {
+            if (authorizationEndpoint != XaiOAuthContract.AUTHORIZATION_ENDPOINT) {
+                put(
+                    Field.AUTHORIZATION_ENDPOINT,
+                    "xAI authorization endpoint is fixed by the Provider contract",
+                )
+            }
+            if (tokenEndpoint != XaiOAuthContract.TOKEN_ENDPOINT) {
+                put(
+                    Field.TOKEN_ENDPOINT,
+                    "xAI token endpoint is fixed by the Provider contract",
+                )
+            }
+            if (inferenceEndpoint != XaiOAuthContract.CHAT_COMPLETIONS_ENDPOINT) {
+                put(
+                    Field.INFERENCE_ENDPOINT,
+                    "xAI inference endpoint is fixed by the Provider contract",
+                )
+            }
+            if (scopes != XaiOAuthContract.SCOPES) {
+                put(Field.SCOPES, "xAI OAuth scopes are fixed by the Provider contract")
+            }
+            if (callbackPort != XaiOAuthContract.CALLBACK_PORT) {
+                put(Field.CALLBACK_PORT, "xAI callback port must be 56121")
+            }
+        }
         if (clientId.isBlank()) put(Field.CLIENT_ID, "Public client ID is required")
         if (scopes.none(String::isNotBlank)) put(Field.SCOPES, "At least one scope is required")
         if (model.isBlank()) put(Field.MODEL, "Default model is required")
@@ -110,6 +237,7 @@ data class ProviderProfile(
         SCOPES,
         MODEL,
         CALLBACK_PORT,
+        ANTHROPIC_BETA,
     }
 
     companion object {
@@ -136,12 +264,47 @@ data class ProviderProfile(
         fun draft(type: ProviderType, label: String): ProviderProfile = ProviderProfile(
             label = label,
             type = type,
-            authorizationEndpoint = "",
-            tokenEndpoint = "",
+            authorizationEndpoint = when (type) {
+                ProviderType.ANTHROPIC -> AnthropicOAuthContract.AUTHORIZATION_ENDPOINT
+                ProviderType.GEMINI -> GeminiOAuthContract.AUTHORIZATION_ENDPOINT
+                ProviderType.CODEX -> CodexOAuthContract.AUTHORIZATION_ENDPOINT
+                ProviderType.XAI -> XaiOAuthContract.AUTHORIZATION_ENDPOINT
+                else -> ""
+            },
+            tokenEndpoint = when (type) {
+                ProviderType.ANTHROPIC -> AnthropicOAuthContract.TOKEN_ENDPOINT
+                ProviderType.GEMINI -> GeminiOAuthContract.TOKEN_ENDPOINT
+                ProviderType.CODEX -> CodexOAuthContract.TOKEN_ENDPOINT
+                ProviderType.XAI -> XaiOAuthContract.TOKEN_ENDPOINT
+                else -> ""
+            },
             inferenceEndpoint = type.inferenceEndpointPlaceholder,
-            clientId = "",
+            clientId = when (type) {
+                ProviderType.ANTHROPIC -> AnthropicOAuthContract.PUBLIC_CLIENT_ID
+                ProviderType.CODEX -> CodexProfileDefaults.PUBLIC_CLIENT_ID
+                ProviderType.XAI -> XaiProfileDefaults.PUBLIC_CLIENT_ID
+                else -> ""
+            },
             scopes = type.defaultScopes.split(" "),
-            model = "",
+            model = when (type) {
+                ProviderType.ANTHROPIC -> AnthropicProfileDefaults.DEFAULT_MODEL
+                ProviderType.GEMINI -> GeminiProfileDefaults.DEFAULT_MODEL
+                ProviderType.CODEX -> CodexProfileDefaults.DEFAULT_MODEL
+                ProviderType.XAI -> XaiProfileDefaults.DEFAULT_MODEL
+                else -> ""
+            },
+            callbackPort = when (type) {
+                ProviderType.ANTHROPIC -> AnthropicOAuthContract.CALLBACK_PORT
+                ProviderType.GEMINI -> GeminiOAuthContract.CALLBACK_PORT
+                ProviderType.CODEX -> CodexOAuthContract.CALLBACK_PORT
+                ProviderType.XAI -> XaiOAuthContract.CALLBACK_PORT
+                else -> DEFAULT_CALLBACK_PORT
+            },
+            anthropicBeta = if (type == ProviderType.ANTHROPIC) {
+                AnthropicOAuthContract.OAUTH_BETA
+            } else {
+                null
+            },
         )
 
         private fun validateHttps(value: String, label: String): String? {

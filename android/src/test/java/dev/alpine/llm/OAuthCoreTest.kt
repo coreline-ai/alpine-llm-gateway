@@ -10,6 +10,7 @@ import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.charset.StandardCharsets
@@ -31,6 +32,18 @@ class OAuthCoreTest {
         assertEquals(expected, value.challenge)
         assertFalse(value.verifier.contains("="))
         assertFalse(value.challenge.contains("="))
+    }
+
+    @Test
+    fun hexPkceUsesThirtyTwoRandomBytesAndStandardS256Challenge() {
+        val value = OAuthPkce.create(OAuthPkceMode.HEX_32_BYTES)
+        val expected = Base64.getUrlEncoder().withoutPadding().encodeToString(
+            MessageDigest.getInstance("SHA-256")
+                .digest(value.verifier.toByteArray(StandardCharsets.US_ASCII)),
+        )
+
+        assertTrue(value.verifier.matches(Regex("[0-9a-f]{64}")))
+        assertEquals(expected, value.challenge)
     }
 
     @Test
@@ -99,6 +112,74 @@ class OAuthCoreTest {
     }
 
     @Test
+    fun providerConfigSupportsExactLocalhostCallbackWithoutFallbackPorts() {
+        val config = OAuthProviderConfig(
+            providerId = "codex-test",
+            authorizationEndpoint = "https://identity.example.test/authorize",
+            tokenEndpoint = "https://identity.example.test/token",
+            clientId = "public-client",
+            scopes = listOf("openid", "offline_access"),
+            callbackPort = 1455,
+            redirectPath = "/auth/callback",
+            redirectHost = "localhost",
+            callbackFallbackPorts = emptyList(),
+        )
+
+        assertEquals("http://localhost:1455/auth/callback", config.redirectUri())
+        assertTrue(config.callbackFallbackPorts.isEmpty())
+        assertThrows(IllegalArgumentException::class.java) {
+            config.copy(redirectHost = "0.0.0.0")
+        }
+    }
+
+    @Test
+    fun providerConfigKeepsDefaultLoopbackFallbackPolicy() {
+        val config = OAuthProviderConfig(
+            providerId = "generic-test",
+            authorizationEndpoint = "https://identity.example.test/authorize",
+            tokenEndpoint = "https://identity.example.test/token",
+            clientId = "public-client",
+            scopes = listOf("openid"),
+            callbackPort = 54545,
+        )
+
+        assertEquals("http://127.0.0.1:54545/oauth/callback", config.redirectUri())
+        assertEquals(listOf(54546, 54547), config.callbackFallbackPorts)
+        assertEquals(1, config.tokenRequestMaxAttempts)
+        assertEquals(0L, config.tokenRetryInitialDelayMs)
+        assertThrows(IllegalArgumentException::class.java) {
+            config.copy(tokenRequestMaxAttempts = 0)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            config.copy(tokenRetryInitialDelayMs = -1L)
+        }
+    }
+
+    @Test
+    fun discoveryAcceptsOnlyPinnedHttpsProviderHosts() {
+        val trusted = OAuthDiscoveryDocument.parse(
+            JSONObject()
+                .put("authorization_endpoint", "https://auth.x.ai/oauth2/authorize")
+                .put("token_endpoint", "https://auth.x.ai/oauth2/token")
+                .toString(),
+            setOf("auth.x.ai"),
+        )
+        assertEquals("https://auth.x.ai/oauth2/authorize", trusted.authorizationEndpoint)
+        assertFailureKind(OAuthFailureKind.CONFIGURATION) {
+            OAuthDiscoveryDocument.parse(
+                JSONObject()
+                    .put("authorization_endpoint", "https://auth.x.ai.evil.test/authorize")
+                    .put("token_endpoint", "https://auth.x.ai/oauth2/token")
+                    .toString(),
+                setOf("auth.x.ai"),
+            )
+        }
+        assertFailureKind(OAuthFailureKind.PROTOCOL) {
+            OAuthDiscoveryDocument.parse("{}", setOf("auth.x.ai"))
+        }
+    }
+
+    @Test
     fun standardTokenAdapterPreservesProviderMetadata() {
         val token = StandardOAuthTokenResponseAdapter().parse(
             JSONObject()
@@ -141,6 +222,33 @@ class OAuthCoreTest {
         assertEquals("application/json", encoded.contentType)
         assertEquals("state-value", JSONObject(encoded.body).getString("state"))
         assertEquals("challenge-value", JSONObject(encoded.body).getString("code_challenge"))
+    }
+
+    @Test
+    fun tokenRetryPolicyRetriesOnlyTransportFailuresWithLinearBackoff() {
+        assertTrue(
+            OAuthTokenRetryPolicy.canRetry(
+                OAuthFailureKind.NETWORK,
+                failedAttempt = 1,
+                maxAttempts = 3,
+            ),
+        )
+        assertFalse(
+            OAuthTokenRetryPolicy.canRetry(
+                OAuthFailureKind.NETWORK,
+                failedAttempt = 3,
+                maxAttempts = 3,
+            ),
+        )
+        assertFalse(
+            OAuthTokenRetryPolicy.canRetry(
+                OAuthFailureKind.PROVIDER_ERROR,
+                failedAttempt = 1,
+                maxAttempts = 3,
+            ),
+        )
+        assertEquals(1_000L, OAuthTokenRetryPolicy.delayMs(1_000L, failedAttempt = 1))
+        assertEquals(2_000L, OAuthTokenRetryPolicy.delayMs(1_000L, failedAttempt = 2))
     }
 
     @Test
@@ -255,6 +363,7 @@ class OAuthCoreTest {
     @Test
     fun loopbackCallbackParsesEncodedProviderError() {
         var received: OAuthCallbackServer.Callback? = null
+        var callbackPage = ""
         val latch = CountDownLatch(1)
         val server = OAuthCallbackServer(
             requestedPort = 0,
@@ -273,15 +382,98 @@ class OAuthCoreTest {
                     write(request.toByteArray(StandardCharsets.US_ASCII))
                     flush()
                 }
-                socket.getInputStream().bufferedReader().use { it.readLine() }
+                socket.getInputStream().bufferedReader().use { reader ->
+                    callbackPage = reader.readText()
+                }
             }
             assertTrue(latch.await(2, TimeUnit.SECONDS))
             assertEquals("access_denied", received?.error)
             assertEquals("user cancelled", received?.errorDescription)
+            assertTrue(callbackPage.contains("Authorization received"))
+            assertFalse(callbackPage.contains("Authorization complete"))
+            assertTrue(callbackPage.contains("window.close()"))
         } finally {
             server.stop()
         }
     }
+
+    @Test
+    fun loopbackCallbackDropsOversizedRequestAndContinuesListening() {
+        var received: OAuthCallbackServer.Callback? = null
+        val latch = CountDownLatch(1)
+        val server = OAuthCallbackServer(
+            requestedPort = 0,
+            redirectPath = "/oauth/callback",
+            maxRequestLineBytes = 64,
+        ) {
+            received = it
+            latch.countDown()
+        }
+        server.start()
+        try {
+            Socket("127.0.0.1", server.boundPort).use { socket ->
+                runCatching {
+                    val oversized = "GET /oauth/callback?code=${"x".repeat(128)} HTTP/1.1\r\n\r\n"
+                    socket.getOutputStream().apply {
+                        write(oversized.toByteArray(StandardCharsets.US_ASCII))
+                        flush()
+                    }
+                }
+            }
+            Socket("127.0.0.1", server.boundPort).use { socket ->
+                val request = "GET /oauth/callback?code=ok&state=expected HTTP/1.1\r\n" +
+                    "Host: 127.0.0.1\r\nConnection: close\r\n\r\n"
+                socket.getOutputStream().apply {
+                    write(request.toByteArray(StandardCharsets.US_ASCII))
+                    flush()
+                }
+                socket.getInputStream().bufferedReader().use { it.readLine() }
+            }
+            assertTrue(latch.await(2, TimeUnit.SECONDS))
+            assertEquals("ok", received?.code)
+            assertEquals("expected", received?.state)
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
+    fun loopbackCallbackAllowsOnlyConfiguredCorsPreflightOrigins() {
+        val server = OAuthCallbackServer(
+            requestedPort = 0,
+            redirectPath = "/callback",
+            corsAllowedOrigins = setOf("https://accounts.x.ai"),
+        ) { error("preflight must not complete OAuth") }
+        server.start()
+        try {
+            val allowed = callbackRequest(
+                server.boundPort,
+                "OPTIONS /callback HTTP/1.1\r\n" +
+                    "Origin: https://accounts.x.ai\r\nConnection: close\r\n\r\n",
+            )
+            val denied = callbackRequest(
+                server.boundPort,
+                "OPTIONS /callback HTTP/1.1\r\n" +
+                    "Origin: https://accounts.x.ai.evil.test\r\nConnection: close\r\n\r\n",
+            )
+
+            assertTrue(allowed.startsWith("HTTP/1.1 204"))
+            assertTrue(allowed.contains("Access-Control-Allow-Origin: https://accounts.x.ai"))
+            assertTrue(denied.startsWith("HTTP/1.1 403"))
+            assertFalse(denied.contains("Access-Control-Allow-Origin"))
+        } finally {
+            server.stop()
+        }
+    }
+
+    private fun callbackRequest(port: Int, request: String): String =
+        Socket("127.0.0.1", port).use { socket ->
+            socket.getOutputStream().apply {
+                write(request.toByteArray(StandardCharsets.US_ASCII))
+                flush()
+            }
+            socket.getInputStream().bufferedReader().use { it.readText() }
+        }
 
     private fun assertFailureKind(kind: OAuthFailureKind, block: () -> Unit) {
         val error = runCatching(block).exceptionOrNull()

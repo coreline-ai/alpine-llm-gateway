@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.outlined.AddComment
 import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material3.AssistChip
@@ -40,6 +42,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -53,7 +58,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -77,9 +82,13 @@ import dev.alpine.llm.demo.model.ChatRole
 import dev.alpine.llm.demo.ui.ChatUiState
 import dev.alpine.llm.demo.ui.ConnectedProviderOption
 import dev.alpine.llm.demo.ui.components.AdaptiveContent
+import dev.alpine.llm.demo.ui.components.ChatMarkdown
+import dev.alpine.llm.demo.ui.screens.assistant.AssistantModeControl
+import dev.alpine.llm.demo.ui.screens.conversation.ConversationHistory
 import dev.alpine.llm.demo.ui.state.ChatFailure
 import dev.alpine.llm.demo.ui.state.ChatRecoveryAction
 import dev.alpine.llm.demo.R
+import kotlinx.coroutines.launch
 
 /** Main chat surface. It only renders redacted [ChatFailure] data. */
 @Composable
@@ -87,97 +96,181 @@ import dev.alpine.llm.demo.R
 fun AlpineChatScreen(
     state: ChatUiState,
     onSelectProvider: (String) -> Unit,
+    onSelectModel: (String, String) -> Unit,
+    onSelectAssistantMode: (String, String, Boolean) -> Unit,
+    onResetAssistantMode: (Boolean) -> Unit,
     onNewChat: () -> Unit,
+    onSelectConversation: (String) -> Unit,
+    onRenameConversation: (String, String) -> Unit,
+    onDeleteConversation: (String) -> Unit,
     onManageProviders: () -> Unit,
+    onDraftChange: (String) -> Unit,
     onSend: (String) -> Unit,
     onStop: () -> Unit,
     failure: ChatFailure? = null,
     onDismissFailure: () -> Unit = {},
     onRetry: () -> Unit = {},
 ) {
-    Scaffold(
-        modifier = Modifier
-            .testTag("chat_screen")
-            .semantics { testTagsAsResourceId = true },
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Alpine Chat") },
-                actions = {
-                    IconButton(
-                        onClick = onNewChat,
-                        enabled = !state.isStreaming,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .testTag("new_chat")
-                            .semantics { contentDescription = "Start new chat" },
-                    ) {
-                        Icon(Icons.Outlined.AddComment, contentDescription = null)
-                    }
-                    IconButton(
-                        onClick = onManageProviders,
-                        enabled = !state.isStreaming,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .testTag("manage_providers")
-                            .semantics { contentDescription = "Manage LLM connections" },
-                    ) {
-                        Icon(Icons.Outlined.Hub, contentDescription = null)
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
-            )
-        },
-        bottomBar = {
-            AdaptiveContent(horizontalPadding = 12.dp) {
-                ChatComposer(
-                    enabled = state.selectedProfileId != null,
-                    streaming = state.isStreaming,
-                    onSend = onSend,
-                    onStop = onStop,
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    var historyVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(drawerState.currentValue) {
+        if (drawerState.currentValue == DrawerValue.Closed) historyVisible = false
+    }
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            if (historyVisible) {
+                ConversationHistory(
+                    conversations = state.conversations,
+                    activeConversationId = state.activeConversationId,
+                    providers = state.providers,
+                    onNewChat = onNewChat,
+                    onSelect = onSelectConversation,
+                    onRename = onRenameConversation,
+                    onDelete = onDeleteConversation,
+                    onClose = {
+                        historyVisible = false
+                        scope.launch { drawerState.close() }
+                    },
                 )
             }
         },
-    ) { padding ->
-        AdaptiveContent(
+        gesturesEnabled = drawerState.isOpen,
+    ) {
+        Scaffold(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
-            Column(Modifier.fillMaxSize()) {
-                ProviderSelector(
-                    providers = state.providers,
-                    selectedProfileId = state.selectedProfileId,
-                    enabled = !state.isStreaming,
-                    onSelect = onSelectProvider,
-                    onManageProviders = onManageProviders,
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                failure?.let { visibleFailure ->
-                    FailureAction(
-                        failure = visibleFailure,
-                        onAction = {
-                            when (visibleFailure.recoveryAction) {
-                                ChatRecoveryAction.RETRY -> onRetry()
-                                ChatRecoveryAction.RECONNECT,
-                                ChatRecoveryAction.CHECK_SETTINGS -> onManageProviders()
+                .testTag("chat_screen")
+                .semantics { testTagsAsResourceId = true },
+            topBar = {
+                CenterAlignedTopAppBar(
+                    navigationIcon = {
+                        IconButton(
+                            onClick = {
+                                historyVisible = true
+                                scope.launch { drawerState.open() }
+                            },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("conversation_history")
+                                .semantics { contentDescription = "Conversation history" },
+                        ) {
+                            Icon(Icons.Outlined.History, contentDescription = null)
+                        }
+                    },
+                    title = {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = state.conversationTitle,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (state.activeGenerationCount > 1) {
+                                Text(
+                                    text = "${state.activeGenerationCount} chats generating",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
-                        },
-                        onDismiss = onDismissFailure,
+                        }
+                    },
+                    actions = {
+                        IconButton(
+                            onClick = onNewChat,
+                            enabled = !state.isLoadingConversations,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("new_chat")
+                                .semantics { contentDescription = "Start new chat" },
+                        ) {
+                            Icon(Icons.Outlined.AddComment, contentDescription = null)
+                        }
+                        IconButton(
+                            onClick = onManageProviders,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("manage_providers")
+                                .semantics { contentDescription = "Manage LLM connections" },
+                        ) {
+                            Icon(Icons.Outlined.Hub, contentDescription = null)
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                )
+            },
+            bottomBar = {
+                AdaptiveContent(horizontalPadding = 12.dp) {
+                    ChatComposer(
+                        value = state.draft,
+                        enabled = state.selectedProfileId != null &&
+                            !state.isLoadingConversations,
+                        streaming = state.isStreaming,
+                        onValueChange = onDraftChange,
+                        onSend = onSend,
+                        onStop = onStop,
                     )
                 }
-                if (state.messages.isEmpty()) {
-                    EmptyChatState(
-                        hasProvider = state.selectedProfileId != null,
+            },
+        ) { padding ->
+            AdaptiveContent(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+            ) {
+                Column(Modifier.fillMaxSize()) {
+                    state.storageWarning?.let { warning ->
+                        StorageWarning(warning)
+                    }
+                    ProviderSelector(
+                        providers = state.providers,
+                        selectedProfileId = state.selectedProfileId,
+                        enabled = state.providers.isNotEmpty() && !state.isLoadingConversations,
+                        streaming = state.isStreaming,
+                        onSelect = onSelectProvider,
+                        onSelectModel = onSelectModel,
                         onManageProviders = onManageProviders,
-                        modifier = Modifier.weight(1f),
                     )
-                } else {
-                    MessageList(
-                        messages = state.messages,
-                        modifier = Modifier.weight(1f),
+                    AssistantModeControl(
+                        selectedSkillId = state.selectedSkillId,
+                        selectedPersonaId = state.selectedPersonaId,
+                        defaultSkillId = state.defaultSkillId,
+                        defaultPersonaId = state.defaultPersonaId,
+                        streaming = state.isStreaming,
+                        enabled = !state.isLoadingConversations,
+                        onSelect = onSelectAssistantMode,
+                        onReset = onResetAssistantMode,
                     )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    state.statusMessage
+                        ?.takeIf { state.selectedProfileId != null || state.messages.isNotEmpty() }
+                        ?.let { message -> StatusMessage(message) }
+                    failure?.let { visibleFailure ->
+                        FailureAction(
+                            failure = visibleFailure,
+                            onAction = {
+                                when (visibleFailure.recoveryAction) {
+                                    ChatRecoveryAction.RETRY -> onRetry()
+                                    ChatRecoveryAction.RECONNECT,
+                                    ChatRecoveryAction.CHECK_SETTINGS -> onManageProviders()
+                                }
+                            },
+                            onDismiss = onDismissFailure,
+                        )
+                    }
+                    if (state.messages.isEmpty()) {
+                        EmptyChatState(
+                            hasProvider = state.selectedProfileId != null,
+                            onManageProviders = onManageProviders,
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
+                        MessageList(
+                            messages = state.messages,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
             }
         }
@@ -190,95 +283,151 @@ private fun ProviderSelector(
     providers: List<ConnectedProviderOption>,
     selectedProfileId: String?,
     enabled: Boolean,
+    streaming: Boolean,
     onSelect: (String) -> Unit,
+    onSelectModel: (String, String) -> Unit,
     onManageProviders: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val selected = providers.firstOrNull { it.profileId == selectedProfileId }
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { if (enabled && providers.isNotEmpty()) expanded = !expanded },
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp)
-            .testTag("provider_selector")
-            .semantics {
-                if (!enabled) disabled()
-            },
-    ) {
-        Surface(
+    Column(Modifier.fillMaxWidth()) {
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { if (enabled && providers.isNotEmpty()) expanded = !expanded },
             modifier = Modifier
                 .fillMaxWidth()
-                .menuAnchor(
-                    type = MenuAnchorType.PrimaryNotEditable,
-                    enabled = enabled,
-                )
-                .clip(RoundedCornerShape(18.dp))
-                .clickable(enabled = enabled && providers.isNotEmpty()) { expanded = true }
-                .semantics { contentDescription = "Connected LLM selector" },
-            shape = RoundedCornerShape(18.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                .padding(top = 8.dp)
+                .testTag("provider_selector")
+                .semantics {
+                    if (!enabled) disabled()
+                },
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(
+                        type = MenuAnchorType.PrimaryNotEditable,
+                        enabled = enabled,
+                    )
+                    .clip(RoundedCornerShape(18.dp))
+                    .clickable(enabled = enabled && providers.isNotEmpty()) { expanded = true }
+                    .semantics { contentDescription = "Connected LLM selector" },
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.SmartToy,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(Modifier.size(8.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = selected?.label ?: "No connected LLM",
-                        style = MaterialTheme.typography.labelLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.SmartToy,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
                     )
-                    Text(
-                        text = selected?.model ?: "Connect an LLM to begin",
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Spacer(Modifier.size(8.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = selected?.label ?: "No connected LLM",
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = selected?.model ?: "Connect an LLM to begin",
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
                 }
-                Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
             }
-        }
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
-            if (providers.isEmpty()) {
-                DropdownMenuItem(
-                    text = { Text("Manage LLM connections") },
-                    onClick = {
-                        expanded = false
-                        onManageProviders()
-                    },
-                )
-            } else {
-                providers.forEach { provider ->
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+            ) {
+                if (providers.isEmpty()) {
                     DropdownMenuItem(
-                        text = {
-                            Column {
-                                Text(provider.label)
-                                Text(provider.model, style = MaterialTheme.typography.labelSmall)
-                            }
-                        },
+                        text = { Text("Manage LLM connections") },
                         onClick = {
                             expanded = false
-                            onSelect(provider.profileId)
-                        },
-                        trailingIcon = {
-                            if (provider.profileId == selectedProfileId) {
-                                AssistChip(onClick = {}, label = { Text("Active") })
-                            }
+                            onManageProviders()
                         },
                     )
+                } else {
+                    providers.forEach { provider ->
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(provider.label)
+                                    Text(provider.model, style = MaterialTheme.typography.labelSmall)
+                                }
+                            },
+                            onClick = {
+                                expanded = false
+                                onSelect(provider.profileId)
+                            },
+                            trailingIcon = {
+                                if (provider.profileId == selectedProfileId) {
+                                    AssistChip(onClick = {}, label = { Text("Active") })
+                                }
+                            },
+                        )
+                    }
                 }
+            }
+        }
+        selected?.takeIf { it.modelOptions.size > 1 }?.let { provider ->
+            ModelQuickSwitcher(
+                models = provider.modelOptions,
+                selectedModel = provider.model,
+                enabled = enabled,
+                streaming = streaming,
+                onSelect = { model -> onSelectModel(provider.profileId, model) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ModelQuickSwitcher(
+    models: List<String>,
+    selectedModel: String,
+    enabled: Boolean,
+    streaming: Boolean,
+    onSelect: (String) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp, bottom = 8.dp),
+    ) {
+        Text(
+            text = if (streaming) {
+                "Next message model · current response continues unchanged"
+            } else {
+                "Quick model switch"
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
+        LazyRow(
+            modifier = Modifier.testTag("model_quick_switcher"),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp),
+        ) {
+            items(models, key = { it }) { model ->
+                FilterChip(
+                    selected = model == selectedModel,
+                    onClick = { onSelect(model) },
+                    enabled = enabled,
+                    label = { Text(model, maxLines = 1) },
+                    modifier = Modifier
+                        .testTag("quick_model_$model")
+                        .semantics { contentDescription = "Use model $model" },
+                )
             }
         }
     }
@@ -409,6 +558,38 @@ private fun FailureAction(
 }
 
 @Composable
+private fun StorageWarning(message: String) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 6.dp)
+            .semantics { liveRegion = LiveRegionMode.Polite },
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+        )
+    }
+}
+
+@Composable
+private fun StatusMessage(message: String) {
+    Text(
+        text = message,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .semantics { liveRegion = LiveRegionMode.Polite },
+    )
+}
+
+@Composable
 private fun MessageBubble(message: ChatMessage) {
     val isUser = message.role == ChatRole.USER
     val isError = message.role == ChatRole.ERROR || message.state == ChatMessageState.FAILED
@@ -429,10 +610,20 @@ private fun MessageBubble(message: ChatMessage) {
             Modifier
                 .fillMaxWidth(0.84f)
                 .widthIn(max = 620.dp),
+            horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
         ) {
             if (!isUser && message.providerLabel != null) {
                 Text(
-                    text = listOfNotNull(message.providerLabel, message.model)
+                    text = listOfNotNull(
+                        message.providerLabel,
+                        message.model,
+                        message.assistantSkillId?.let { id ->
+                            dev.alpine.llm.demo.assistant.AssistantCatalog.skill(id).title
+                        },
+                        message.assistantPersonaId?.let { id ->
+                            dev.alpine.llm.demo.assistant.AssistantCatalog.persona(id).title
+                        },
+                    )
                         .joinToString(" · "),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -450,10 +641,15 @@ private fun MessageBubble(message: ChatMessage) {
                 contentColor = contentColor,
             ) {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                    Text(
-                        text = message.displayText(),
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
+                    val displayText = message.displayText()
+                    if (!isUser && !isError && displayText.isNotBlank()) {
+                        ChatMarkdown(source = displayText)
+                    } else {
+                        Text(
+                            text = displayText,
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    }
                     message.statusLabel()?.let { status ->
                         Spacer(Modifier.height(5.dp))
                         Text(
@@ -471,12 +667,13 @@ private fun MessageBubble(message: ChatMessage) {
 
 @Composable
 private fun ChatComposer(
+    value: String,
     enabled: Boolean,
     streaming: Boolean,
+    onValueChange: (String) -> Unit,
     onSend: (String) -> Unit,
     onStop: () -> Unit,
 ) {
-    var text by rememberSaveable { mutableStateOf("") }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -490,13 +687,21 @@ private fun ChatComposer(
             verticalAlignment = Alignment.Bottom,
         ) {
             TextField(
-                value = text,
-                onValueChange = { text = it },
+                value = value,
+                onValueChange = onValueChange,
                 modifier = Modifier
                     .weight(1f)
                     .testTag("message_input"),
-                enabled = enabled && !streaming,
-                placeholder = { Text(if (enabled) "Message your LLM" else "Connect an LLM first") },
+                enabled = enabled,
+                placeholder = {
+                    Text(
+                        when {
+                            !enabled -> "Connect an LLM first"
+                            streaming -> "Type your next message while this response finishes"
+                            else -> "Message your LLM"
+                        },
+                    )
+                },
                 maxLines = 5,
                 shape = RoundedCornerShape(24.dp),
                 colors = TextFieldDefaults.colors(
@@ -512,9 +717,8 @@ private fun ChatComposer(
                 ),
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(
                     onSend = {
-                        if (enabled && text.isNotBlank()) {
-                            onSend(text)
-                            text = ""
+                        if (enabled && !streaming && value.isNotBlank()) {
+                            onSend(value)
                         }
                     },
                 ),
@@ -532,12 +736,11 @@ private fun ChatComposer(
             } else {
                 IconButton(
                     onClick = {
-                        if (enabled && text.isNotBlank()) {
-                            onSend(text)
-                            text = ""
+                        if (enabled && value.isNotBlank()) {
+                            onSend(value)
                         }
                     },
-                    enabled = enabled && text.isNotBlank(),
+                    enabled = enabled && value.isNotBlank(),
                     modifier = Modifier
                         .size(48.dp)
                         .testTag("send_button")
@@ -575,6 +778,12 @@ private fun ChatFailure.userMessage(): String = when (recoveryAction) {
             stringResource(R.string.failure_overloaded)
         dev.alpine.llm.demo.ui.state.ChatFailureKind.TIMEOUT ->
             stringResource(R.string.failure_timeout)
+        dev.alpine.llm.demo.ui.state.ChatFailureKind.PROVIDER_UNAVAILABLE ->
+            stringResource(R.string.failure_unavailable)
+        dev.alpine.llm.demo.ui.state.ChatFailureKind.INVALID_RESPONSE ->
+            stringResource(R.string.failure_invalid_response)
+        dev.alpine.llm.demo.ui.state.ChatFailureKind.NETWORK ->
+            stringResource(R.string.failure_network)
         else -> stringResource(R.string.failure_generic)
     }
     ChatRecoveryAction.CHECK_SETTINGS -> stringResource(R.string.failure_check_settings)

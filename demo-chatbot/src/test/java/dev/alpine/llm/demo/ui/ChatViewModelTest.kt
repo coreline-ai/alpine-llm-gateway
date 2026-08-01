@@ -11,6 +11,7 @@ import dev.alpine.llm.ProviderStreamException
 import dev.alpine.llm.demo.llm.ChatCompletionSession
 import dev.alpine.llm.demo.llm.ProviderConnection
 import dev.alpine.llm.demo.llm.ProviderConnectionState
+import dev.alpine.llm.demo.model.AssistantSelection
 import dev.alpine.llm.demo.model.ChatMessageState
 import dev.alpine.llm.demo.model.ChatRole
 import dev.alpine.llm.demo.model.ProviderProfile
@@ -33,6 +34,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
+import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -80,6 +82,305 @@ class ChatViewModelTest {
         }
 
     @Test
+    fun `assistant selection is conversation scoped and saved default applies to new chats`() =
+        runTest(dispatcher) {
+            var persisted: AssistantSelection? = null
+            val viewModel = ChatViewModel(
+                initialAssistantSelection = AssistantSelection("coding", "expert_engineer"),
+                persistAssistantDefaults = { persisted = it },
+            )
+
+            assertEquals("coding", viewModel.state.value.selectedSkillId)
+            assertEquals("expert_engineer", viewModel.state.value.defaultPersonaId)
+            viewModel.selectAssistantMode("debugging", "concise", saveAsDefault = true)
+
+            assertEquals(AssistantSelection("debugging", "concise"), persisted)
+            assertEquals("debugging", viewModel.state.value.defaultSkillId)
+            viewModel.updateDraft("create another conversation")
+            viewModel.newConversation()
+
+            assertEquals("debugging", viewModel.state.value.selectedSkillId)
+            assertEquals("concise", viewModel.state.value.selectedPersonaId)
+        }
+
+    @Test
+    fun `stream captures assistant mode while next message selection remains editable`() =
+        runTest(dispatcher) {
+            val session = FakeSession.slow(
+                profile("assistant-mode-stream", ProviderType.OPENAI_COMPATIBLE),
+                "partial",
+            )
+            val viewModel = connectedViewModel(session)
+            viewModel.selectAssistantMode("coding", "concise")
+
+            viewModel.send("Implement this", session)
+            runCurrent()
+            viewModel.selectAssistantMode("learning", "beginner_friendly")
+
+            val request = JSONObject(session.requests.single())
+            assertTrue(request.getString("system").contains("maintainable code"))
+            assertTrue(request.getString("system").contains("Be concise"))
+            assertEquals("learning", viewModel.state.value.selectedSkillId)
+            assertEquals("coding", viewModel.state.value.messages.last().assistantSkillId)
+            assertEquals("concise", viewModel.state.value.messages.last().assistantPersonaId)
+            viewModel.stopStreaming()
+            runCurrent()
+        }
+
+    @Test
+    fun `parallel conversations keep independent assistant instructions and metadata`() =
+        runTest(dispatcher) {
+            val first = FakeSession.slow(profile("mode-a", ProviderType.GEMINI), "A")
+            val second = FakeSession.slow(
+                profile("mode-b", ProviderType.OPENAI_COMPATIBLE),
+                "B",
+            )
+            val viewModel = ChatViewModel()
+            viewModel.updateConnections(listOf(first.connected(), second.connected()))
+            viewModel.selectAssistantMode("coding", "concise")
+            val firstId = viewModel.state.value.activeConversationId
+            viewModel.send("First", first)
+            runCurrent()
+
+            viewModel.newConversation()
+            viewModel.selectProvider(second.profile.id)
+            viewModel.selectAssistantMode("learning", "beginner_friendly")
+            val secondId = viewModel.state.value.activeConversationId
+            viewModel.send("Second", second)
+            runCurrent()
+
+            assertTrue(JSONObject(first.requests.single()).getString("system").contains("maintainable code"))
+            assertTrue(JSONObject(second.requests.single()).getString("system").contains("Teach progressively"))
+            assertEquals("learning", viewModel.state.value.messages.last().assistantSkillId)
+            viewModel.selectConversation(firstId)
+            assertEquals("coding", viewModel.state.value.messages.last().assistantSkillId)
+            viewModel.stopStreaming()
+            runCurrent()
+            viewModel.selectConversation(secondId)
+            viewModel.stopStreaming()
+            runCurrent()
+        }
+
+    @Test
+    fun `retry reuses original assistant mode after conversation selection changes`() =
+        runTest(dispatcher) {
+            val session = FakeSession(
+                profile("assistant-mode-retry", ProviderType.GEMINI),
+                Step.Failure(IOException("temporary")),
+                Step.Result(HostLlmStreamResult(events = flowOf(HostLlmStreamEvent.delta("ok")))),
+            )
+            val viewModel = connectedViewModel(session)
+            viewModel.selectAssistantMode("code_review", "critical_reviewer")
+            viewModel.send("Review this", session)
+            advanceUntilIdle()
+
+            viewModel.selectAssistantMode("learning", "beginner_friendly")
+            viewModel.retry(session)
+            advanceUntilIdle()
+
+            val systems = session.requests.map { JSONObject(it).getString("system") }
+            assertEquals(systems.first(), systems.last())
+            assertTrue(systems.last().contains("Review for concrete correctness"))
+            assertEquals("code_review", viewModel.state.value.messages.last().assistantSkillId)
+            assertEquals(
+                "critical_reviewer",
+                viewModel.state.value.messages.last().assistantPersonaId,
+            )
+        }
+
+    @Test
+    fun `measurable word limit is validated and corrected only once`() = runTest(dispatcher) {
+        val session = FakeSession(
+            profile("constraint-correct", ProviderType.CODEX),
+            Step.Result(
+                HostLlmStreamResult(
+                    events = flowOf(HostLlmStreamEvent.delta("one two three four five six")),
+                ),
+            ),
+            Step.Result(
+                HostLlmStreamResult(
+                    events = flowOf(HostLlmStreamEvent.delta("one two three four")),
+                ),
+            ),
+        )
+        val viewModel = connectedViewModel(session)
+
+        viewModel.send("Reply in under five words.", session)
+        advanceUntilIdle()
+
+        assertEquals(2, session.requests.size)
+        assertTrue(JSONObject(session.requests[0]).getString("system").contains("at most 4 words"))
+        assertTrue(JSONObject(session.requests[1]).getString("system").contains("previous draft"))
+        assertEquals("one two three four", viewModel.state.value.messages.last().text)
+        assertEquals(ChatMessageState.COMPLETE, viewModel.state.value.messages.last().state)
+        assertEquals(
+            "Response corrected to match the requested format.",
+            viewModel.state.value.statusMessage,
+        )
+        assertNull(viewModel.state.value.failure)
+    }
+
+    @Test
+    fun `second constraint violation is kept without a third provider call`() = runTest(dispatcher) {
+        val session = FakeSession(
+            profile("constraint-still-invalid", ProviderType.GEMINI),
+            Step.Result(
+                HostLlmStreamResult(events = flowOf(HostLlmStreamEvent.delta("one two three"))),
+            ),
+            Step.Result(
+                HostLlmStreamResult(events = flowOf(HostLlmStreamEvent.delta("four five six"))),
+            ),
+        )
+        val viewModel = connectedViewModel(session)
+
+        viewModel.send("Use at most two words.", session)
+        advanceUntilIdle()
+
+        assertEquals(2, session.requests.size)
+        assertEquals("four five six", viewModel.state.value.messages.last().text)
+        assertEquals(
+            "Response format may not match the requested limits.",
+            viewModel.state.value.statusMessage,
+        )
+        assertFalse(viewModel.state.value.isStreaming)
+    }
+
+    @Test
+    fun `correction failure restores original response without exposing provider error`() =
+        runTest(dispatcher) {
+            val original = "one two three"
+            val session = FakeSession(
+                profile("constraint-fallback", ProviderType.OPENAI_COMPATIBLE),
+                Step.Result(
+                    HostLlmStreamResult(events = flowOf(HostLlmStreamEvent.delta(original))),
+                ),
+                Step.Failure(IOException("private correction failure")),
+            )
+            val viewModel = connectedViewModel(session)
+
+            viewModel.send("Use at most two words.", session)
+            advanceUntilIdle()
+
+            assertEquals(2, session.requests.size)
+            assertEquals(original, viewModel.state.value.messages.last().text)
+            assertEquals(ChatMessageState.COMPLETE, viewModel.state.value.messages.last().state)
+            assertNull(viewModel.state.value.failure)
+            assertFalse(viewModel.state.value.statusMessage.orEmpty().contains("private"))
+            assertEquals(
+                "Response format could not be corrected; the original response was kept.",
+                viewModel.state.value.statusMessage,
+            )
+        }
+
+    @Test
+    fun `stopping constraint correction keeps its partial response`() = runTest(dispatcher) {
+        val session = FakeSession(
+            profile("constraint-stop", ProviderType.OPENAI_COMPATIBLE),
+            Step.Result(
+                HostLlmStreamResult(
+                    events = flowOf(HostLlmStreamEvent.delta("one two three")),
+                ),
+            ),
+            Step.Result(
+                HostLlmStreamResult(
+                    events = flow {
+                        emit(HostLlmStreamEvent.delta("partial"))
+                        awaitCancellation()
+                    },
+                ),
+            ),
+        )
+        val viewModel = connectedViewModel(session)
+
+        viewModel.send("Use at most two words.", session)
+        runCurrent()
+        assertEquals(2, session.requests.size)
+        assertEquals("partial", viewModel.state.value.messages.last().text)
+
+        viewModel.stopStreaming()
+        runCurrent()
+
+        assertEquals("partial", viewModel.state.value.messages.last().text)
+        assertEquals(ChatMessageState.CANCELLED, viewModel.state.value.messages.last().state)
+        assertFalse(viewModel.state.value.isStreaming)
+        assertNull(viewModel.state.value.failure)
+    }
+
+    @Test
+    fun `unsupported web verification claim is corrected only once`() = runTest(dispatcher) {
+        val session = FakeSession(
+            profile("freshness-correct", ProviderType.CODEX),
+            Step.Result(
+                HostLlmStreamResult(
+                    events = flowOf(
+                        HostLlmStreamEvent.delta(
+                            "I checked the web today and verified the temperature.",
+                        ),
+                    ),
+                ),
+            ),
+            Step.Result(
+                HostLlmStreamResult(
+                    events = flowOf(
+                        HostLlmStreamEvent.delta(
+                            "I cannot access live web data here, so I cannot verify today's temperature.",
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val viewModel = connectedViewModel(session)
+
+        viewModel.send("Search the web and verify today's Seoul temperature.", session)
+        advanceUntilIdle()
+
+        assertEquals(2, session.requests.size)
+        val systems = session.requests.map { JSONObject(it).getString("system") }
+        assertTrue(systems.first().contains("has no web, browser, search, or live-data tool"))
+        assertTrue(systems.last().contains("previous draft claimed external verification"))
+        assertEquals(
+            "I cannot access live web data here, so I cannot verify today's temperature.",
+            viewModel.state.value.messages.last().text,
+        )
+        assertEquals(
+            "Response corrected to remove an unsupported verification claim.",
+            viewModel.state.value.statusMessage,
+        )
+    }
+
+    @Test
+    fun `format and verification checks share a single correction budget`() = runTest(dispatcher) {
+        val session = FakeSession(
+            profile("freshness-bounded", ProviderType.GEMINI),
+            Step.Result(
+                HostLlmStreamResult(
+                    events = flowOf(
+                        HostLlmStreamEvent.delta("I checked the web and verified one two three."),
+                    ),
+                ),
+            ),
+            Step.Result(
+                HostLlmStreamResult(
+                    events = flowOf(
+                        HostLlmStreamEvent.delta("I checked the web and verified four five six."),
+                    ),
+                ),
+            ),
+        )
+        val viewModel = connectedViewModel(session)
+
+        viewModel.send("Search the web. Reply in at most two words.", session)
+        advanceUntilIdle()
+
+        assertEquals(2, session.requests.size)
+        assertEquals(ChatMessageState.COMPLETE, viewModel.state.value.messages.last().state)
+        assertEquals(
+            "Response may not match the requested limits or verification boundary.",
+            viewModel.state.value.statusMessage,
+        )
+    }
+
+    @Test
     fun `stop keeps partial response and creates no failure`() = runTest(dispatcher) {
         val session = FakeSession(
             profile("slow", ProviderType.OPENAI_COMPATIBLE),
@@ -104,6 +405,189 @@ class ChatViewModelTest {
         assertNull(viewModel.state.value.failure)
         assertNull(viewModel.state.value.retryTarget)
     }
+
+    @Test
+    fun `next provider can be selected while current stream keeps original metadata`() =
+        runTest(dispatcher) {
+            val currentSession = FakeSession(
+                profile("current", ProviderType.OPENAI_COMPATIBLE),
+                Step.Result(
+                    HostLlmStreamResult(events = flow {
+                        emit(HostLlmStreamEvent.delta("partial"))
+                        awaitCancellation()
+                    }),
+                ),
+            )
+            val nextSession = FakeSession.success(
+                profile("next", ProviderType.GEMINI),
+                "next answer",
+            )
+            val viewModel = ChatViewModel()
+            viewModel.updateConnections(listOf(currentSession.connected(), nextSession.connected()))
+
+            viewModel.send("current request", currentSession)
+            runCurrent()
+            viewModel.selectProvider(nextSession.profile.id)
+            viewModel.send("must wait", nextSession)
+
+            val streaming = viewModel.state.value
+            assertTrue(streaming.isStreaming)
+            assertEquals(nextSession.profile.id, streaming.selectedProfileId)
+            assertEquals(currentSession.profile.id, streaming.messages.last().providerProfileId)
+            assertEquals(currentSession.profile.model, streaming.messages.last().model)
+            assertTrue(nextSession.requests.isEmpty())
+
+            viewModel.stopStreaming()
+            runCurrent()
+            viewModel.send("next request", nextSession)
+            advanceUntilIdle()
+
+            assertEquals(1, currentSession.requests.size)
+            assertEquals(1, nextSession.requests.size)
+            assertEquals("next answer", viewModel.state.value.messages.last().text)
+        }
+
+    @Test
+    fun `new chat preserves active stream and previous conversation can be reopened`() = runTest(dispatcher) {
+        val session = FakeSession(
+            profile("clear-active", ProviderType.OPENAI_COMPATIBLE),
+            Step.Result(
+                HostLlmStreamResult(events = flow {
+                    emit(HostLlmStreamEvent.delta("discard me"))
+                    awaitCancellation()
+                }),
+            ),
+        )
+        val viewModel = connectedViewModel(session)
+
+        viewModel.send("clear this", session)
+        runCurrent()
+        val firstConversationId = viewModel.state.value.activeConversationId
+        viewModel.clearConversation()
+        runCurrent()
+
+        val newConversation = viewModel.state.value
+        assertTrue(newConversation.messages.isEmpty())
+        assertFalse(newConversation.isStreaming)
+        assertTrue(newConversation.conversations.any {
+            it.id == firstConversationId &&
+                it.generationState == dev.alpine.llm.demo.model.ConversationGenerationState.STREAMING
+        })
+
+        viewModel.selectConversation(firstConversationId)
+        assertTrue(viewModel.state.value.isStreaming)
+        assertEquals("discard me", viewModel.state.value.messages.last().text)
+        viewModel.stopStreaming()
+        runCurrent()
+        assertEquals(ChatMessageState.CANCELLED, viewModel.state.value.messages.last().state)
+    }
+
+    @Test
+    fun `conversation switch restores isolated draft provider model and messages`() =
+        runTest(dispatcher) {
+            val first = FakeSession.success(profile("conversation-a", ProviderType.GEMINI), "A answer")
+            val second = FakeSession.success(
+                profile("conversation-b", ProviderType.OPENAI_COMPATIBLE),
+                "B answer",
+            )
+            val viewModel = ChatViewModel()
+            viewModel.updateConnections(listOf(first.connected(), second.connected()))
+            viewModel.updateDraft("draft-a")
+            val firstId = viewModel.state.value.activeConversationId
+            viewModel.send("Question A", first)
+            advanceUntilIdle()
+
+            viewModel.newConversation()
+            viewModel.selectProvider(second.profile.id)
+            viewModel.updateDraft("draft-b")
+            val secondId = viewModel.state.value.activeConversationId
+
+            viewModel.selectConversation(firstId)
+            assertEquals("", viewModel.state.value.draft)
+            assertEquals(first.profile.id, viewModel.state.value.selectedProfileId)
+            assertEquals("A answer", viewModel.state.value.messages.last().text)
+
+            viewModel.selectConversation(secondId)
+            assertEquals("draft-b", viewModel.state.value.draft)
+            assertEquals(second.profile.id, viewModel.state.value.selectedProfileId)
+            assertTrue(viewModel.state.value.messages.isEmpty())
+        }
+
+    @Test
+    fun `two conversations may stream while third is rejected before provider call`() =
+        runTest(dispatcher) {
+            val first = FakeSession.slow(profile("parallel-a", ProviderType.GEMINI), "A partial")
+            val second = FakeSession.slow(
+                profile("parallel-b", ProviderType.OPENAI_COMPATIBLE),
+                "B partial",
+            )
+            val third = FakeSession.slow(profile("parallel-c", ProviderType.ANTHROPIC), "C partial")
+            val viewModel = ChatViewModel()
+            viewModel.updateConnections(
+                listOf(first.connected(), second.connected(), third.connected()),
+            )
+
+            viewModel.send("A", first)
+            runCurrent()
+            viewModel.newConversation()
+            viewModel.selectProvider(second.profile.id)
+            viewModel.send("B", second)
+            runCurrent()
+            viewModel.newConversation()
+            viewModel.selectProvider(third.profile.id)
+            viewModel.updateDraft("C remains a draft")
+            viewModel.send("C", third)
+            runCurrent()
+
+            assertEquals(2, viewModel.state.value.activeGenerationCount)
+            assertEquals(1, first.requests.size)
+            assertEquals(1, second.requests.size)
+            assertTrue(third.requests.isEmpty())
+            assertEquals("C remains a draft", viewModel.state.value.draft)
+            assertEquals("Two conversations are already generating.", viewModel.state.value.statusMessage)
+
+            val firstId = viewModel.state.value.conversations.first {
+                it.selectedProfileId == first.profile.id
+            }.id
+            viewModel.selectConversation(firstId)
+            viewModel.stopStreaming()
+            runCurrent()
+            assertEquals(1, viewModel.state.value.activeGenerationCount)
+
+            val secondId = viewModel.state.value.conversations.first {
+                it.selectedProfileId == second.profile.id
+            }.id
+            viewModel.selectConversation(secondId)
+            assertTrue(viewModel.state.value.isStreaming)
+            viewModel.stopStreaming()
+            runCurrent()
+        }
+
+    @Test
+    fun `disconnected provider falls back without losing saved conversation content`() =
+        runTest(dispatcher) {
+            val first = FakeSession.success(
+                profile("fallback-a", ProviderType.OPENAI_COMPATIBLE),
+                "unused",
+            )
+            val second = FakeSession.success(
+                profile("fallback-b", ProviderType.GEMINI),
+                "saved answer",
+            )
+            val viewModel = ChatViewModel()
+            viewModel.updateConnections(listOf(first.connected(), second.connected()))
+            viewModel.selectProvider(second.profile.id)
+            viewModel.send("Keep this history", second)
+            advanceUntilIdle()
+
+            viewModel.updateConnections(listOf(first.connected()))
+            assertEquals(first.profile.id, viewModel.state.value.selectedProfileId)
+            assertEquals("saved answer", viewModel.state.value.messages.last().text)
+
+            viewModel.updateConnections(emptyList())
+            assertNull(viewModel.state.value.selectedProfileId)
+            assertEquals("saved answer", viewModel.state.value.messages.last().text)
+        }
 
     @Test
     fun `rapid duplicate send starts only one provider request`() = runTest(dispatcher) {
@@ -389,6 +873,16 @@ class ChatViewModelTest {
             fun success(profile: ProviderProfile, text: String) = FakeSession(
                 profile,
                 Step.Result(HostLlmStreamResult(events = flowOf(HostLlmStreamEvent.delta(text)))),
+            )
+
+            fun slow(profile: ProviderProfile, partial: String) = FakeSession(
+                profile,
+                Step.Result(
+                    HostLlmStreamResult(events = flow {
+                        emit(HostLlmStreamEvent.delta(partial))
+                        awaitCancellation()
+                    }),
+                ),
             )
         }
     }

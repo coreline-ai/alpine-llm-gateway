@@ -38,12 +38,43 @@ Android 12 이상은 시스템 Dynamic Color를 기본 허용하되, 브랜드 �
 
 ### 채팅
 
-- 상단: `CenterAlignedTopAppBar`, 제목 `Alpine Chat`, `new_chat`, `manage_providers` 아이콘 버튼.
+- 상단: `CenterAlignedTopAppBar`, 현재 대화 제목, `conversation_history`, `new_chat`, `manage_providers` 아이콘 버튼.
 - Provider 선택: `ExposedDropdownMenuBox` 또는 `SingleChoice` bottom sheet. 각 항목은 프로필명, Provider, 모델, 연결 상태를 함께 노출한다.
+- Assistant mode: Provider·빠른 모델 선택 아래 `assistant_mode_selector` 칩에 현재 스킬과
+  페르소나를 표시한다. `ModalBottomSheet` 안에서 각각 하나를 고르고, 새 대화 기본값 저장과
+  `General assistant · Balanced` reset을 제공한다. 생성 중에는 다음 메시지부터 적용된다고
+  명시한다.
 - 메시지: `LazyColumn` + 안정적인 message id key. 사용자 메시지는 오른쪽 `primaryContainer`, LLM 메시지는 왼쪽 `surfaceContainerHigh`에 배치한다.
-- 메타 정보: 응답 말풍선 위에 `Provider · model`을 `labelMedium`으로 표시한다.
+- assistant Markdown: 제목·문단·목록·인용·표·강조·inline code·fenced code block을 native
+  Compose로 렌더링한다. 표와 code block은 bubble 폭 안에서 각자 가로 스크롤하며, 알려진 언어는
+  keyword·문자열·숫자·주석만 경량 강조한다. HTML·image를 WebView나 원격 리소스로 실행하지
+  않는다. 절대 http/https 링크도 확인 dialog 전에는 열지 않고 위험 scheme은 inert text로
+  남긴다. streaming 중 닫히지 않은 marker와 표는 일반 text 또는 열린 code block으로 안전하게
+  표시한다.
+- 응답 형식 제한: 측정 가능한 단어 상한·정확한 문장/목록 수가 있으면 완료 후 검사하고
+  같은 요청을 최대 1회 교정한다. 교정 중에는 `Correcting response format…`, 최종 미준수나
+  교정 실패에는 원문 오류가 없는 상태 문구를 표시한다.
+- 외부 검증 경계: 최신·실시간·웹 확인 요청에는 현재 runtime에 웹 도구가 없음을 지시하고,
+  명시적 허위 웹 확인 주장은 형식 제한과 공유하는 최대 1회 교정 예산으로 처리한다. 일반 사실
+  정확성을 자동 판정하거나 웹 검색을 수행하는 기능으로 표시하지 않는다.
+- 메타 정보: 응답 말풍선 위에 실제 사용한 `Provider · model · skill · persona`를
+  `labelMedium`으로 표시한다.
 - 입력: 하단 고정 `Surface` 안의 `OutlinedTextField`와 `FilledIconButton`. 스트리밍 중 `send_button`은 `stop_button`으로 바꾸고 입력 중복 전송을 막는다.
-- 오류: 긴 원문 stack trace를 표시하지 않고, 짧은 설명과 `retry_button`을 제공한다. 401은 재인증 안내, 429/5xx는 재시도 안내로 구분한다.
+- 오류: 긴 원문 stack trace를 표시하지 않고, 짧은 설명과 `retry_button`을 제공한다. 401은 재인증,
+  429는 busy, 5xx는 unavailable, malformed stream은 unreadable, timeout과 network interruption은
+  각각 구분된 재시도 안내를 사용한다.
+
+### 대화 기록
+
+- Compact 화면에서는 왼쪽 `ModalNavigationDrawer`를 사용한다. 닫힌 drawer 내용은 semantics
+  tree에서도 제거해 현재 메시지와 중복으로 읽히지 않게 한다.
+- `New chat`은 확인 dialog 없이 즉시 active 대화를 바꾸며, 현재 대화가 비어 있으면 재사용한다.
+- 각 행은 제목, 최근 메시지 최대 2줄, Provider·모델, 수정 시각을 보여준다.
+- `Generating`, `New`, `Failed`, `Stopped` 상태를 색상만이 아닌 텍스트 badge로 표시한다.
+- 행 전체를 선택할 수 있고 48dp overflow action에서 이름 변경과 삭제를 제공한다. 이름 변경은
+  inline dialog에서 저장하며 삭제만 비가역 동작 확인 dialog를 사용한다.
+- 연결이 사라진 Provider는 과거 대화를 그대로 읽을 수 있게 두고 `Disconnected LLM`으로 표시한다.
+- 동시 생성 수가 2개이면 상단 제목 아래에 전체 생성 수를 표시한다. `Stop`은 active 대화에만 작동한다.
 
 ### Provider 목록과 추가
 
@@ -85,10 +116,21 @@ Android 12 이상은 시스템 Dynamic Color를 기본 허용하되, 브랜드 �
 | --- | --- |
 | 채팅 루트 | `chat_screen` |
 | Provider 선택 | `provider_selector` |
+| Assistant mode 진입/시트 | `assistant_mode_selector`, `assistant_mode_sheet` |
+| 기본 스킬/페르소나 | `skill_option_{id}`, `persona_option_{id}` |
+| Assistant 기본값/reset | `assistant_mode_default_toggle`, `assistant_mode_reset` |
 | 메시지 목록 | `messages_list` |
+| assistant code block | `message_code_block` |
+| assistant Markdown 표 | `message_markdown_table` |
+| 외부 링크 확인 | `markdown_link_dialog`, `markdown_link_open`, `markdown_link_cancel` |
 | 입력 | `message_input` |
 | 전송/중단 | `send_button`, `stop_button` |
 | Provider 관리/새 대화 | `manage_providers`, `new_chat` |
+| 대화 기록 진입/목록 | `conversation_history`, `conversation_history_list` |
+| 기록 안의 새 대화 | `history_new_chat` |
+| 개별 대화 | `conversation_item_{id}` |
+| 대화 이름 변경 | `rename_conversation_input`, `confirm_rename_conversation` |
+| 대화 삭제 확인 | `confirm_delete_conversation` |
 | 실패 재시도 | `retry_button` |
 | Provider 목록 루트 | `provider_list_screen` |
 | Provider 추가 | `add_provider` |
@@ -103,6 +145,7 @@ Android 12 이상은 시스템 Dynamic Color를 기본 허용하되, 브랜드 �
 - Light/Dark/Dynamic Color Preview에서 텍스트 대비와 상태 의미가 유지된다.
 - Compact와 Expanded Preview에서 메시지·Provider·설정 폼의 최대 폭이 지켜진다.
 - 모든 태그가 Compose UI 테스트에서 검색 가능하고, 태그에 사용자 이름이나 token을 포함하지 않는다.
-- 회전 후에는 ViewModel의 대화와 Provider 선택을 유지한다. 프로세스 종료 후
-  대화는 복원하지 않고 저장된 비민감 프로필과 Keystore credential만 다시 읽는다.
+- 회전 후에는 ViewModel의 active 대화, drawer 전환과 Provider 선택을 유지한다. 프로세스 종료 후
+  encrypted conversation store에서 대화·초안·선택 Provider·모델·스킬·페르소나를 복원하고 중단된
+  `STREAMING`은 `CANCELLED`로 정상화한다.
 - TalkBack이 토큰 단위로 문장을 끊어 읽지 않고, 응답 완료와 오류만 안내한다.

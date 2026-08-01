@@ -23,5 +23,7 @@ data class ChatMessage(
     val providerProfileId: String? = null,
     val providerLabel: String? = null,
     val model: String? = null,
+    val assistantSkillId: String? = null,
+    val assistantPersonaId: String? = null,
     val createdAtMs: Long = System.currentTimeMillis(),
 )

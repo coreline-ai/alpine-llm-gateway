@@ -2,10 +2,12 @@ package dev.alpine.llm
 
 import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -25,7 +27,9 @@ class OAuthManager(
 ) {
     private val appContext = context.applicationContext
     private val authorizationMutex = Mutex()
+    private val discoveryLock = Any()
     @Volatile private var activeCallback: CompletableDeferred<OAuthCallbackServer.Callback>? = null
+    @Volatile private var discoveredEndpoints: OAuthResolvedEndpoints? = null
 
     suspend fun authorize(
         browserContext: Context = appContext,
@@ -46,7 +50,7 @@ class OAuthManager(
     private suspend fun authorizeOnce(
         browserContext: Context,
     ): OAuthTokenStore.Token = withContext(Dispatchers.IO) {
-        val pkce = OAuthPkce.create()
+        val pkce = OAuthPkce.create(config.pkceMode)
         val state = OAuthPkce.state()
         try {
             store.saveTransaction(
@@ -71,7 +75,8 @@ class OAuthManager(
         val callback = OAuthCallbackServer(
             requestedPort = config.callbackPort,
             redirectPath = config.redirectPath,
-            fallbackPorts = listOf(config.callbackPort + 1, config.callbackPort + 2),
+            fallbackPorts = config.callbackFallbackPorts,
+            corsAllowedOrigins = config.callbackCorsAllowedOrigins,
         ) { result -> callbackResult.complete(result) }
         var callbackRegistered = false
         try {
@@ -79,7 +84,13 @@ class OAuthManager(
             OAuthCallbackRegistry.register(callback.boundPort, config.redirectPath, state)
             callbackRegistered = true
             val redirectUri = config.redirectUri(callback.boundPort)
-            val authUrl = buildAuthorizationUrl(redirectUri, state, pkce.challenge)
+            val endpoints = resolveEndpoints()
+            val authUrl = buildAuthorizationUrl(
+                endpoints.authorizationEndpoint,
+                redirectUri,
+                state,
+                pkce.challenge,
+            )
             withContext(Dispatchers.Main) {
                 val customTab = CustomTabsIntent.Builder()
                     .setShowTitle(true)
@@ -97,7 +108,8 @@ class OAuthManager(
                 nowMs = System.currentTimeMillis(),
                 timeoutMs = config.callbackTimeoutMs,
             )
-            exchangeCode(code, requireNotNull(transaction), redirectUri)
+            returnHostToForeground(browserContext)
+            exchangeCode(code, requireNotNull(transaction), redirectUri, endpoints.tokenEndpoint)
         } finally {
             if (callbackRegistered) {
                 OAuthCallbackRegistry.unregister(callback.boundPort, state)
@@ -159,7 +171,33 @@ class OAuthManager(
     fun isAuthenticated(): Boolean =
         authenticationState() is OAuthAuthenticationState.Authenticated
 
-    private fun buildAuthorizationUrl(redirectUri: String, state: String, challenge: String): String {
+    /**
+     * Chrome Custom Tabs can leave the host UID in an OEM background-blocked
+     * state after the loopback callback. Bring the Activity that initiated the
+     * user-visible flow back to the foreground before the token POST so DNS and
+     * sockets use the foreground network policy.
+     */
+    private suspend fun returnHostToForeground(browserContext: Context) {
+        val activity = browserContext as? Activity ?: return
+        withContext(Dispatchers.Main) {
+            if (activity.isFinishing || activity.isDestroyed) return@withContext
+            val intent = Intent(activity, activity.javaClass).apply {
+                addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            }
+            activity.startActivity(intent)
+        }
+        // Allow the task/UID foreground transition to reach Android's network
+        // policy before the IO dispatcher opens the token connection.
+        delay(HOST_FOREGROUND_SETTLE_MS)
+    }
+
+    private fun buildAuthorizationUrl(
+        authorizationEndpoint: String,
+        redirectUri: String,
+        state: String,
+        challenge: String,
+    ): String {
         val params = linkedMapOf(
             "client_id" to config.clientId,
             "redirect_uri" to redirectUri,
@@ -169,15 +207,17 @@ class OAuthManager(
             "code_challenge" to challenge,
             "code_challenge_method" to "S256",
         )
+        if (config.includeAuthorizationNonce) params["nonce"] = OAuthPkce.state()
         params.putAll(config.extraAuthorizationParams)
-        val separator = if (config.authorizationEndpoint.contains("?")) "&" else "?"
-        return config.authorizationEndpoint + separator + OAuthPkce.formEncode(params)
+        val separator = if (authorizationEndpoint.contains("?")) "&" else "?"
+        return authorizationEndpoint + separator + OAuthPkce.formEncode(params)
     }
 
     private fun exchangeCode(
         code: String,
         transaction: OAuthTokenStore.Transaction,
         redirectUri: String,
+        tokenEndpoint: String,
     ): OAuthTokenStore.Token {
         val standardParams = linkedMapOf(
             "grant_type" to "authorization_code",
@@ -195,7 +235,7 @@ class OAuthManager(
                 codeChallenge = transaction.challenge,
             ),
         )
-        return tokenRequest(params).also(::saveToken)
+        return tokenRequest(params, tokenEndpoint).also(::saveToken)
     }
 
     private fun refreshToken(current: OAuthTokenStore.Token, refreshToken: String): OAuthTokenStore.Token {
@@ -211,7 +251,7 @@ class OAuthManager(
                 parameters = standardParams,
             ),
         )
-        val refreshed = tokenRequest(params)
+        val refreshed = tokenRequest(params, resolveEndpoints().tokenEndpoint)
         val preserved = refreshed.copy(
             refreshToken = refreshed.refreshToken ?: current.refreshToken,
             scope = refreshed.scope ?: current.scope,
@@ -221,8 +261,47 @@ class OAuthManager(
         return preserved
     }
 
-    private fun tokenRequest(params: Map<String, String>): OAuthTokenStore.Token {
-        val connection = URL(config.tokenEndpoint).openConnection() as HttpURLConnection
+    private fun tokenRequest(
+        params: Map<String, String>,
+        tokenEndpoint: String,
+    ): OAuthTokenStore.Token {
+        repeat(config.tokenRequestMaxAttempts) { attempt ->
+            try {
+                return tokenRequestOnce(params, tokenEndpoint)
+            } catch (error: OAuthException) {
+                val failedAttempt = attempt + 1
+                val canRetry = OAuthTokenRetryPolicy.canRetry(
+                    kind = error.kind,
+                    failedAttempt = failedAttempt,
+                    maxAttempts = config.tokenRequestMaxAttempts,
+                )
+                if (!canRetry) throw error
+                val delayMs = OAuthTokenRetryPolicy.delayMs(
+                    initialDelayMs = config.tokenRetryInitialDelayMs,
+                    failedAttempt = failedAttempt,
+                )
+                if (delayMs > 0L) {
+                    try {
+                        Thread.sleep(delayMs)
+                    } catch (interrupted: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        throw OAuthException(
+                            "token endpoint retry interrupted",
+                            OAuthFailureKind.NETWORK,
+                            interrupted,
+                        )
+                    }
+                }
+            }
+        }
+        error("unreachable token request state")
+    }
+
+    private fun tokenRequestOnce(
+        params: Map<String, String>,
+        tokenEndpoint: String,
+    ): OAuthTokenStore.Token {
+        val connection = URL(tokenEndpoint).openConnection() as HttpURLConnection
         connection.requestMethod = "POST"
         connection.doOutput = true
         connection.connectTimeout = 15_000
@@ -302,6 +381,58 @@ class OAuthManager(
         }
     }.getOrNull()
 
+    private fun resolveEndpoints(): OAuthResolvedEndpoints {
+        val discoveryEndpoint = config.discoveryEndpoint ?: return OAuthResolvedEndpoints(
+            config.authorizationEndpoint,
+            config.tokenEndpoint,
+        )
+        discoveredEndpoints?.let { return it }
+        return synchronized(discoveryLock) {
+            discoveredEndpoints?.let { return@synchronized it }
+            fetchDiscovery(discoveryEndpoint).also { discoveredEndpoints = it }
+        }
+    }
+
+    private fun fetchDiscovery(discoveryEndpoint: String): OAuthResolvedEndpoints {
+        val connection = URL(discoveryEndpoint).openConnection() as HttpURLConnection
+        connection.requestMethod = "GET"
+        connection.instanceFollowRedirects = false
+        connection.connectTimeout = 15_000
+        connection.readTimeout = 15_000
+        connection.setRequestProperty("Accept", "application/json")
+        val responseCode: Int
+        val responseBody: String
+        try {
+            responseCode = connection.responseCode
+            val stream = if (responseCode in 200..299) {
+                connection.inputStream
+            } else {
+                connection.errorStream
+            }
+            responseBody = stream?.use { readLimited(it, MAX_DISCOVERY_RESPONSE_BYTES) }.orEmpty()
+        } catch (error: OAuthException) {
+            throw error
+        } catch (error: Exception) {
+            throw OAuthException(
+                "OAuth discovery request failed",
+                OAuthFailureKind.NETWORK,
+                error,
+            )
+        } finally {
+            connection.disconnect()
+        }
+        if (responseCode !in 200..299) {
+            throw OAuthException(
+                "OAuth discovery returned HTTP $responseCode",
+                OAuthFailureKind.PROVIDER_ERROR,
+            )
+        }
+        return OAuthDiscoveryDocument.parse(
+            responseBody,
+            config.trustedDiscoveryEndpointHosts,
+        )
+    }
+
     private fun readLimited(input: InputStream, limit: Int): String {
         val output = ByteArrayOutputStream()
         val buffer = ByteArray(8192)
@@ -345,5 +476,25 @@ class OAuthManager(
 
     private companion object {
         const val MAX_TOKEN_RESPONSE_BYTES = 1024 * 1024
+        const val MAX_DISCOVERY_RESPONSE_BYTES = 1024 * 1024
+        const val HOST_FOREGROUND_SETTLE_MS = 300L
+    }
+}
+
+internal object OAuthTokenRetryPolicy {
+    fun canRetry(
+        kind: OAuthFailureKind,
+        failedAttempt: Int,
+        maxAttempts: Int,
+    ): Boolean = kind == OAuthFailureKind.NETWORK && failedAttempt < maxAttempts
+
+    fun delayMs(initialDelayMs: Long, failedAttempt: Int): Long {
+        if (initialDelayMs == 0L) return 0L
+        val multiplier = failedAttempt.toLong()
+        return if (multiplier > Long.MAX_VALUE / initialDelayMs) {
+            Long.MAX_VALUE
+        } else {
+            initialDelayMs * multiplier
+        }
     }
 }

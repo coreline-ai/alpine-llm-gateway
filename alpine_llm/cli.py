@@ -94,6 +94,7 @@ def _stream_request(
         method="POST",
     )
     collected: list[str] = []
+    stream_error: str | None = None
     with urlopen(request, timeout=180) as response:
         for raw_line in response:
             line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
@@ -101,7 +102,7 @@ def _stream_request(
                 continue
             data = line[5:].strip()
             if data == "[DONE]":
-                continue
+                break
             event = json.loads(data)
             if event.get("type") == "delta":
                 text = str(event.get("text", ""))
@@ -112,10 +113,15 @@ def _stream_request(
                     print(text, end="", flush=True)
             elif output_format == "jsonl":
                 print(json.dumps(event, ensure_ascii=False), flush=True)
+            if event.get("type") == "error":
+                stream_error = str(event.get("message") or "gateway stream failed")
     if output_format != "jsonl":
         print()
     if output_path:
         Path(output_path).write_text("".join(collected), encoding="utf-8")
+    if stream_error:
+        print(f"llmctl: {stream_error}", file=sys.stderr)
+        return 1
     return 0
 
 

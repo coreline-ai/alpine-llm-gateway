@@ -21,6 +21,8 @@ data class ProviderHttpRequest(
     val url: String,
     val bodyJson: String,
     val headers: Map<String, String> = emptyMap(),
+    /** Header name that receives the sanitized OAuth account id at the credential boundary. */
+    val credentialAccountIdHeader: String? = null,
 )
 
 data class ProviderHttpResponse(
@@ -121,9 +123,18 @@ class OAuthHttpLlmBridge(
         require(request.headers.keys.none { it.equals(AUTHORIZATION, ignoreCase = true) }) {
             "Provider adapter must not set Authorization"
         }
+        val headers = request.headers.toMutableMap()
+        request.credentialAccountIdHeader?.let { headerName ->
+            require(headers.keys.none { it.equals(headerName, ignoreCase = true) }) {
+                "Provider adapter must not pre-set the OAuth account header"
+            }
+            credential.accountId?.takeIf { it.isNotBlank() }?.let { accountId ->
+                ProviderAdapterJson.requireSafeHeaders(mapOf(headerName to accountId))
+                headers[headerName] = accountId
+            }
+        }
         return request.copy(
-            headers = request.headers +
-                (AUTHORIZATION to "${credential.tokenType} ${credential.accessToken}"),
+            headers = headers + (AUTHORIZATION to "${credential.tokenType} ${credential.accessToken}"),
         )
     }
 
@@ -181,12 +192,27 @@ class OpenAiCompatibleOAuthAdapter(
             throw HostLlmRequestException("requestJson must be a JSON object")
         }
         ProviderAdapterJson.validateOpenAiExtensions(body)
+        moveSystemInstructionIntoMessages(body)
         body.put("stream", stream)
         return ProviderHttpRequest(
             url = completionEndpoint,
             bodyJson = body.toString(),
             headers = extraHeaders,
         )
+    }
+
+    private fun moveSystemInstructionIntoMessages(body: JSONObject) {
+        if (!body.has("system") || body.isNull("system")) return
+        val system = body.opt("system") as? String
+            ?: throw HostLlmRequestException("system must be a string")
+        body.remove("system")
+        if (system.isBlank()) return
+        val source = body.optJSONArray("messages")
+            ?: throw HostLlmRequestException("messages are required")
+        val messages = org.json.JSONArray()
+            .put(JSONObject().put("role", "system").put("content", system))
+        for (index in 0 until source.length()) messages.put(source.get(index))
+        body.put("messages", messages)
     }
 }
 

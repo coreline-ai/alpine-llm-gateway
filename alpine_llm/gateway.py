@@ -8,6 +8,7 @@ import secrets
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Iterator
 
+from . import __version__
 from .config import Settings
 from .policy import Policy, PolicyError
 from .protocol import CompletionDelta, CompletionRequest, ProtocolError
@@ -23,6 +24,7 @@ class GatewayService:
         self.policy = Policy(
             allowed_models=self.settings.allowed_models,
             default_model=self.settings.default_model,
+            allow_passthrough=self.settings.allow_passthrough,
             max_input_bytes=self.settings.max_input_bytes,
             max_output_tokens=self.settings.max_output_tokens,
             max_messages=self.settings.max_messages,
@@ -54,7 +56,7 @@ class GatewayService:
 
 def make_handler(service: GatewayService):
     class Handler(BaseHTTPRequestHandler):
-        server_version = "AlpineLLMGateway/0.1"
+        server_version = f"AlpineLLMGateway/{__version__}"
 
         def log_message(self, format: str, *args: Any) -> None:
             return
@@ -72,25 +74,41 @@ def make_handler(service: GatewayService):
             if self.path != "/v1/chat/completions":
                 self._json(404, {"error": {"code": "not_found", "message": "route not found"}})
                 return
-            length = int(self.headers.get("Content-Length", "0"))
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                self._json(400, {"error": {
+                    "code": "invalid_request",
+                    "message": "Content-Length must be an integer",
+                }})
+                return
             if length <= 0 or length > service.settings.max_input_bytes * 2:
                 self._json(413, {"error": {"code": "request_too_large", "message": "request body is too large"}})
                 return
             try:
                 raw = self.rfile.read(length)
-                request = CompletionRequest.from_dict(json.loads(raw.decode("utf-8")))
+                request = service.validate(
+                    CompletionRequest.from_dict(json.loads(raw.decode("utf-8"))),
+                )
                 if request.stream:
                     self._stream(request)
                 else:
-                    result = service.complete(request)
+                    result = service.provider.complete(request)
                     self._json(200, result.to_openai_dict("chatcmpl_" + secrets.token_hex(8)))
             except (json.JSONDecodeError, UnicodeDecodeError, ProtocolError, PolicyError) as error:
                 self._json(400, {"error": {"code": "invalid_request", "message": str(error)}})
             except ProviderError as error:
                 status = error.status_code if error.status_code and 400 <= error.status_code < 600 else 502
-                self._json(status, {"error": {"code": "provider_error", "message": str(error), "retryable": error.retryable}})
-            except Exception as error:  # pragma: no cover - defensive server guard
-                self._json(500, {"error": {"code": "internal_error", "message": str(error)}})
+                self._json(status, {"error": {
+                    "code": "provider_error",
+                    "message": "provider request failed",
+                    "retryable": error.retryable,
+                }})
+            except Exception:  # pragma: no cover - defensive server guard
+                self._json(500, {"error": {
+                    "code": "internal_error",
+                    "message": "internal gateway error",
+                }})
 
         def _stream(self, request: CompletionRequest) -> None:
             self.send_response(200)
@@ -101,7 +119,7 @@ def make_handler(service: GatewayService):
             request_id = "chatcmpl_" + secrets.token_hex(8)
             try:
                 self._event({"id": request_id, "type": "start", "model": request.model})
-                for delta in service.stream(request):
+                for delta in service.provider.stream(request):
                     self._event({
                         "id": request_id,
                         "type": "delta",
@@ -110,15 +128,52 @@ def make_handler(service: GatewayService):
                         "usage": delta.usage.to_dict(),
                     })
                 self._event({"id": request_id, "type": "done", "finish_reason": "stop"})
-                self.wfile.write(b"data: [DONE]\n\n")
-                self.wfile.flush()
-            except Exception as error:
-                self._event({"id": request_id, "type": "error", "message": str(error)})
+                self._stream_done()
+            except ProviderError as error:
+                self._stream_error(
+                    request_id,
+                    code="provider_error",
+                    message="provider stream failed",
+                    retryable=error.retryable,
+                )
+            except (BrokenPipeError, ConnectionResetError):
+                return
+            except Exception:
+                self._stream_error(
+                    request_id,
+                    code="internal_error",
+                    message="gateway stream failed",
+                    retryable=False,
+                )
 
         def _event(self, value: dict[str, Any]) -> None:
             payload = ("data: " + json.dumps(value, ensure_ascii=False) + "\n\n").encode("utf-8")
             self.wfile.write(payload)
             self.wfile.flush()
+
+        def _stream_done(self) -> None:
+            self.wfile.write(b"data: [DONE]\n\n")
+            self.wfile.flush()
+
+        def _stream_error(
+            self,
+            request_id: str,
+            *,
+            code: str,
+            message: str,
+            retryable: bool,
+        ) -> None:
+            try:
+                self._event({
+                    "id": request_id,
+                    "type": "error",
+                    "code": code,
+                    "message": message,
+                    "retryable": retryable,
+                })
+                self._stream_done()
+            except OSError:
+                return
 
         def _json(self, status: int, value: dict[str, Any]) -> None:
             payload = json.dumps(value, ensure_ascii=False).encode("utf-8")

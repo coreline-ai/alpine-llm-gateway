@@ -355,7 +355,7 @@ class ProviderProtocolAdaptersTest {
         )
 
         assertEquals("access", token.accessToken)
-        assertEquals("not-a-jwt", token.metadata["id_token"])
+        assertTrue("id_token" !in token.metadata)
         assertTrue("account_id" !in token.metadata)
     }
 

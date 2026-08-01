@@ -9,6 +9,7 @@ import org.json.JSONObject
 data class OAuthCredential(
     val accessToken: String,
     val tokenType: String = "Bearer",
+    val accountId: String? = null,
 )
 
 data class HostLlmResult(
@@ -110,7 +111,7 @@ class OAuthLlmSession(
             ?: throw OAuthRequiredException(oauth)
         val first = bridge.complete(
             requestJson,
-            OAuthCredential(token.accessToken, token.tokenType),
+            OAuthCredential(token.accessToken, token.tokenType, token.metadata["account_id"]),
         )
         if (first.statusCode != 401) return first
 
@@ -118,7 +119,11 @@ class OAuthLlmSession(
             ?: throw OAuthRequiredException(oauth)
         val retried = bridge.complete(
             requestJson,
-            OAuthCredential(refreshed.accessToken, refreshed.tokenType),
+            OAuthCredential(
+                refreshed.accessToken,
+                refreshed.tokenType,
+                refreshed.metadata["account_id"],
+            ),
         )
         if (retried.statusCode == 401) {
             oauth.invalidateIfCurrent(refreshed.accessToken)
@@ -132,7 +137,7 @@ class OAuthLlmSession(
             ?: throw OAuthRequiredException(oauth)
         val first = bridge.stream(
             requestJson,
-            OAuthCredential(token.accessToken, token.tokenType),
+            OAuthCredential(token.accessToken, token.tokenType, token.metadata["account_id"]),
         )
         if (first.statusCode != 401) return first
 
@@ -140,7 +145,11 @@ class OAuthLlmSession(
             ?: throw OAuthRequiredException(oauth)
         val retried = bridge.stream(
             requestJson,
-            OAuthCredential(refreshed.accessToken, refreshed.tokenType),
+            OAuthCredential(
+                refreshed.accessToken,
+                refreshed.tokenType,
+                refreshed.metadata["account_id"],
+            ),
         )
         if (retried.statusCode == 401) {
             oauth.invalidateIfCurrent(refreshed.accessToken)

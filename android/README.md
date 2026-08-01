@@ -13,7 +13,7 @@ dependencies {
 }
 ```
 
-Library Manifest가 `INTERNET` permission과 기본 `/oauth/callback` Activity intent filter를 병합합니다.
+Library Manifest가 `INTERNET` permission, 기본 `/oauth/callback`과 Codex용 `localhost:1455/auth/callback` Activity intent filter를 병합합니다.
 
 ## 보안 경계
 
@@ -145,44 +145,44 @@ Android Host가 원격 URL을 대신 가져오지 않도록 image는 PNG/JPEG/GI
 
 ## Claude·Gemini adapter
 
-Claude 계열은 JSON token 교환과 state echo를 설정하고 Messages API adapter를 연결할 수 있습니다. Endpoint, client id, scope는 앱 설정에서 주입해야 합니다.
+Claude 계열은 JSON token 교환과 state echo를 설정하고 Messages API adapter를 연결할 수 있습니다. `AnthropicOAuthContract`는 OpenMinis 공개 Android 참조값과 같은 endpoint, public client ID, scope, `localhost:54545/callback`, 96-byte PKCE와 OAuth beta를 제공합니다. 호환성·로그인 검증용이며 배포 앱은 Anthropic이 승인한 자체 registration을 사용해야 합니다.
 
 ```kotlin
-val claudeOAuthConfig = OAuthProviderConfig(
-    providerId = "claude",
-    authorizationEndpoint = BuildConfig.CLAUDE_AUTH_ENDPOINT,
-    tokenEndpoint = BuildConfig.CLAUDE_TOKEN_ENDPOINT,
-    clientId = BuildConfig.CLAUDE_CLIENT_ID,
-    scopes = BuildConfig.CLAUDE_SCOPES.split(" "),
-    callbackPort = 54545,
-    redirectPath = "/callback",
-    tokenRequestEncoding = OAuthTokenRequestEncoding.JSON,
-    tokenRequestAdapter = OAuthTokenRequestAdapter { context ->
-        if (context.grantType == OAuthTokenGrantType.AUTHORIZATION_CODE) {
-            context.parameters + ("state" to requireNotNull(context.state))
-        } else {
-            context.parameters
-        }
-    },
-)
+val claudeOAuthConfig = AnthropicOAuthContract.providerConfig(providerId = "claude")
 val claudeBridge = OAuthHttpLlmBridge(
     AnthropicMessagesOAuthAdapter(
-        messagesEndpoint = BuildConfig.CLAUDE_MESSAGES_ENDPOINT,
-        anthropicBeta = BuildConfig.CLAUDE_BETA.takeIf { it.isNotBlank() },
+        messagesEndpoint = AnthropicOAuthContract.MESSAGES_ENDPOINT,
+        anthropicBeta = AnthropicOAuthContract.OAUTH_BETA,
     ),
 )
 ```
 
-Gemini generateContent adapter는 OpenAI 공통 role/message를 Gemini `contents`, `systemInstruction`, `generationConfig`로 변환합니다.
+OpenMinis 공개 mirror는 OAuth inference에 필요한 Claude Code 식별 system prompt 값을 의도적으로 제공하지 않습니다. Alpine도 이 값이나 official CLI fingerprint를 추측·위장하지 않습니다. 따라서 login/token exchange 성공은 Messages inference 성공을 보장하지 않습니다.
+
+Gemini generateContent adapter는 OpenAI 공통 role/message를 Gemini `contents`, `systemInstruction`, `generationConfig`로 변환합니다. `GeminiOAuthContract`는 Google 공식 authorization/token endpoint, cloud-platform/userinfo scopes, `localhost:8085/oauth2callback`, offline consent와 고정 generateContent endpoint를 제공합니다. Client ID는 반드시 Alpine 앱 소유 registration을 전달해야 합니다.
 
 ```kotlin
+val geminiOAuth = OAuthManager(
+    context = context,
+    config = GeminiOAuthContract.providerConfig(
+        providerId = "gemini",
+        clientId = BuildConfig.GEMINI_OAUTH_CLIENT_ID,
+    ),
+)
 val geminiBridge = OAuthHttpLlmBridge(
     GeminiGenerateContentOAuthAdapter(
-        endpointTemplate = BuildConfig.GEMINI_ENDPOINT_TEMPLATE,
+        endpointTemplate = GeminiOAuthContract.GENERATE_CONTENT_ENDPOINT,
         extraHeaders = mapOf("X-Goog-User-Project" to selectedProjectId),
     ),
 )
 ```
+
+OpenMinis 참조 구현은 Gemini CLI client ID와 placeholder client secret을 포함하지만,
+그 registration은 Alpine 소유가 아니며 그대로 복사하면 안 됩니다. Google 공식 Gemini
+API OAuth 흐름은 사용자 소유 Cloud project에서 OAuth client와 consent screen을 만들고
+Generative Language API 및 quota project 권한을 설정해야 합니다. Android OAuth client의
+loopback redirect는 deprecated 상태이므로 완전 통합 배포 전 App Link/공식 Android 인증
+흐름으로 교체해야 합니다.
 
 OpenAI/Codex 또는 OIDC Provider의 표시용 ID token claim은 다음처럼 encrypted metadata에 병합할 수 있습니다.
 
@@ -193,6 +193,64 @@ val config = existingProviderConfig.copy(
 ```
 
 JWT claim 추출은 계정명 표시용이며 signature 검증이나 권한 판단을 대체하지 않습니다.
+
+## Codex account OAuth adapter
+
+Codex account 경로는 범용 `OpenAiCompatibleOAuthAdapter`와 분리되어 있습니다. Host가 소유한 public client registration을 전달하면 고정 callback, form-urlencoded token 교환·갱신, account claim 추출과 Codex Responses 변환을 조합할 수 있습니다. Codex token 요청은 transport 실패에만 최대 3회 backoff 재시도를 적용하며 HTTP/provider 오류는 재시도하지 않습니다.
+
+```kotlin
+val codexOAuth = OAuthManager(
+    context = context,
+    config = CodexOAuthContract.providerConfig(
+        providerId = "codex-account",
+        clientId = BuildConfig.CODEX_PUBLIC_CLIENT_ID,
+    ),
+)
+val codexBridge = OAuthHttpLlmBridge(
+    adapter = CodexResponsesOAuthAdapter(),
+    streamingTransport = transport,
+    transport = transport,
+)
+val codexSession = OAuthLlmSession(codexOAuth, codexBridge)
+```
+
+이 contract는 `http://localhost:1455/auth/callback`을 정확히 사용하고 fallback port를 허용하지 않습니다. Provider endpoint도 Codex backend로 고정하여 account token이 사용자 입력 relay로 전송되지 않게 합니다. OpenAI 공통 message, inline image와 function tool을 Responses 입력으로 변환하고 text/tool/usage terminal SSE를 공통 Host event로 정규화합니다.
+
+`CodexOAuthContract`에는 public client ID가 포함되어 있지 않습니다. 다른 앱이나 CLI의 client ID를 복사하지 말고 앱 소유자가 사용 권한을 가진 registration을 준비해야 합니다. 현재 자동 테스트는 mock JSON/SSE 계약만 검증하며 실제 ChatGPT 계정 로그인, endpoint 사용 가능성 및 정책 적합성은 별도 E2E 항목입니다.
+
+## xAI Grok account OAuth adapter
+
+`XaiOAuthContract`는 xAI OIDC discovery와 브라우저 OAuth에 필요한 고정 계약을
+제공합니다. discovery 문서에서 받은 authorization/token endpoint는 HTTPS와
+정확한 `auth.x.ai` host를 모두 만족해야 하며, 임의 relay endpoint를 거부합니다.
+
+```kotlin
+val xaiOAuth = OAuthManager(
+    context = context,
+    config = XaiOAuthContract.providerConfig(
+        providerId = "xai-account",
+        clientId = BuildConfig.XAI_PUBLIC_CLIENT_ID,
+    ),
+)
+val xaiBridge = OAuthHttpLlmBridge(
+    adapter = OpenAiCompatibleOAuthAdapter(
+        completionEndpoint = XaiOAuthContract.CHAT_COMPLETIONS_ENDPOINT,
+    ),
+    streamingTransport = transport,
+    transport = transport,
+)
+```
+
+이 contract는 `http://127.0.0.1:56121/callback`, 32-byte hex PKCE,
+OIDC nonce, form-urlencoded token 교환, token 단계의 PKCE challenge echo,
+xAI origin만 허용하는 callback CORS preflight와 refresh token rotation 보존을
+조합합니다. OAuth token은 고정 xAI inference endpoint 외의 사용자 입력
+endpoint로 전송하지 않습니다.
+
+참조 앱의 공개 client ID는 호환성 검증용일 뿐 Alpine 소유 registration이
+아닙니다. 배포 앱은 xAI가 발급하거나 사용을 승인한 public client registration을
+사용해야 합니다. 브라우저 로그인 성공과 inference 권한은 별개이며 계정·구독
+등급에 따라 API 요청이 403으로 거부될 수 있습니다.
 
 ## Alpine runtime asset
 
@@ -248,7 +306,7 @@ val status = alpine.installationStatus()
 
 ## Manifest 주의
 
-기본 redirect path는 `/oauth/callback`입니다. Provider가 `/callback`, `/auth/callback`, `/oauth2callback`처럼 다른 고정 경로를 요구하면 앱 Manifest에 같은 Activity의 추가 `<intent-filter>`를 선언해야 합니다. `OAuthProviderConfig.redirectPath`와 Manifest path가 반드시 같아야 합니다.
+기본 redirect path는 `/oauth/callback`입니다. Codex의 `localhost:1455/auth/callback` filter는 Library Manifest에 포함됩니다. 그 외 Provider가 `/callback`, `/oauth2callback`처럼 다른 고정 경로를 요구하면 앱 Manifest에 같은 Activity의 추가 `<intent-filter>`를 선언해야 합니다. `OAuthProviderConfig.redirectHost`, port, path와 Manifest가 반드시 같아야 합니다.
 
 기본 callback forwarding은 raw loopback socket을 사용하므로 앱 전체에 `usesCleartextTraffic="true"`를 설정할 필요가 없습니다.
 

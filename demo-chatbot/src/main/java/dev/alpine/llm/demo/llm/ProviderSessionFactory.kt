@@ -2,22 +2,25 @@ package dev.alpine.llm.demo.llm
 
 import android.app.Activity
 import android.content.Context
+import dev.alpine.llm.AnthropicOAuthContract
 import dev.alpine.llm.AnthropicMessagesOAuthAdapter
+import dev.alpine.llm.CodexOAuthContract
+import dev.alpine.llm.CodexResponsesOAuthAdapter
 import dev.alpine.llm.GeminiGenerateContentOAuthAdapter
+import dev.alpine.llm.GeminiOAuthContract
 import dev.alpine.llm.HostLlmStreamResult
 import dev.alpine.llm.OAuthAuthenticationState
 import dev.alpine.llm.OAuthHttpLlmBridge
 import dev.alpine.llm.OAuthLlmSession
 import dev.alpine.llm.OAuthManager
 import dev.alpine.llm.OAuthProviderConfig
-import dev.alpine.llm.OAuthTokenGrantType
-import dev.alpine.llm.OAuthTokenRequestAdapter
 import dev.alpine.llm.OAuthTokenRequestEncoding
 import dev.alpine.llm.OpenAiCompatibleOAuthAdapter
 import dev.alpine.llm.ProviderCircuitBreaker
 import dev.alpine.llm.ProviderCircuitBreakerConfig
 import dev.alpine.llm.ProviderRetryPolicy
 import dev.alpine.llm.ResilientOAuthHttpTransport
+import dev.alpine.llm.XaiOAuthContract
 import dev.alpine.llm.demo.model.ProviderProfile
 import dev.alpine.llm.demo.model.ProviderType
 
@@ -49,6 +52,10 @@ object ProviderSessionFactory {
             ProviderType.OPENAI_COMPATIBLE -> OpenAiCompatibleOAuthAdapter(
                 completionEndpoint = profile.inferenceEndpoint,
             )
+            ProviderType.CODEX -> CodexResponsesOAuthAdapter()
+            ProviderType.XAI -> OpenAiCompatibleOAuthAdapter(
+                completionEndpoint = profile.inferenceEndpoint,
+            )
         }
         val bridge = OAuthHttpLlmBridge(
             adapter = adapter,
@@ -60,6 +67,30 @@ object ProviderSessionFactory {
     }
 
     private fun oauthConfig(profile: ProviderProfile): OAuthProviderConfig {
+        if (profile.type == ProviderType.ANTHROPIC) {
+            return AnthropicOAuthContract.providerConfig(
+                providerId = profile.id,
+                clientId = profile.clientId,
+            )
+        }
+        if (profile.type == ProviderType.GEMINI) {
+            return GeminiOAuthContract.providerConfig(
+                providerId = profile.id,
+                clientId = profile.clientId,
+            )
+        }
+        if (profile.type == ProviderType.CODEX) {
+            return CodexOAuthContract.providerConfig(
+                providerId = profile.id,
+                clientId = profile.clientId,
+            )
+        }
+        if (profile.type == ProviderType.XAI) {
+            return XaiOAuthContract.providerConfig(
+                providerId = profile.id,
+                clientId = profile.clientId,
+            )
+        }
         val common = OAuthProviderConfig(
             providerId = profile.id,
             authorizationEndpoint = profile.authorizationEndpoint,
@@ -72,22 +103,8 @@ object ProviderSessionFactory {
             } else {
                 emptyMap()
             },
-            tokenRequestEncoding = if (profile.type == ProviderType.ANTHROPIC) {
-                OAuthTokenRequestEncoding.JSON
-            } else {
-                OAuthTokenRequestEncoding.FORM_URLENCODED
-            },
-            tokenRequestAdapter = if (profile.type == ProviderType.ANTHROPIC) {
-                OAuthTokenRequestAdapter { context ->
-                    if (context.grantType == OAuthTokenGrantType.AUTHORIZATION_CODE) {
-                        context.parameters + ("state" to requireNotNull(context.state))
-                    } else {
-                        context.parameters
-                    }
-                }
-            } else {
-                dev.alpine.llm.StandardOAuthTokenRequestAdapter
-            },
+            tokenRequestEncoding = OAuthTokenRequestEncoding.FORM_URLENCODED,
+            tokenRequestAdapter = dev.alpine.llm.StandardOAuthTokenRequestAdapter,
         )
         return common
     }

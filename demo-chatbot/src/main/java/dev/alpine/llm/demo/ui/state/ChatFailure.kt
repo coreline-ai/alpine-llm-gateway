@@ -31,4 +31,6 @@ data class ChatRetryTarget(
     val userText: String,
     val profileId: String,
     val model: String,
+    val assistantSkillId: String,
+    val assistantPersonaId: String,
 )

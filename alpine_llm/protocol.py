@@ -72,13 +72,17 @@ class CompletionRequest:
         if system is not None and not isinstance(system, str):
             raise ProtocolError("system must be a string")
 
+        stream = value.get("stream", False)
+        if not isinstance(stream, bool):
+            raise ProtocolError("stream must be a boolean")
+
         return cls(
             model=model.strip(),
             messages=messages,
             system=system,
             max_tokens=max_tokens,
             temperature=temperature,
-            stream=bool(value.get("stream", False)),
+            stream=stream,
             response_format=response_format,
         )
 

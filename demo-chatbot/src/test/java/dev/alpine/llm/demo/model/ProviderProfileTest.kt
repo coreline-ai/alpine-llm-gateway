@@ -1,5 +1,9 @@
 package dev.alpine.llm.demo.model
 
+import dev.alpine.llm.AnthropicOAuthContract
+import dev.alpine.llm.CodexOAuthContract
+import dev.alpine.llm.GeminiOAuthContract
+import dev.alpine.llm.XaiOAuthContract
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
@@ -39,6 +43,143 @@ class ProviderProfileTest {
     }
 
     @Test
+    fun `anthropic draft prefills complete OpenMinis compatibility contract`() {
+        val draft = ProviderProfile.draft(ProviderType.ANTHROPIC, "Claude")
+
+        assertEquals(AnthropicOAuthContract.AUTHORIZATION_ENDPOINT, draft.authorizationEndpoint)
+        assertEquals(AnthropicOAuthContract.TOKEN_ENDPOINT, draft.tokenEndpoint)
+        assertEquals(AnthropicOAuthContract.MESSAGES_ENDPOINT, draft.inferenceEndpoint)
+        assertEquals(AnthropicOAuthContract.PUBLIC_CLIENT_ID, draft.clientId)
+        assertEquals(AnthropicOAuthContract.SCOPES, draft.scopes)
+        assertEquals(AnthropicOAuthContract.CALLBACK_PORT, draft.callbackPort)
+        assertEquals(AnthropicOAuthContract.OAUTH_BETA, draft.anthropicBeta)
+        assertEquals(AnthropicProfileDefaults.DEFAULT_MODEL, draft.model)
+        assertTrue(AnthropicProfileDefaults.DEFAULT_MODEL in AnthropicProfileDefaults.MODELS)
+        assertTrue(draft.validationErrors().isEmpty())
+    }
+
+    @Test
+    fun `anthropic profile rejects modified compatibility contract`() {
+        val invalid = validProfile(ProviderType.ANTHROPIC).copy(
+            authorizationEndpoint = "https://identity.example.test/authorize",
+            tokenEndpoint = "https://identity.example.test/token",
+            inferenceEndpoint = "https://relay.example.test/messages",
+            clientId = "replacement-client",
+            scopes = listOf("openid"),
+            callbackPort = 54544,
+            anthropicBeta = "different-beta",
+        )
+
+        val errors = invalid.validationErrors()
+        assertTrue(errors.containsKey(ProviderProfile.Field.AUTHORIZATION_ENDPOINT))
+        assertTrue(errors.containsKey(ProviderProfile.Field.TOKEN_ENDPOINT))
+        assertTrue(errors.containsKey(ProviderProfile.Field.INFERENCE_ENDPOINT))
+        assertTrue(errors.containsKey(ProviderProfile.Field.CLIENT_ID))
+        assertTrue(errors.containsKey(ProviderProfile.Field.SCOPES))
+        assertTrue(errors.containsKey(ProviderProfile.Field.CALLBACK_PORT))
+        assertTrue(errors.containsKey(ProviderProfile.Field.ANTHROPIC_BETA))
+    }
+
+    @Test
+    fun `gemini draft prefills official protocol and current model catalog`() {
+        val draft = ProviderProfile.draft(ProviderType.GEMINI, "Gemini")
+
+        assertEquals(GeminiOAuthContract.AUTHORIZATION_ENDPOINT, draft.authorizationEndpoint)
+        assertEquals(GeminiOAuthContract.TOKEN_ENDPOINT, draft.tokenEndpoint)
+        assertEquals(GeminiOAuthContract.GENERATE_CONTENT_ENDPOINT, draft.inferenceEndpoint)
+        assertEquals(GeminiOAuthContract.SCOPES, draft.scopes)
+        assertEquals(GeminiOAuthContract.CALLBACK_PORT, draft.callbackPort)
+        assertEquals(GeminiProfileDefaults.DEFAULT_MODEL, draft.model)
+        assertTrue(GeminiProfileDefaults.DEFAULT_MODEL in GeminiProfileDefaults.MODELS)
+        assertTrue(draft.clientId.isBlank())
+        assertTrue(draft.validationErrors().containsKey(ProviderProfile.Field.CLIENT_ID))
+    }
+
+    @Test
+    fun `gemini profile rejects modified official protocol contract`() {
+        val invalid = validProfile(ProviderType.GEMINI).copy(
+            authorizationEndpoint = "https://identity.example.test/authorize",
+            tokenEndpoint = "https://identity.example.test/token",
+            inferenceEndpoint = "https://relay.example.test/models/{model}:generateContent",
+            scopes = listOf("openid"),
+            callbackPort = 54545,
+        )
+
+        val errors = invalid.validationErrors()
+        assertTrue(errors.containsKey(ProviderProfile.Field.AUTHORIZATION_ENDPOINT))
+        assertTrue(errors.containsKey(ProviderProfile.Field.TOKEN_ENDPOINT))
+        assertTrue(errors.containsKey(ProviderProfile.Field.INFERENCE_ENDPOINT))
+        assertTrue(errors.containsKey(ProviderProfile.Field.SCOPES))
+        assertTrue(errors.containsKey(ProviderProfile.Field.CALLBACK_PORT))
+    }
+
+    @Test
+    fun `codex draft uses compatibility client id and selectable model default`() {
+        val draft = ProviderProfile.draft(ProviderType.CODEX, "Codex")
+
+        assertEquals(CodexOAuthContract.AUTHORIZATION_ENDPOINT, draft.authorizationEndpoint)
+        assertEquals(CodexOAuthContract.TOKEN_ENDPOINT, draft.tokenEndpoint)
+        assertEquals(CodexOAuthContract.RESPONSES_ENDPOINT, draft.inferenceEndpoint)
+        assertEquals(CodexOAuthContract.SCOPES, draft.scopes)
+        assertEquals(CodexOAuthContract.CALLBACK_PORT, draft.callbackPort)
+        assertEquals(CodexProfileDefaults.PUBLIC_CLIENT_ID, draft.clientId)
+        assertEquals(CodexProfileDefaults.DEFAULT_MODEL, draft.model)
+        assertTrue(CodexProfileDefaults.DEFAULT_MODEL in CodexProfileDefaults.MODELS)
+        assertTrue(draft.validationErrors().isEmpty())
+    }
+
+    @Test
+    fun `codex profile rejects modified endpoint scope and callback contract`() {
+        val invalid = validProfile(ProviderType.CODEX).copy(
+            authorizationEndpoint = "https://identity.example.test/authorize",
+            tokenEndpoint = "https://identity.example.test/token",
+            inferenceEndpoint = "https://relay.example.test/responses",
+            scopes = listOf("openid"),
+            callbackPort = 54545,
+        )
+
+        val errors = invalid.validationErrors()
+        assertTrue(errors.containsKey(ProviderProfile.Field.AUTHORIZATION_ENDPOINT))
+        assertTrue(errors.containsKey(ProviderProfile.Field.TOKEN_ENDPOINT))
+        assertTrue(errors.containsKey(ProviderProfile.Field.INFERENCE_ENDPOINT))
+        assertTrue(errors.containsKey(ProviderProfile.Field.SCOPES))
+        assertTrue(errors.containsKey(ProviderProfile.Field.CALLBACK_PORT))
+    }
+
+    @Test
+    fun `xai draft uses inspected oauth contract and model catalog`() {
+        val draft = ProviderProfile.draft(ProviderType.XAI, "Grok")
+
+        assertEquals(XaiOAuthContract.AUTHORIZATION_ENDPOINT, draft.authorizationEndpoint)
+        assertEquals(XaiOAuthContract.TOKEN_ENDPOINT, draft.tokenEndpoint)
+        assertEquals(XaiOAuthContract.CHAT_COMPLETIONS_ENDPOINT, draft.inferenceEndpoint)
+        assertEquals(XaiOAuthContract.SCOPES, draft.scopes)
+        assertEquals(XaiOAuthContract.CALLBACK_PORT, draft.callbackPort)
+        assertEquals(XaiProfileDefaults.PUBLIC_CLIENT_ID, draft.clientId)
+        assertEquals(XaiProfileDefaults.DEFAULT_MODEL, draft.model)
+        assertTrue(XaiProfileDefaults.DEFAULT_MODEL in XaiProfileDefaults.MODELS)
+        assertTrue(draft.validationErrors().isEmpty())
+    }
+
+    @Test
+    fun `xai profile rejects modified endpoint scope and callback contract`() {
+        val invalid = validProfile(ProviderType.XAI).copy(
+            authorizationEndpoint = "https://identity.example.test/authorize",
+            tokenEndpoint = "https://identity.example.test/token",
+            inferenceEndpoint = "https://relay.example.test/chat/completions",
+            scopes = listOf("openid"),
+            callbackPort = 54545,
+        )
+
+        val errors = invalid.validationErrors()
+        assertTrue(errors.containsKey(ProviderProfile.Field.AUTHORIZATION_ENDPOINT))
+        assertTrue(errors.containsKey(ProviderProfile.Field.TOKEN_ENDPOINT))
+        assertTrue(errors.containsKey(ProviderProfile.Field.INFERENCE_ENDPOINT))
+        assertTrue(errors.containsKey(ProviderProfile.Field.SCOPES))
+        assertTrue(errors.containsKey(ProviderProfile.Field.CALLBACK_PORT))
+    }
+
+    @Test
     fun `profile requires https public client and model`() {
         val invalid = validProfile(ProviderType.ANTHROPIC).copy(
             authorizationEndpoint = "http://provider.example/auth",
@@ -73,7 +214,7 @@ class ProviderProfileTest {
 
     @Test
     fun `validation rejects blank and boundary callback ports`() {
-        val blank = validProfile(ProviderType.ANTHROPIC).copy(
+        val blank = validProfile(ProviderType.OPENAI_COMPATIBLE).copy(
             label = " ",
             scopes = listOf(" "),
         )
@@ -81,19 +222,19 @@ class ProviderProfileTest {
         assertTrue(blank.validationErrors().containsKey(ProviderProfile.Field.SCOPES))
 
         assertTrue(
-            validProfile(ProviderType.ANTHROPIC).copy(callbackPort = 0)
+            validProfile(ProviderType.OPENAI_COMPATIBLE).copy(callbackPort = 0)
                 .validationErrors().containsKey(ProviderProfile.Field.CALLBACK_PORT),
         )
         assertTrue(
-            validProfile(ProviderType.ANTHROPIC).copy(callbackPort = 65534)
+            validProfile(ProviderType.OPENAI_COMPATIBLE).copy(callbackPort = 65534)
                 .validationErrors().containsKey(ProviderProfile.Field.CALLBACK_PORT),
         )
         assertTrue(
-            validProfile(ProviderType.ANTHROPIC).copy(callbackPort = 1)
+            validProfile(ProviderType.OPENAI_COMPATIBLE).copy(callbackPort = 1)
                 .validationErrors().containsKey(ProviderProfile.Field.CALLBACK_PORT).not(),
         )
         assertTrue(
-            validProfile(ProviderType.ANTHROPIC).copy(callbackPort = 65533)
+            validProfile(ProviderType.OPENAI_COMPATIBLE).copy(callbackPort = 65533)
                 .validationErrors().containsKey(ProviderProfile.Field.CALLBACK_PORT).not(),
         )
     }
@@ -166,19 +307,38 @@ class ProviderProfileTest {
         )
     }
 
-    private fun validProfile(type: ProviderType): ProviderProfile = ProviderProfile(
-        id = "profile-${type.wireName}",
-        label = type.displayName,
-        type = type,
-        authorizationEndpoint = "https://identity.example.test/oauth/authorize",
-        tokenEndpoint = "https://identity.example.test/oauth/token",
-        inferenceEndpoint = type.inferenceEndpointPlaceholder,
-        clientId = "android-public-client",
-        scopes = type.defaultScopes.split(" "),
-        model = "test-model",
-        callbackPort = 54545,
-        anthropicBeta = if (type == ProviderType.ANTHROPIC) "oauth-test" else null,
-        googleProjectId = if (type == ProviderType.GEMINI) "test-project" else null,
-        createdAtMs = 1234L,
-    )
+    private fun validProfile(type: ProviderType): ProviderProfile {
+        val draft = ProviderProfile.draft(type, type.displayName)
+        return draft.copy(
+            id = "profile-${type.wireName}",
+            authorizationEndpoint = if (
+                type == ProviderType.ANTHROPIC || type == ProviderType.GEMINI ||
+                    type == ProviderType.CODEX || type == ProviderType.XAI
+            ) {
+                draft.authorizationEndpoint
+            } else {
+                "https://identity.example.test/oauth/authorize"
+            },
+            tokenEndpoint = if (
+                type == ProviderType.ANTHROPIC || type == ProviderType.GEMINI ||
+                type == ProviderType.CODEX || type == ProviderType.XAI
+            ) {
+                draft.tokenEndpoint
+            } else {
+                "https://identity.example.test/oauth/token"
+            },
+            clientId = if (
+                type == ProviderType.ANTHROPIC ||
+                    type == ProviderType.CODEX || type == ProviderType.XAI
+            ) {
+                draft.clientId
+            } else {
+                "android-public-client"
+            },
+            model = "test-model",
+            anthropicBeta = draft.anthropicBeta,
+            googleProjectId = if (type == ProviderType.GEMINI) "test-project" else null,
+            createdAtMs = 1234L,
+        )
+    }
 }

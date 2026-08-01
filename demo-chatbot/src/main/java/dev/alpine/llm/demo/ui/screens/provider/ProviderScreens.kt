@@ -25,7 +25,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -59,8 +63,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import dev.alpine.llm.demo.llm.ProviderConnection
 import dev.alpine.llm.demo.llm.ProviderConnectionState
+import dev.alpine.llm.demo.model.AnthropicProfileDefaults
+import dev.alpine.llm.demo.model.CodexProfileDefaults
+import dev.alpine.llm.demo.model.GeminiProfileDefaults
 import dev.alpine.llm.demo.model.ProviderProfile
 import dev.alpine.llm.demo.model.ProviderType
+import dev.alpine.llm.demo.model.XaiProfileDefaults
 import dev.alpine.llm.demo.ui.theme.AlpineTheme
 
 private val ContentMaxWidth = 840.dp
@@ -273,6 +281,8 @@ private fun ProviderMonogram(type: ProviderType) {
         ProviderType.ANTHROPIC -> "A"
         ProviderType.GEMINI -> "G"
         ProviderType.OPENAI_COMPATIBLE -> "O"
+        ProviderType.CODEX -> "C"
+        ProviderType.XAI -> "X"
     }
     Surface(
         modifier = Modifier.size(40.dp),
@@ -324,6 +334,8 @@ private fun ProviderChooser(
                 ProviderChoiceCard(ProviderType.ANTHROPIC, "provider_card_anthropic", onSelected)
                 ProviderChoiceCard(ProviderType.GEMINI, "provider_card_gemini", onSelected)
                 ProviderChoiceCard(ProviderType.OPENAI_COMPATIBLE, "provider_card_openai", onSelected)
+                ProviderChoiceCard(ProviderType.CODEX, "provider_card_codex", onSelected)
+                ProviderChoiceCard(ProviderType.XAI, "provider_card_xai", onSelected)
             }
         },
         confirmButton = {},
@@ -382,6 +394,20 @@ fun ProviderEditScreen(
     var anthropicBeta by rememberSaveable(initialProfile.id) { mutableStateOf(initialProfile.anthropicBeta.orEmpty()) }
     var googleProjectId by rememberSaveable(initialProfile.id) { mutableStateOf(initialProfile.googleProjectId.orEmpty()) }
     var errors by remember { mutableStateOf<Map<ProviderProfile.Field, String>>(emptyMap()) }
+    val fixedProtocolContract = initialProfile.type == ProviderType.ANTHROPIC ||
+        initialProfile.type == ProviderType.GEMINI ||
+        initialProfile.type == ProviderType.CODEX ||
+        initialProfile.type == ProviderType.XAI
+    val fixedClientRegistration = initialProfile.type == ProviderType.ANTHROPIC ||
+        initialProfile.type == ProviderType.CODEX ||
+        initialProfile.type == ProviderType.XAI
+    val selectableModels = when (initialProfile.type) {
+        ProviderType.ANTHROPIC -> AnthropicProfileDefaults.MODELS
+        ProviderType.GEMINI -> GeminiProfileDefaults.MODELS
+        ProviderType.CODEX -> CodexProfileDefaults.MODELS
+        ProviderType.XAI -> XaiProfileDefaults.MODELS
+        else -> emptyList()
+    }
 
     fun profile() = initialProfile.copy(
         label = label.trim(),
@@ -441,30 +467,35 @@ fun ProviderEditScreen(
                         value = authorizationEndpoint, onValueChange = { authorizationEndpoint = it },
                         label = "Authorization endpoint", error = errors[ProviderProfile.Field.AUTHORIZATION_ENDPOINT],
                         tag = "authorization_endpoint", keyboardType = KeyboardType.Uri,
+                        readOnly = fixedProtocolContract,
                     )
                 }
                 item {
                     ProfileTextField(
                         value = tokenEndpoint, onValueChange = { tokenEndpoint = it }, label = "Token endpoint",
                         error = errors[ProviderProfile.Field.TOKEN_ENDPOINT], tag = "token_endpoint", keyboardType = KeyboardType.Uri,
+                        readOnly = fixedProtocolContract,
                     )
                 }
                 item {
                     ProfileTextField(
                         value = clientId, onValueChange = { clientId = it }, label = "OAuth public client ID",
                         error = errors[ProviderProfile.Field.CLIENT_ID], tag = "client_id",
+                        readOnly = fixedClientRegistration,
                     )
                 }
                 item {
                     ProfileTextField(
                         value = scopes, onValueChange = { scopes = it }, label = "OAuth scopes (space-separated)",
                         error = errors[ProviderProfile.Field.SCOPES], tag = "scopes",
+                        readOnly = fixedProtocolContract,
                     )
                 }
                 item {
                     ProfileTextField(
                         value = callbackPort, onValueChange = { callbackPort = it }, label = "Loopback callback port",
                         error = errors[ProviderProfile.Field.CALLBACK_PORT], tag = "callback_port", keyboardType = KeyboardType.Number,
+                        readOnly = fixedProtocolContract,
                     )
                 }
                 item { SectionTitle("LLM") }
@@ -473,29 +504,57 @@ fun ProviderEditScreen(
                         value = inferenceEndpoint, onValueChange = { inferenceEndpoint = it }, label = "LLM endpoint",
                         placeholder = initialProfile.type.inferenceEndpointPlaceholder,
                         error = errors[ProviderProfile.Field.INFERENCE_ENDPOINT], tag = "inference_endpoint", keyboardType = KeyboardType.Uri,
+                        readOnly = fixedProtocolContract,
                     )
                 }
                 item {
-                    ProfileTextField(
-                        value = model, onValueChange = { model = it }, label = "Default model",
-                        error = errors[ProviderProfile.Field.MODEL], tag = "model",
-                    )
+                    if (selectableModels.isNotEmpty()) {
+                        ProviderModelSelector(
+                            value = model,
+                            models = selectableModels,
+                            onValueChange = { model = it },
+                            error = errors[ProviderProfile.Field.MODEL],
+                        )
+                    } else {
+                        ProfileTextField(
+                            value = model, onValueChange = { model = it }, label = "Default model",
+                            error = errors[ProviderProfile.Field.MODEL], tag = "model",
+                        )
+                    }
                 }
                 if (initialProfile.type == ProviderType.ANTHROPIC) {
                     item { SectionTitle("Anthropic options") }
                     item {
                         ProfileTextField(
                             value = anthropicBeta, onValueChange = { anthropicBeta = it },
-                            label = "Anthropic beta header (optional)", tag = "anthropic_beta",
+                            label = "Anthropic OAuth beta header", tag = "anthropic_beta",
+                            error = errors[ProviderProfile.Field.ANTHROPIC_BETA],
+                            readOnly = true,
+                        )
+                    }
+                    item {
+                        Text(
+                            text = "OpenMinis 공개 소스의 OAuth·PKCE·Messages 값입니다. " +
+                                "비공개 Claude Code 식별 시스템 프롬프트와 CLI 지문은 포함하지 않습니다.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
                 if (initialProfile.type == ProviderType.GEMINI) {
                     item { SectionTitle("Google options") }
                     item {
+                        Text(
+                            text = "Use a Google OAuth Desktop client ID and quota project " +
+                                "owned by this app. Gemini CLI credentials are not reused.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    item {
                         ProfileTextField(
                             value = googleProjectId, onValueChange = { googleProjectId = it },
-                            label = "Google Cloud project ID (optional)", tag = "google_project",
+                            label = "Google Cloud quota project ID", tag = "google_project",
                         )
                     }
                 }
@@ -509,6 +568,55 @@ fun ProviderEditScreen(
                     ) { Text("Save profile") }
                 }
                 item { Spacer(Modifier.height(16.dp)) }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProviderModelSelector(
+    value: String,
+    models: List<String>,
+    onValueChange: (String) -> Unit,
+    error: String?,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        OutlinedTextField(
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(
+                    type = MenuAnchorType.PrimaryNotEditable,
+                    enabled = true,
+                )
+                .testTag("model"),
+            value = value,
+            onValueChange = {},
+            label = { Text("Default model") },
+            supportingText = error?.let { { Text(it) } },
+            isError = error != null,
+            readOnly = true,
+            singleLine = true,
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            models.forEach { model ->
+                DropdownMenuItem(
+                    modifier = Modifier.testTag("model_option_$model"),
+                    text = { Text(model) },
+                    onClick = {
+                        onValueChange(model)
+                        expanded = false
+                    },
+                )
             }
         }
     }
@@ -558,6 +666,7 @@ private fun ProfileTextField(
     error: String? = null,
     placeholder: String? = null,
     keyboardType: KeyboardType = KeyboardType.Text,
+    readOnly: Boolean = false,
 ) {
     OutlinedTextField(
         modifier = Modifier
@@ -569,6 +678,7 @@ private fun ProfileTextField(
         placeholder = placeholder?.let { { Text(it) } },
         supportingText = error?.let { { Text(it) } },
         isError = error != null,
+        readOnly = readOnly,
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
     )

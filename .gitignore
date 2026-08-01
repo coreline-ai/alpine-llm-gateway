@@ -1,5 +1,7 @@
 .gradle/
 **/build/
+**/__pycache__/
+*.py[cod]
 dist/
 local.properties
 config.json
