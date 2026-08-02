@@ -17,13 +17,46 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.charset.StandardCharsets
 
+/**
+ * Automatic retry is fail-closed because an inference POST may have been accepted even when
+ * its response is lost. Adapters may opt in only after their Provider idempotency contract is
+ * reviewed and the same idempotency key is retained for every transport attempt.
+ */
+enum class ProviderRetrySafety {
+    NEVER_AUTOMATIC,
+    IDEMPOTENT_WITH_STABLE_KEY,
+}
+
 data class ProviderHttpRequest(
     val url: String,
     val bodyJson: String,
     val headers: Map<String, String> = emptyMap(),
     /** Header name that receives the sanitized OAuth account id at the credential boundary. */
     val credentialAccountIdHeader: String? = null,
-)
+    val retrySafety: ProviderRetrySafety = ProviderRetrySafety.NEVER_AUTOMATIC,
+    val idempotencyKeyHeader: String? = null,
+) {
+    init {
+        if (retrySafety == ProviderRetrySafety.IDEMPOTENT_WITH_STABLE_KEY) {
+            require(!idempotencyKeyHeader.isNullOrBlank()) {
+                "idempotent retry requires an idempotency header"
+            }
+            require(idempotencyKeyHeader.matches(Regex("[A-Za-z0-9-]{1,80}"))) {
+                "idempotency header name is invalid"
+            }
+            val key = headers.entries.firstOrNull {
+                it.key.equals(idempotencyKeyHeader, ignoreCase = true)
+            }?.value
+            require(!key.isNullOrBlank() && key.length <= 256) {
+                "idempotency header value is missing or invalid"
+            }
+        } else {
+            require(idempotencyKeyHeader == null) {
+                "idempotency header requires an idempotent retry contract"
+            }
+        }
+    }
+}
 
 data class ProviderHttpResponse(
     val statusCode: Int,

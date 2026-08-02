@@ -1,0 +1,55 @@
+{
+  "schema_version": 2,
+  "support_status": "experimental_requires_emulator_e2e",
+  "runtime_id": "alpine",
+  "runtime_version": "3.21.3-openminis-8cf13e9-winsize1-x86_64-experimental",
+  "abi": "x86_64",
+  "android": {
+    "min_sdk": 26,
+    "target_sdk_verified": 36,
+    "ndk": "27.0.12077973"
+  },
+  "rootfs": {
+    "distribution": "Alpine Linux",
+    "version": "3.21.3",
+    "architecture": "x86_64",
+    "source_url": "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/x86_64/alpine-minirootfs-3.21.3-x86_64.tar.gz",
+    "size_bytes": 3507952,
+    "sha256": "1a694899e406ce55d32334c47ac0b2efb6c06d7e878102d1840892ad44cd5239"
+  },
+  "proot": {
+    "repository": "https://github.com/OpenMinis/proot.git",
+    "commit": "8cf13e997cdc9472997aae19df8050c073c9a86c",
+    "build_android_api": 26,
+    "size_bytes": 293992,
+    "sha256": "9c0bf771ba92151514338643b03fce271d80543c30ae6395c472f313a5d98868",
+    "patches": [
+      {
+        "path": "scripts/runtime/patches/proot-android-winsize.patch",
+        "sha256": "20726d1ccf9bb8c952a6039d5158168dad58ec62bcf7cbf73bc3170b8c4a9a27"
+      }
+    ],
+    "license_declared": "GPL-2.0-or-later",
+    "license_concluded": "NOASSERTION",
+    "license_review_status": "REVIEW_REQUIRED"
+  },
+  "loader": {
+    "packaging": "stripped static loader packaged as libproot-loader.so",
+    "size_bytes": 17832,
+    "sha256": "4ca6f14810548610501d012144abeb4c27c1530e2e37201cabf30cab2c39a585"
+  },
+  "talloc": {
+    "version": "2.4.2",
+    "linkage": "static",
+    "source_url": "https://download.samba.org/pub/talloc/talloc-2.4.2.tar.gz",
+    "source_sha256": "85ecf9e465e20f98f9950a52e9a411e14320bc555fa257d87697b7e7a9b1d8a6",
+    "license_declared": "LGPL-3.0-or-later",
+    "license_concluded": "LGPL-3.0-or-later",
+    "license_review_status": "SOURCE_VERIFIED_BINARY_REVIEW_REQUIRED"
+  },
+  "sbom": {
+    "format": "SPDX-2.3",
+    "path": "alpine-runtime-pack-x86_64/src/main/resources/META-INF/alpine-runtime/x86_64/sbom.spdx.json",
+    "sha256": "1aa09d877b3fec8a9149bfc967f86489087b0e4799d71d067ff2f3a971c2ecc4"
+  }
+}

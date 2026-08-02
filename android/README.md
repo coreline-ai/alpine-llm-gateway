@@ -19,7 +19,7 @@ Library Manifest가 `INTERNET` permission, 기본 `/oauth/callback`과 Codex용 
 
 ```text
 Alpine llmctl
-  └─ ALPINE_LLM_SESSION_TOKEN (임시 로컬 capability)
+  └─ ALPINE_LLM_CREDENTIAL_FILE (TTL capability 파일 경로)
        └─ 127.0.0.1 HostBridgeServer
             └─ OAuthLlmSession
                  ├─ Android Keystore 암호화 token 저장
@@ -90,18 +90,21 @@ val hostBridge = HostBridgeServer(
 )
 val endpoint = hostBridge.start()
 
-val alpine = AlpineRuntime(context)
-alpine.attachHostBridge(endpoint)
-
-// Dispatchers.IO 등 background context에서 실행
-val result = alpine.exec(
-    "llmctl run --model provider-model --prompt 'hello'",
-)
-
 // 앱 lifecycle 종료 시
 hostBridge.stop()
-alpine.detachHostBridge()
 ```
+
+Alpine 작업 모드는 더 이상 이 Provider 모듈의 `AlpineRuntime`을 사용하지 않습니다.
+`:alpine-runtime-android`의 `RuntimeEnvironmentContributor`와
+`:alpine-llm-bridge`를 사용합니다. `AlpineLlmBridgeController`가 bridge, runtime session,
+Python Gateway의 start/health/stop/restart를 단일 소유하며 stop 시 capability/config를 삭제합니다.
+
+두 실행 경로를 함께 조립하는 앱은 `:alpine-chat-routing`의 `SafeChatRouter`를 사용합니다.
+빠른 채팅은 `:alpine-chat-backend-direct`, Alpine 작업은
+`:alpine-chat-backend-alpine` adapter로 분리됩니다. Runtime 준비 실패만 Provider dispatch 전에
+fallback 승인 대상으로 전달되며 429·5xx·network·stream 오류는 다른 backend를 자동 호출하지
+않습니다. 두 adapter는 검증된 Provider idempotency key가 없으므로 capability를 `NONE`으로
+선언합니다.
 
 `OAuthHttpLlmBridge`는 Provider adapter가 JSON/headers를 만든 뒤 transport 단계에서만 Authorization을 추가합니다. Adapter가 Authorization을 직접 덮어쓸 수 없고, HTTPS가 아닌 Provider URL은 거부합니다. Claude/Gemini처럼 request/response 형식이 다른 Provider는 `OAuthProviderHttpAdapter`와 필요 시 `OAuthStreamingProviderHttpAdapter`를 구현합니다.
 
@@ -254,55 +257,39 @@ endpoint로 전송하지 않습니다.
 
 ## Alpine runtime asset
 
-단일 ABI 호환 모드는 앱의 `src/main/assets`에 다음 파일이 필요합니다.
+Runtime 설치와 PRoot process 구현은 `:android` Provider 모듈에서 분리되었습니다.
+오프라인 arm64 구성을 사용하는 앱은 다음 모듈을 선택적으로 추가합니다.
 
-```text
-alpine-rootfs.tar.gz
-proot-aarch64
+```kotlin
+implementation(project(":alpine-runtime-api"))
+implementation(project(":alpine-runtime-android"))
+implementation(project(":alpine-runtime-pack-bundled"))
 ```
 
 ```kotlin
-val alpine = AlpineRuntime(context)
-alpine.installIfNeeded()
-
-// background context에서 실행
-val result = alpine.exec("python3 --version")
-```
-
-ABI별 asset과 checksum을 강제하려면 다음처럼 설정합니다.
-
-```kotlin
-val alpine = AlpineRuntime(
+val provider = BundledRuntimeArtifactProvider(
     context,
-    AlpineRuntime.Config(
-        runtimeAssets = listOf(
-            AlpineRuntimeAssetSet(
-                abi = "arm64-v8a",
-                rootfsAsset = "runtime/alpine-arm64.tar.gz",
-                rootfsVersion = "3.22.1",
-                prootAsset = "runtime/proot-arm64-v8a",
-                rootfsSha256 = BuildConfig.ALPINE_ARM64_SHA256,
-                prootSha256 = BuildConfig.PROOT_ARM64_SHA256,
-            ),
-            AlpineRuntimeAssetSet(
-                abi = "x86_64",
-                rootfsAsset = "runtime/alpine-x86_64.tar.gz",
-                rootfsVersion = "3.22.1",
-                prootAsset = "runtime/proot-x86_64",
-                rootfsSha256 = BuildConfig.ALPINE_X86_64_SHA256,
-                prootSha256 = BuildConfig.PROOT_X86_64_SHA256,
-            ),
-        ),
-    ),
+    Alpine321Arm64Pack.create(),
 )
-val status = alpine.installationStatus()
+val runtime = DefaultAndroidAlpineRuntimeFactory().create(
+    context,
+    AndroidRuntimeConfiguration(artifactProvider = provider),
+)
+runtime.install(RuntimeInstallRequest()).thenCompose {
+    runtime.start(RuntimeStartRequest())
+}.thenCompose { session ->
+    session.execute(
+        RuntimeCommandRequest(
+            executable = "/bin/sh",
+            arguments = listOf("-lc", "python3 --version"),
+        ),
+    )
+}
 ```
 
-기기 `Build.SUPPORTED_ABIS` 순서로 asset을 선택하며 지원 항목이 없으면 설치 전에 실패합니다. rootfs는 app-private 임시 파일에 복사하며 SHA-256을 확인한 뒤에만 추출하고, PRoot도 검증된 임시 파일을 원자적으로 교체합니다.
-
-이 저장소는 rootfs/PRoot 바이너리를 배포하지 않습니다. 사용할 Alpine release와 PRoot binary의 checksum·서명·라이선스를 앱 공급 과정에서 검증해야 합니다.
-
-`exec()`는 stdout을 별도 thread에서 계속 drain하므로 timeout이 출력 대기 때문에 멈추지 않습니다. 출력 제한을 넘기면 `ExecResult.outputTruncated`가 `true`가 됩니다. rootfs extractor는 tar checksum, 경로 traversal, entry/총 크기 제한과 실행 권한을 검증하며 교체 실패 시 이전 rootfs를 복원합니다.
+bundled pack은 Alpine 3.21.3 rootfs, packaged PRoot/loader, checksum lock과 SPDX SBOM을 포함합니다.
+설치는 staging 후 원자적으로 활성화하며 checksum·ABI·용량·취소·process death 실패 시 기존 활성 runtime을 보존합니다.
+host-provided 또는 Ed25519 signed-download 공급은 같은 `RuntimeArtifactProvider` 계약으로 교체할 수 있습니다.
 
 ## Manifest 주의
 
@@ -312,11 +299,11 @@ val status = alpine.installationStatus()
 
 ## 운영 주의
 
-- `AlpineRuntime`은 Linux kernel/VM이 아니라 Android kernel 위의 Alpine user space입니다.
-- 단일 `proot-aarch64` 설정은 arm64 전용입니다. 여러 ABI를 지원하려면 `runtimeAssets`와 각 checksum을 제공해야 합니다.
+- Alpine runtime은 Linux kernel/VM이 아니라 Android kernel 위의 Alpine user space입니다.
+- 현재 bundled pack은 arm64-v8a 전용입니다. 추가 ABI는 별도 manifest와 native artifact가 필요합니다.
 - rootfs 설치와 모든 네트워크/프로세스 호출은 UI thread 밖에서 실행해야 합니다.
 - 장시간 runtime을 유지하면 Foreground Service 및 사용자 알림 정책을 적용해야 합니다.
-- session token은 process environment에 있으므로 다른 앱과 공유되는 외부 저장소나 로그에 환경 전체를 출력하면 안 됩니다.
+- raw OAuth token은 guest process environment에 전달하지 않습니다. Phase 4 bridge는 credential file/capability 방식으로 연결합니다.
 - Provider별 작업은 [Provider OAuth adapter 요구사항](../docs/provider-oauth-adapters.md)을 참고하세요.
 
 ## Release artifact
@@ -373,4 +360,4 @@ instrumentation source는 Android Keystore token 저장/재생성/삭제와 phys
 ANDROID_SERIAL=<device-serial> ./gradlew :android:connectedDebugAndroidTest
 ```
 
-2026-07-31 기준 Samsung `SM-S931N`, Android 16(API 36), `arm64-v8a`에서 instrumentation 6건을 실행했습니다. 검증 범위는 Keystore token 저장·복원·삭제, 저장 파일의 token/PKCE verifier 평문 비노출, Android Keystore key 비추출성, 고정 runtime ABI fixture 선택, 실제 loopback Host Bridge의 session 인증·completion·SSE·재기동입니다. 실제 Provider OAuth/API와 PRoot/rootfs 실행은 별도 credential과 runtime asset이 필요하므로 이 결과에 포함되지 않습니다.
+2026-07-31 기준 Samsung `SM-S931N`, Android 16(API 36), `arm64-v8a`에서 Provider/Keystore/Host Bridge instrumentation 6건을 실행했습니다. 별도로 2026-08-01에는 같은 삼성폰과 Android 15 arm64 emulator에서 선택형 runtime SDK의 install/start/exec/stop/restart/repair/reset 및 workspace 보존을 검증했습니다. 상세 결과는 [Phase 3 검증 기록](../dev-plan/alpine-runtime-phase3-verification-20260801.md)에 있습니다. 실제 외부 Provider 계정 OAuth/API 검증은 credential이 필요하므로 이 두 로컬 검증에 포함되지 않습니다.

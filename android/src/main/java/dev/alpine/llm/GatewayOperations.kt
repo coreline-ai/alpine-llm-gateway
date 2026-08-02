@@ -163,8 +163,8 @@ class ProviderCircuitBreaker(
 }
 
 /**
- * Retries only request opening/complete-response failures. A returned stream
- * Flow is never collected here, so an emitted delta can never be duplicated.
+ * Retries only requests whose adapter supplied an explicit idempotency contract. A returned
+ * stream Flow is never collected here, so an emitted delta can never be duplicated.
  */
 class ResilientOAuthHttpTransport(
     private val delegate: OAuthHttpTransport = UrlConnectionOAuthHttpTransport(),
@@ -181,6 +181,7 @@ class ResilientOAuthHttpTransport(
             operation = "completion",
             status = ProviderHttpResponse::statusCode,
             headers = ProviderHttpResponse::headers,
+            retrySafety = request.retrySafety,
         ) {
             delegate.execute(request)
         }
@@ -194,6 +195,7 @@ class ResilientOAuthHttpTransport(
             operation = "stream_open",
             status = ProviderHttpStreamResponse::statusCode,
             headers = ProviderHttpStreamResponse::headers,
+            retrySafety = request.retrySafety,
         ) {
             streamTransport.executeStream(request)
         }
@@ -203,6 +205,7 @@ class ResilientOAuthHttpTransport(
         operation: String,
         status: (T) -> Int,
         headers: (T) -> Map<String, String>,
+        retrySafety: ProviderRetrySafety,
         request: suspend () -> T,
     ): T {
         var attempt = 1
@@ -216,7 +219,8 @@ class ResilientOAuthHttpTransport(
                     return response
                 }
                 circuitBreaker.recordFailure()
-                if (attempt >= retryPolicy.maxAttempts ||
+                if (retrySafety != ProviderRetrySafety.IDEMPOTENT_WITH_STABLE_KEY ||
+                    attempt >= retryPolicy.maxAttempts ||
                     circuitBreaker.state() == ProviderCircuitBreaker.State.OPEN
                 ) {
                     return response
@@ -224,7 +228,8 @@ class ResilientOAuthHttpTransport(
                 waitBeforeRetry(operation, attempt, responseStatus, headers(response))
             } catch (error: IOException) {
                 circuitBreaker.recordFailure()
-                if (error is ProviderCircuitOpenException ||
+                if (retrySafety != ProviderRetrySafety.IDEMPOTENT_WITH_STABLE_KEY ||
+                    error is ProviderCircuitOpenException ||
                     attempt >= retryPolicy.maxAttempts
                 ) {
                     throw error

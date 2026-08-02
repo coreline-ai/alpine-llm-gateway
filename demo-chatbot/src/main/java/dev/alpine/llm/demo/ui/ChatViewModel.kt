@@ -3,6 +3,7 @@ package dev.alpine.llm.demo.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import dev.alpine.chat.routing.ChatExecutionMode
 import dev.alpine.llm.demo.assistant.AssistantCatalog
 import dev.alpine.llm.demo.assistant.AssistantPromptComposer
 import dev.alpine.llm.demo.assistant.ResponseConstraintDetector
@@ -64,6 +65,7 @@ data class ChatUiState(
     val providers: List<ConnectedProviderOption> = emptyList(),
     val selectedProfileId: String? = null,
     val selectedModel: String? = null,
+    val executionMode: ChatExecutionMode = ChatExecutionMode.FAST_CHAT,
     val selectedSkillId: String = AssistantSelection.DEFAULT_SKILL_ID,
     val selectedPersonaId: String = AssistantSelection.DEFAULT_PERSONA_ID,
     val defaultSkillId: String = AssistantSelection.DEFAULT_SKILL_ID,
@@ -199,6 +201,19 @@ class ChatViewModel(
         publish()
     }
 
+    /** Persists the host-selected mode; routing is connected by the integrating app in Phase 6. */
+    fun selectExecutionMode(mode: ChatExecutionMode) {
+        if (isLoading || activeJobs.containsKey(snapshot.activeConversationId)) return
+        val active = snapshot.activeConversation
+        if (active.executionMode == mode) return
+        updateActiveConversation {
+            it.copy(executionMode = mode, updatedAtMs = System.currentTimeMillis())
+        }
+        clearFailure(active.id)
+        persistImmediately()
+        publish()
+    }
+
     fun selectAssistantMode(
         skillId: String,
         personaId: String,
@@ -260,6 +275,7 @@ class ChatViewModel(
                 ?: providerOptions.firstOrNull()?.profileId,
             selectedModel = active.selectedModel
                 ?: providerOptions.firstOrNull()?.model,
+            executionMode = active.executionMode,
             assistantSelection = defaultAssistantSelection,
         )
         clearFailure(snapshot.activeConversationId)
@@ -301,6 +317,7 @@ class ChatViewModel(
                 snapshot.activeConversation.copy(
                     selectedProfileId = selectedProfile,
                     selectedModel = selectedModel,
+                    executionMode = previousActive.executionMode,
                     selectedSkillId = defaultAssistantSelection.skillId,
                     selectedPersonaId = defaultAssistantSelection.personaId,
                 ),
@@ -844,6 +861,7 @@ class ChatViewModel(
             providers = projectedProviders,
             selectedProfileId = selectedOption?.profileId,
             selectedModel = selectedModel,
+            executionMode = active.executionMode,
             selectedSkillId = active.selectedSkillId,
             selectedPersonaId = active.selectedPersonaId,
             defaultSkillId = defaultAssistantSelection.skillId,

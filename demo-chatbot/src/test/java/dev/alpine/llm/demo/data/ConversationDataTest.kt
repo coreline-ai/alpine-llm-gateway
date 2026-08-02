@@ -1,5 +1,6 @@
 package dev.alpine.llm.demo.data
 
+import dev.alpine.chat.routing.ChatExecutionMode
 import dev.alpine.llm.demo.model.AssistantSelection
 import dev.alpine.llm.demo.model.ChatConversation
 import dev.alpine.llm.demo.model.ChatMessage
@@ -50,6 +51,7 @@ class ConversationDataTest {
             draft = "next draft",
             selectedProfileId = "provider-1",
             selectedModel = "model-2",
+            executionMode = ChatExecutionMode.ALPINE_WORKSPACE,
             selectedSkillId = "debugging",
             selectedPersonaId = "step_by_step",
             generationState = ConversationGenerationState.CANCELLED,
@@ -104,6 +106,41 @@ class ConversationDataTest {
         assertEquals(AssistantSelection.DEFAULT_PERSONA_ID, migrated.selectedPersonaId)
         assertNull(migrated.messages.single().assistantSkillId)
         assertNull(migrated.messages.single().assistantPersonaId)
+        assertEquals(ChatExecutionMode.FAST_CHAT, migrated.executionMode)
+    }
+
+    @Test
+    fun `schema two and legacy index migrate execution mode to fast chat`() {
+        val current = ChatConversation(
+            id = "legacy-mode",
+            selectedSkillId = "coding",
+            selectedPersonaId = "concise",
+            executionMode = ChatExecutionMode.ALPINE_WORKSPACE,
+            createdAtMs = 1,
+            updatedAtMs = 2,
+        )
+        val legacyConversation = JSONObject(
+            ConversationCodec.encodeConversation(current).toString(Charsets.UTF_8),
+        ).apply {
+            put("schema", 2)
+            remove("executionMode")
+        }
+        val legacyIndex = JSONObject(
+            ConversationCodec.encodeIndex(
+                ConversationIndex(current.id, listOf(current.summary())),
+            ).toString(Charsets.UTF_8),
+        ).apply {
+            put("schema", 1)
+            getJSONArray("summaries").getJSONObject(0).remove("executionMode")
+        }
+
+        val migrated = ConversationCodec.decodeConversation(legacyConversation.toString().toByteArray())
+        val migratedIndex = ConversationCodec.decodeIndex(legacyIndex.toString().toByteArray())
+
+        assertEquals(ChatExecutionMode.FAST_CHAT, migrated.executionMode)
+        assertEquals("coding", migrated.selectedSkillId)
+        assertEquals("concise", migrated.selectedPersonaId)
+        assertEquals(ChatExecutionMode.FAST_CHAT, migratedIndex.summaries.single().executionMode)
     }
 
     @Test
@@ -177,6 +214,7 @@ class ConversationDataTest {
             snapshot.activeConversation.copy(
                 messages = listOf(ChatMessage(id = "user-a", role = ChatRole.USER, text = "A")),
                 draft = "draft-a",
+                executionMode = ChatExecutionMode.ALPINE_WORKSPACE,
             ),
         )
         snapshot = repository.create(snapshot, "provider-b", "model-b")
@@ -186,6 +224,7 @@ class ConversationDataTest {
 
         assertEquals("draft-a", snapshot.activeConversation.draft)
         assertEquals("provider-a", snapshot.activeConversation.selectedProfileId)
+        assertEquals(ChatExecutionMode.ALPINE_WORKSPACE, snapshot.activeConversation.executionMode)
         assertEquals("draft-b", repository.get(snapshot, secondId)?.draft)
         snapshot = repository.rename(snapshot, firstId, " Renamed\n chat ")
         assertEquals("Renamed chat", snapshot.activeConversation.title)
@@ -295,6 +334,7 @@ class ConversationDataTest {
                         ChatMessage(id = "persistent-message", role = ChatRole.USER, text = "A"),
                     ),
                     draft = "draft-a",
+                    executionMode = ChatExecutionMode.ALPINE_WORKSPACE,
                     updatedAtMs = 20,
                 ),
             )
@@ -319,6 +359,7 @@ class ConversationDataTest {
             assertEquals("draft-b", reloaded.activeConversation.draft)
             assertEquals("provider-b", reloaded.activeConversation.selectedProfileId)
             assertEquals("model-b", reloaded.activeConversation.selectedModel)
+            assertEquals(ChatExecutionMode.ALPINE_WORKSPACE, reloaded.activeConversation.executionMode)
             assertEquals(listOf(secondId, "persistent-a"), reloaded.summaries.map { it.id })
         }
 

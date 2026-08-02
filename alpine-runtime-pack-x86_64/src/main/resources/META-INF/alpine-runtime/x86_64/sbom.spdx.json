@@ -1,0 +1,68 @@
+{
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "spdxVersion": "SPDX-2.3",
+  "dataLicense": "CC0-1.0",
+  "name": "alpine-runtime-3.21.3-x86_64",
+  "documentNamespace": "https://coreline-ai.example/spdx/alpine-runtime/3.21.3-x86_64",
+  "creationInfo": {
+    "created": "2026-08-02T00:00:00Z",
+    "creators": ["Tool: alpine-llm-gateway-runtime-lock"]
+  },
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-AlpineRootfs",
+      "name": "Alpine Linux minirootfs",
+      "versionInfo": "3.21.3",
+      "downloadLocation": "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/x86_64/alpine-minirootfs-3.21.3-x86_64.tar.gz",
+      "filesAnalyzed": false,
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "1a694899e406ce55d32334c47ac0b2efb6c06d7e878102d1840892ad44cd5239"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-PRoot",
+      "name": "OpenMinis PRoot Android fork",
+      "versionInfo": "8cf13e997cdc9472997aae19df8050c073c9a86c",
+      "downloadLocation": "https://github.com/OpenMinis/proot",
+      "sourceInfo": "OpenMinis commit plus scripts/runtime/patches/proot-android-winsize.patch (SHA256 20726d1ccf9bb8c952a6039d5158168dad58ec62bcf7cbf73bc3170b8c4a9a27)",
+      "filesAnalyzed": false,
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "GPL-2.0-or-later",
+      "copyrightText": "NOASSERTION",
+      "comment": "Source grant verified as GPL-2.0-or-later. The packaged PRoot executable statically links talloc; the combined binary conclusion remains under review."
+    },
+    {
+      "SPDXID": "SPDXRef-Talloc",
+      "name": "talloc",
+      "versionInfo": "2.4.2",
+      "downloadLocation": "https://download.samba.org/pub/talloc/talloc-2.4.2.tar.gz",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-3.0-or-later",
+      "licenseDeclared": "LGPL-3.0-or-later",
+      "copyrightText": "NOASSERTION"
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-AlpineRootfs"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-PRoot"
+    },
+    {
+      "spdxElementId": "SPDXRef-PRoot",
+      "relationshipType": "STATIC_LINK",
+      "relatedSpdxElement": "SPDXRef-Talloc"
+    }
+  ]
+}

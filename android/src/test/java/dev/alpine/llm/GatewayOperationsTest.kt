@@ -39,7 +39,7 @@ class GatewayOperationsTest {
             sleeper = { waits += it },
         )
 
-        val response = transport.execute(ProviderHttpRequest("https://example.com", "{}"))
+        val response = transport.execute(idempotentRequest())
 
         assertEquals(200, response.statusCode)
         assertEquals(2, calls)
@@ -65,6 +65,39 @@ class GatewayOperationsTest {
             transport.execute(ProviderHttpRequest("https://example.com", "{}")).statusCode,
         )
         assertEquals(1, calls)
+    }
+
+    @Test
+    fun inferencePostIsNotRetriedWithoutAnExplicitIdempotencyContract() = runBlocking {
+        var calls = 0
+        val transport = ResilientOAuthHttpTransport(
+            delegate = OAuthHttpTransport {
+                calls++
+                ProviderHttpResponse(503, "{}")
+            },
+            retryPolicy = ProviderRetryPolicy(maxAttempts = 3, initialBackoffMs = 0),
+            sleeper = { error("an unsafe request must not be scheduled for retry") },
+        )
+
+        assertEquals(
+            503,
+            transport.execute(ProviderHttpRequest("https://example.com", "{}")).statusCode,
+        )
+        assertEquals(1, calls)
+    }
+
+    @Test
+    fun idempotentRetryContractRequiresTheDeclaredStableHeader() {
+        val error = runCatching {
+            ProviderHttpRequest(
+                url = "https://example.com",
+                bodyJson = "{}",
+                retrySafety = ProviderRetrySafety.IDEMPOTENT_WITH_STABLE_KEY,
+                idempotencyKeyHeader = "Idempotency-Key",
+            )
+        }.exceptionOrNull()
+
+        assertTrue(error is IllegalArgumentException)
     }
 
     @Test
@@ -104,9 +137,9 @@ class GatewayOperationsTest {
 
         assertEquals(
             200,
-            transport.execute(ProviderHttpRequest("https://example.com", "{}")).statusCode,
+            transport.execute(idempotentRequest()).statusCode,
         )
-        val stream = transport.executeStream(ProviderHttpRequest("https://example.com", "{}"))
+        val stream = transport.executeStream(idempotentRequest())
         val values = stream.events.toList().also { collected += it.size }
 
         assertEquals(2, completeCalls)
@@ -183,4 +216,12 @@ class GatewayOperationsTest {
         assertEquals(1, allowed.get())
         assertEquals(ProviderCircuitBreaker.State.HALF_OPEN, breaker.state())
     }
+
+    private fun idempotentRequest() = ProviderHttpRequest(
+        url = "https://example.com",
+        bodyJson = "{}",
+        headers = mapOf("Idempotency-Key" to "stable-test-key"),
+        retrySafety = ProviderRetrySafety.IDEMPOTENT_WITH_STABLE_KEY,
+        idempotencyKeyHeader = "Idempotency-Key",
+    )
 }

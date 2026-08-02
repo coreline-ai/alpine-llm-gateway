@@ -1,6 +1,7 @@
 package dev.alpine.llm.demo.ui
 
 import android.app.Activity
+import dev.alpine.chat.routing.ChatExecutionMode
 import dev.alpine.llm.HostLlmStreamEvent
 import dev.alpine.llm.HostLlmStreamResult
 import dev.alpine.llm.OAuthAuthenticationState
@@ -57,6 +58,21 @@ class ChatViewModelTest {
     fun tearDown() {
         Dispatchers.resetMain()
     }
+
+    @Test
+    fun `execution mode is conversation scoped and inherited by a new chat`() =
+        runTest(dispatcher) {
+            val viewModel = ChatViewModel()
+
+            viewModel.selectExecutionMode(ChatExecutionMode.ALPINE_WORKSPACE)
+            assertEquals(ChatExecutionMode.ALPINE_WORKSPACE, viewModel.state.value.executionMode)
+            viewModel.updateDraft("workspace conversation")
+            viewModel.newConversation()
+
+            assertEquals(ChatExecutionMode.ALPINE_WORKSPACE, viewModel.state.value.executionMode)
+            viewModel.selectExecutionMode(ChatExecutionMode.FAST_CHAT)
+            assertEquals(ChatExecutionMode.FAST_CHAT, viewModel.state.value.executionMode)
+        }
 
     @Test
     fun `provider switch sends only through selected session and fixes assistant metadata`() =

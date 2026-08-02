@@ -1,0 +1,204 @@
+{
+  "abi": "arm64-v8a",
+  "missing_source_origins": [
+    "alpine-baselayout@5f0cd7890349e7fe11128478ac506c709805224d",
+    "apk-tools@41847d6ccff08940b5bf1ba0d6005e95897039f9",
+    "busybox@9c49608930ef6a9936750e9e39edec56b3db9cd5",
+    "ca-certificates@707ff77afebd8ef5bd60f3a5dd1b08f8c480f531",
+    "musl@efd4d5df7be0ea48d98512671f676fc5ceb14899",
+    "pax-utils@398a5aee3025ec8a4d0d761e448dc86ac777fa09"
+  ],
+  "package_count": 15,
+  "packages": [
+    {
+      "architecture": "aarch64",
+      "installed_checksum": "Q1fMzOBGrN5A2tRfD+hq90EexboUQ=",
+      "license_declared": "GPL-2.0-only",
+      "name": "alpine-baselayout",
+      "origin": "alpine-baselayout",
+      "package_commit": "5f0cd7890349e7fe11128478ac506c709805224d",
+      "source_mirror_status": "NOT_VERIFIED",
+      "source_review_required": true,
+      "source_url": "https://git.alpinelinux.org/cgit/aports/tree/main/alpine-baselayout",
+      "version": "3.6.8-r1"
+    },
+    {
+      "architecture": "aarch64",
+      "installed_checksum": "Q1YluBoF1dbOwSXQzQPPjP8CnKLb0=",
+      "license_declared": "GPL-2.0-only",
+      "name": "alpine-baselayout-data",
+      "origin": "alpine-baselayout",
+      "package_commit": "5f0cd7890349e7fe11128478ac506c709805224d",
+      "source_mirror_status": "NOT_VERIFIED",
+      "source_review_required": true,
+      "source_url": "https://git.alpinelinux.org/cgit/aports/tree/main/alpine-baselayout",
+      "version": "3.6.8-r1"
+    },
+    {
+      "architecture": "aarch64",
+      "installed_checksum": "Q1MchWO9rd+xBzdNDZBiwL1Tg9/aU=",
+      "license_declared": "MIT",
+      "name": "alpine-keys",
+      "origin": "alpine-keys",
+      "package_commit": "6d473fb38effb2389f567b29fb7eb27039b3a279",
+      "source_mirror_status": "NOT_VERIFIED",
+      "source_review_required": false,
+      "source_url": "https://alpinelinux.org",
+      "version": "2.5-r0"
+    },
+    {
+      "architecture": "aarch64",
+      "installed_checksum": "Q1fnZHIR6WHZWJ7LVYreAUNOR3tG8=",
+      "license_declared": "MIT",
+      "name": "alpine-release",
+      "origin": "alpine-base",
+      "package_commit": "899c70c801638ce9aea29a822aaa07a1488efa15",
+      "source_mirror_status": "NOT_VERIFIED",
+      "source_review_required": false,
+      "source_url": "https://alpinelinux.org",
+      "version": "3.21.3-r0"
+    },
+    {
+      "architecture": "aarch64",
+      "installed_checksum": "Q1CkP9a3awut9Uv8Wj9F0CqEKo7YM=",
+      "license_declared": "GPL-2.0-only",
+      "name": "apk-tools",
+      "origin": "apk-tools",
+      "package_commit": "41847d6ccff08940b5bf1ba0d6005e95897039f9",
+      "source_mirror_status": "NOT_VERIFIED",
+      "source_review_required": true,
+      "source_url": "https://gitlab.alpinelinux.org/alpine/apk-tools",
+      "version": "2.14.6-r3"
+    },
+    {
+      "architecture": "aarch64",
+      "installed_checksum": "Q14x7cdyQoSZWgyJG95ddz1MoV8uw=",
+      "license_declared": "GPL-2.0-only",
+      "name": "busybox",
+      "origin": "busybox",
+      "package_commit": "9c49608930ef6a9936750e9e39edec56b3db9cd5",
+      "source_mirror_status": "NOT_VERIFIED",
+      "source_review_required": true,
+      "source_url": "https://busybox.net/",
+      "version": "1.37.0-r12"
+    },
+    {
+      "architecture": "aarch64",
+      "installed_checksum": "Q1tKnb2Vs5sOjTMGEeq2fmONarBzA=",
+      "license_declared": "GPL-2.0-only",
+      "name": "busybox-binsh",
+      "origin": "busybox",
+      "package_commit": "9c49608930ef6a9936750e9e39edec56b3db9cd5",
+      "source_mirror_status": "NOT_VERIFIED",
+      "source_review_required": true,
+      "source_url": "https://busybox.net/",
+      "version": "1.37.0-r12"
+    },
+    {
+      "architecture": "aarch64",
+      "installed_checksum": "Q1u+wb12YGwjm/zk/SMQPFkeoY5rU=",
+      "license_declared": "MPL-2.0 AND MIT",
+      "name": "ca-certificates-bundle",
+      "origin": "ca-certificates",
+      "package_commit": "707ff77afebd8ef5bd60f3a5dd1b08f8c480f531",
+      "source_mirror_status": "NOT_VERIFIED",
+      "source_review_required": true,
+      "source_url": "https://www.mozilla.org/en-US/about/governance/policies/security-group/certs/",
+      "version": "20241121-r1"
+    },
+    {
+      "architecture": "aarch64",
+      "installed_checksum": "Q1sL2FMKlyrvWwx/5c11siZeR/v4g=",
+      "license_declared": "Apache-2.0",
+      "name": "libcrypto3",
+      "origin": "openssl",
+      "package_commit": "ddbf4a43b534e1e2da4ccb72bdc4ffcd9b85ce03",
+      "source_mirror_status": "NOT_VERIFIED",
+      "source_review_required": false,
+      "source_url": "https://www.openssl.org/",
+      "version": "3.3.3-r0"
+    },
+    {
+      "architecture": "aarch64",
+      "installed_checksum": "Q1BGirx6NmgyKc3o3HyW/IjhxiSig=",
+      "license_declared": "Apache-2.0",
+      "name": "libssl3",
+      "origin": "openssl",
+      "package_commit": "ddbf4a43b534e1e2da4ccb72bdc4ffcd9b85ce03",
+      "source_mirror_status": "NOT_VERIFIED",
+      "source_review_required": false,
+      "source_url": "https://www.openssl.org/",
+      "version": "3.3.3-r0"
+    },
+    {
+      "architecture": "aarch64",
+      "installed_checksum": "Q1b9f8KH7RJnBrrbyrGSaTf0V8v5I=",
+      "license_declared": "MIT",
+      "name": "musl",
+      "origin": "musl",
+      "package_commit": "efd4d5df7be0ea48d98512671f676fc5ceb14899",
+      "source_mirror_status": "NOT_VERIFIED",
+      "source_review_required": false,
+      "source_url": "https://musl.libc.org/",
+      "version": "1.2.5-r9"
+    },
+    {
+      "architecture": "aarch64",
+      "installed_checksum": "Q15J7iCIth3ZC+GVb2dQjVPpi8Rjo=",
+      "license_declared": "MIT AND BSD-2-Clause AND GPL-2.0-or-later",
+      "name": "musl-utils",
+      "origin": "musl",
+      "package_commit": "efd4d5df7be0ea48d98512671f676fc5ceb14899",
+      "source_mirror_status": "NOT_VERIFIED",
+      "source_review_required": true,
+      "source_url": "https://musl.libc.org/",
+      "version": "1.2.5-r9"
+    },
+    {
+      "architecture": "aarch64",
+      "installed_checksum": "Q1wtXOtXltlxMn8m9w3LuCiDFGGQY=",
+      "license_declared": "GPL-2.0-only",
+      "name": "scanelf",
+      "origin": "pax-utils",
+      "package_commit": "398a5aee3025ec8a4d0d761e448dc86ac777fa09",
+      "source_mirror_status": "NOT_VERIFIED",
+      "source_review_required": true,
+      "source_url": "https://wiki.gentoo.org/wiki/Hardened/PaX_Utilities",
+      "version": "1.3.8-r1"
+    },
+    {
+      "architecture": "aarch64",
+      "installed_checksum": "Q1Vf152/NhxT0U+MgLHROvUpE0Esw=",
+      "license_declared": "GPL-2.0-only",
+      "name": "ssl_client",
+      "origin": "busybox",
+      "package_commit": "9c49608930ef6a9936750e9e39edec56b3db9cd5",
+      "source_mirror_status": "NOT_VERIFIED",
+      "source_review_required": true,
+      "source_url": "https://busybox.net/",
+      "version": "1.37.0-r12"
+    },
+    {
+      "architecture": "aarch64",
+      "installed_checksum": "Q1ZEtAcwgZopzoL/lwkvjL8KcMEVo=",
+      "license_declared": "Zlib",
+      "name": "zlib",
+      "origin": "zlib",
+      "package_commit": "4c2722e7ecc1c5e3ba882429044a101497121223",
+      "source_mirror_status": "NOT_VERIFIED",
+      "source_review_required": false,
+      "source_url": "https://zlib.net/",
+      "version": "1.3.1-r2"
+    }
+  ],
+  "rootfs": {
+    "architectures": [
+      "aarch64"
+    ],
+    "sha256": "ead8a4b37867bd19e7417dd078748e2312c0aea364403d96758d63ea8ff261ea"
+  },
+  "schema_version": 1,
+  "source_mirror_complete": false,
+  "source_mirror_verified_count": 0,
+  "source_review_package_count": 9
+}

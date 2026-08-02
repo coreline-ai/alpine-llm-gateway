@@ -1,0 +1,583 @@
+Compiled from "AlpineRuntimeManager.kt"
+public interface dev.alpine.runtime.api.AlpineRuntimeManager extends java.lang.AutoCloseable {
+  public abstract dev.alpine.runtime.api.RuntimeState currentState();
+  public abstract dev.alpine.runtime.api.RuntimeSubscription addStateListener(dev.alpine.runtime.api.RuntimeStateListener);
+  public abstract dev.alpine.runtime.api.RuntimeSubscription addEventListener(dev.alpine.runtime.api.RuntimeEventListener);
+  public abstract java.util.concurrent.CompletionStage<dev.alpine.runtime.api.RuntimeInstallResult> install(dev.alpine.runtime.api.RuntimeInstallRequest);
+  public abstract java.util.concurrent.CompletionStage<dev.alpine.runtime.api.RuntimeSession> start(dev.alpine.runtime.api.RuntimeStartRequest);
+  public abstract java.util.concurrent.CompletionStage<java.lang.Void> stop(dev.alpine.runtime.api.RuntimeStopReason);
+  public abstract java.util.concurrent.CompletionStage<dev.alpine.runtime.api.RuntimeInstallResult> repair();
+  public abstract java.util.concurrent.CompletionStage<java.lang.Void> reset();
+  public abstract java.util.concurrent.CompletionStage<dev.alpine.runtime.api.RuntimeHealth> health();
+  public abstract void close();
+}
+Compiled from "RuntimeArtifacts.kt"
+public interface dev.alpine.runtime.api.RuntimeArtifact {
+  public abstract dev.alpine.runtime.api.RuntimeArtifactDescriptor getDescriptor();
+  public abstract java.io.InputStream openStream();
+}
+Compiled from "RuntimeArtifacts.kt"
+public final class dev.alpine.runtime.api.RuntimeArtifactBundle {
+  public dev.alpine.runtime.api.RuntimeArtifactBundle(dev.alpine.runtime.api.RuntimeArtifactManifest, java.util.List<? extends dev.alpine.runtime.api.RuntimeArtifact>);
+  public final dev.alpine.runtime.api.RuntimeArtifactManifest getManifest();
+  public final java.util.List<dev.alpine.runtime.api.RuntimeArtifact> getArtifacts();
+  public final dev.alpine.runtime.api.RuntimeArtifactManifest component1();
+  public final java.util.List<dev.alpine.runtime.api.RuntimeArtifact> component2();
+  public final dev.alpine.runtime.api.RuntimeArtifactBundle copy(dev.alpine.runtime.api.RuntimeArtifactManifest, java.util.List<? extends dev.alpine.runtime.api.RuntimeArtifact>);
+  public static dev.alpine.runtime.api.RuntimeArtifactBundle copy$default(dev.alpine.runtime.api.RuntimeArtifactBundle, dev.alpine.runtime.api.RuntimeArtifactManifest, java.util.List, int, java.lang.Object);
+  public java.lang.String toString();
+  public int hashCode();
+  public boolean equals(java.lang.Object);
+}
+Compiled from "RuntimeArtifacts.kt"
+public final class dev.alpine.runtime.api.RuntimeArtifactDescriptor {
+  public dev.alpine.runtime.api.RuntimeArtifactDescriptor(java.lang.String, dev.alpine.runtime.api.RuntimeArtifactKind, java.lang.String, java.lang.String, long, java.lang.String, java.lang.String);
+  public dev.alpine.runtime.api.RuntimeArtifactDescriptor(java.lang.String, dev.alpine.runtime.api.RuntimeArtifactKind, java.lang.String, java.lang.String, long, java.lang.String, java.lang.String, int, kotlin.jvm.internal.DefaultConstructorMarker);
+  public final java.lang.String getId();
+  public final dev.alpine.runtime.api.RuntimeArtifactKind getKind();
+  public final java.lang.String getVersion();
+  public final java.lang.String getSha256();
+  public final long getSizeBytes();
+  public final java.lang.String getAbi();
+  public final java.lang.String getLicense();
+  public final java.lang.String component1();
+  public final dev.alpine.runtime.api.RuntimeArtifactKind component2();
+  public final java.lang.String component3();
+  public final java.lang.String component4();
+  public final long component5();
+  public final java.lang.String component6();
+  public final java.lang.String component7();
+  public final dev.alpine.runtime.api.RuntimeArtifactDescriptor copy(java.lang.String, dev.alpine.runtime.api.RuntimeArtifactKind, java.lang.String, java.lang.String, long, java.lang.String, java.lang.String);
+  public static dev.alpine.runtime.api.RuntimeArtifactDescriptor copy$default(dev.alpine.runtime.api.RuntimeArtifactDescriptor, java.lang.String, dev.alpine.runtime.api.RuntimeArtifactKind, java.lang.String, java.lang.String, long, java.lang.String, java.lang.String, int, java.lang.Object);
+  public java.lang.String toString();
+  public int hashCode();
+  public boolean equals(java.lang.Object);
+  public dev.alpine.runtime.api.RuntimeArtifactDescriptor(java.lang.String, dev.alpine.runtime.api.RuntimeArtifactKind, java.lang.String, java.lang.String, long, java.lang.String);
+  public dev.alpine.runtime.api.RuntimeArtifactDescriptor(java.lang.String, dev.alpine.runtime.api.RuntimeArtifactKind, java.lang.String, java.lang.String, long);
+}
+Compiled from "RuntimeArtifacts.kt"
+public final class dev.alpine.runtime.api.RuntimeArtifactKind extends java.lang.Enum<dev.alpine.runtime.api.RuntimeArtifactKind> {
+  public static final dev.alpine.runtime.api.RuntimeArtifactKind ROOTFS;
+  public static final dev.alpine.runtime.api.RuntimeArtifactKind NATIVE_LAUNCHER;
+  public static final dev.alpine.runtime.api.RuntimeArtifactKind NATIVE_LOADER;
+  public static final dev.alpine.runtime.api.RuntimeArtifactKind AUXILIARY;
+  public static dev.alpine.runtime.api.RuntimeArtifactKind[] values();
+  public static dev.alpine.runtime.api.RuntimeArtifactKind valueOf(java.lang.String);
+  public static kotlin.enums.EnumEntries<dev.alpine.runtime.api.RuntimeArtifactKind> getEntries();
+}
+Compiled from "RuntimeArtifacts.kt"
+public final class dev.alpine.runtime.api.RuntimeArtifactManifest {
+  public dev.alpine.runtime.api.RuntimeArtifactManifest(java.lang.String, java.lang.String, java.util.List<dev.alpine.runtime.api.RuntimeArtifactDescriptor>, java.util.Map<java.lang.String, java.lang.String>);
+  public dev.alpine.runtime.api.RuntimeArtifactManifest(java.lang.String, java.lang.String, java.util.List, java.util.Map, int, kotlin.jvm.internal.DefaultConstructorMarker);
+  public final java.lang.String getRuntimeId();
+  public final java.lang.String getRuntimeVersion();
+  public final java.util.List<dev.alpine.runtime.api.RuntimeArtifactDescriptor> getArtifacts();
+  public final java.util.Map<java.lang.String, java.lang.String> getMetadata();
+  public final java.lang.String component1();
+  public final java.lang.String component2();
+  public final java.util.List<dev.alpine.runtime.api.RuntimeArtifactDescriptor> component3();
+  public final java.util.Map<java.lang.String, java.lang.String> component4();
+  public final dev.alpine.runtime.api.RuntimeArtifactManifest copy(java.lang.String, java.lang.String, java.util.List<dev.alpine.runtime.api.RuntimeArtifactDescriptor>, java.util.Map<java.lang.String, java.lang.String>);
+  public static dev.alpine.runtime.api.RuntimeArtifactManifest copy$default(dev.alpine.runtime.api.RuntimeArtifactManifest, java.lang.String, java.lang.String, java.util.List, java.util.Map, int, java.lang.Object);
+  public java.lang.String toString();
+  public int hashCode();
+  public boolean equals(java.lang.Object);
+  public dev.alpine.runtime.api.RuntimeArtifactManifest(java.lang.String, java.lang.String, java.util.List<dev.alpine.runtime.api.RuntimeArtifactDescriptor>);
+}
+Compiled from "RuntimeArtifacts.kt"
+public final class dev.alpine.runtime.api.RuntimeArtifactManifestCanonicalizer {
+  public static final dev.alpine.runtime.api.RuntimeArtifactManifestCanonicalizer INSTANCE;
+  public static final byte[] canonicalBytes(dev.alpine.runtime.api.RuntimeArtifactManifest);
+}
+Compiled from "RuntimeArtifacts.kt"
+public final class dev.alpine.runtime.api.RuntimeArtifactMetadataKeys {
+  public static final dev.alpine.runtime.api.RuntimeArtifactMetadataKeys INSTANCE;
+  public static final java.lang.String MANIFEST_SCHEMA;
+  public static final java.lang.String ROOTFS_FORMAT;
+  public static final java.lang.String NATIVE_LAUNCHER_FILE_NAME;
+  public static final java.lang.String NATIVE_LOADER_FILE_NAME;
+  public static final java.lang.String SBOM_FORMAT;
+  public static final java.lang.String SBOM_PATH;
+  public static final java.lang.String SBOM_SHA256;
+  public static final java.lang.String SOURCE_REVISION;
+}
+Compiled from "RuntimeArtifacts.kt"
+public interface dev.alpine.runtime.api.RuntimeArtifactProvider {
+  public abstract java.util.concurrent.CompletionStage<dev.alpine.runtime.api.RuntimeArtifactBundle> resolve(dev.alpine.runtime.api.RuntimeArtifactRequest);
+}
+Compiled from "RuntimeArtifacts.kt"
+public final class dev.alpine.runtime.api.RuntimeArtifactRequest {
+  public dev.alpine.runtime.api.RuntimeArtifactRequest(java.lang.String, java.lang.String, java.util.List<java.lang.String>);
+  public dev.alpine.runtime.api.RuntimeArtifactRequest(java.lang.String, java.lang.String, java.util.List, int, kotlin.jvm.internal.DefaultConstructorMarker);
+  public final java.lang.String getRuntimeId();
+  public final java.lang.String getVersion();
+  public final java.util.List<java.lang.String> getSupportedAbis();
+  public final java.lang.String component1();
+  public final java.lang.String component2();
+  public final java.util.List<java.lang.String> component3();
+  public final dev.alpine.runtime.api.RuntimeArtifactRequest copy(java.lang.String, java.lang.String, java.util.List<java.lang.String>);
+  public static dev.alpine.runtime.api.RuntimeArtifactRequest copy$default(dev.alpine.runtime.api.RuntimeArtifactRequest, java.lang.String, java.lang.String, java.util.List, int, java.lang.Object);
+  public java.lang.String toString();
+  public int hashCode();
+  public boolean equals(java.lang.Object);
+  public dev.alpine.runtime.api.RuntimeArtifactRequest(java.lang.String, java.lang.String);
+  public dev.alpine.runtime.api.RuntimeArtifactRequest(java.lang.String);
+  public dev.alpine.runtime.api.RuntimeArtifactRequest();
+}
+Compiled from "RuntimeCommands.kt"
+public final class dev.alpine.runtime.api.RuntimeCommandRequest {
+  public dev.alpine.runtime.api.RuntimeCommandRequest(java.lang.String, java.util.List<java.lang.String>, java.lang.String, java.util.Map<java.lang.String, java.lang.String>, long);
+  public dev.alpine.runtime.api.RuntimeCommandRequest(java.lang.String, java.util.List, java.lang.String, java.util.Map, long, int, kotlin.jvm.internal.DefaultConstructorMarker);
+  public final java.lang.String getExecutable();
+  public final java.util.List<java.lang.String> getArguments();
+  public final java.lang.String getWorkingDirectory();
+  public final java.util.Map<java.lang.String, java.lang.String> getEnvironment();
+  public final long getTimeoutMillis();
+  public final java.lang.String component1();
+  public final java.util.List<java.lang.String> component2();
+  public final java.lang.String component3();
+  public final java.util.Map<java.lang.String, java.lang.String> component4();
+  public final long component5();
+  public final dev.alpine.runtime.api.RuntimeCommandRequest copy(java.lang.String, java.util.List<java.lang.String>, java.lang.String, java.util.Map<java.lang.String, java.lang.String>, long);
+  public static dev.alpine.runtime.api.RuntimeCommandRequest copy$default(dev.alpine.runtime.api.RuntimeCommandRequest, java.lang.String, java.util.List, java.lang.String, java.util.Map, long, int, java.lang.Object);
+  public java.lang.String toString();
+  public int hashCode();
+  public boolean equals(java.lang.Object);
+  public dev.alpine.runtime.api.RuntimeCommandRequest(java.lang.String, java.util.List<java.lang.String>, java.lang.String, java.util.Map<java.lang.String, java.lang.String>);
+  public dev.alpine.runtime.api.RuntimeCommandRequest(java.lang.String, java.util.List<java.lang.String>, java.lang.String);
+  public dev.alpine.runtime.api.RuntimeCommandRequest(java.lang.String, java.util.List<java.lang.String>);
+  public dev.alpine.runtime.api.RuntimeCommandRequest(java.lang.String);
+}
+Compiled from "RuntimeCommands.kt"
+public final class dev.alpine.runtime.api.RuntimeCommandResult {
+  public dev.alpine.runtime.api.RuntimeCommandResult(int, byte[], byte[], long, boolean);
+  public dev.alpine.runtime.api.RuntimeCommandResult(int, byte[], byte[], long, boolean, int, kotlin.jvm.internal.DefaultConstructorMarker);
+  public final int getExitCode();
+  public final byte[] getStandardOutput();
+  public final byte[] getStandardError();
+  public final long getDurationMillis();
+  public final boolean getTimedOut();
+  public final int component1();
+  public final byte[] component2();
+  public final byte[] component3();
+  public final long component4();
+  public final boolean component5();
+  public final dev.alpine.runtime.api.RuntimeCommandResult copy(int, byte[], byte[], long, boolean);
+  public static dev.alpine.runtime.api.RuntimeCommandResult copy$default(dev.alpine.runtime.api.RuntimeCommandResult, int, byte[], byte[], long, boolean, int, java.lang.Object);
+  public java.lang.String toString();
+  public int hashCode();
+  public boolean equals(java.lang.Object);
+  public dev.alpine.runtime.api.RuntimeCommandResult(int, byte[], byte[], long);
+  public dev.alpine.runtime.api.RuntimeCommandResult(int, byte[], byte[]);
+  public dev.alpine.runtime.api.RuntimeCommandResult(int, byte[]);
+  public dev.alpine.runtime.api.RuntimeCommandResult(int);
+}
+Compiled from "RuntimeCommands.kt"
+public final class dev.alpine.runtime.api.RuntimeEnvironmentContext {
+  public dev.alpine.runtime.api.RuntimeEnvironmentContext(java.lang.String, java.lang.String, java.util.Map<java.lang.String, java.lang.String>);
+  public dev.alpine.runtime.api.RuntimeEnvironmentContext(java.lang.String, java.lang.String, java.util.Map, int, kotlin.jvm.internal.DefaultConstructorMarker);
+  public final java.lang.String getSessionId();
+  public final java.lang.String getWorkspacePath();
+  public final java.util.Map<java.lang.String, java.lang.String> getAttributes();
+  public final java.lang.String component1();
+  public final java.lang.String component2();
+  public final java.util.Map<java.lang.String, java.lang.String> component3();
+  public final dev.alpine.runtime.api.RuntimeEnvironmentContext copy(java.lang.String, java.lang.String, java.util.Map<java.lang.String, java.lang.String>);
+  public static dev.alpine.runtime.api.RuntimeEnvironmentContext copy$default(dev.alpine.runtime.api.RuntimeEnvironmentContext, java.lang.String, java.lang.String, java.util.Map, int, java.lang.Object);
+  public java.lang.String toString();
+  public int hashCode();
+  public boolean equals(java.lang.Object);
+  public dev.alpine.runtime.api.RuntimeEnvironmentContext(java.lang.String, java.lang.String);
+}
+Compiled from "RuntimeCommands.kt"
+public interface dev.alpine.runtime.api.RuntimeEnvironmentContributor {
+  public abstract java.util.Map<java.lang.String, java.lang.String> contribute(dev.alpine.runtime.api.RuntimeEnvironmentContext);
+}
+Compiled from "RuntimeLifecycle.kt"
+public final class dev.alpine.runtime.api.RuntimeErrorCode extends java.lang.Enum<dev.alpine.runtime.api.RuntimeErrorCode> {
+  public static final dev.alpine.runtime.api.RuntimeErrorCode UNSUPPORTED_ABI;
+  public static final dev.alpine.runtime.api.RuntimeErrorCode ARTIFACT_NOT_FOUND;
+  public static final dev.alpine.runtime.api.RuntimeErrorCode ARTIFACT_INTEGRITY_FAILED;
+  public static final dev.alpine.runtime.api.RuntimeErrorCode STORAGE_UNAVAILABLE;
+  public static final dev.alpine.runtime.api.RuntimeErrorCode INSTALL_CANCELLED;
+  public static final dev.alpine.runtime.api.RuntimeErrorCode PROCESS_START_FAILED;
+  public static final dev.alpine.runtime.api.RuntimeErrorCode PROCESS_EXITED;
+  public static final dev.alpine.runtime.api.RuntimeErrorCode COMMAND_FAILED;
+  public static final dev.alpine.runtime.api.RuntimeErrorCode TERMINAL_UNAVAILABLE;
+  public static final dev.alpine.runtime.api.RuntimeErrorCode TERMINAL_RESIZE_UNSUPPORTED;
+  public static final dev.alpine.runtime.api.RuntimeErrorCode HEALTH_CHECK_FAILED;
+  public static final dev.alpine.runtime.api.RuntimeErrorCode BRIDGE_UNAVAILABLE;
+  public static final dev.alpine.runtime.api.RuntimeErrorCode INVALID_REQUEST;
+  public static final dev.alpine.runtime.api.RuntimeErrorCode INTERNAL_ERROR;
+  public static dev.alpine.runtime.api.RuntimeErrorCode[] values();
+  public static dev.alpine.runtime.api.RuntimeErrorCode valueOf(java.lang.String);
+  public static kotlin.enums.EnumEntries<dev.alpine.runtime.api.RuntimeErrorCode> getEntries();
+}
+Compiled from "RuntimeLifecycle.kt"
+public final class dev.alpine.runtime.api.RuntimeEvent {
+  public dev.alpine.runtime.api.RuntimeEvent(dev.alpine.runtime.api.RuntimeEventKind, long, java.lang.String, dev.alpine.runtime.api.RuntimeErrorCode, java.util.Map<java.lang.String, java.lang.String>);
+  public dev.alpine.runtime.api.RuntimeEvent(dev.alpine.runtime.api.RuntimeEventKind, long, java.lang.String, dev.alpine.runtime.api.RuntimeErrorCode, java.util.Map, int, kotlin.jvm.internal.DefaultConstructorMarker);
+  public final dev.alpine.runtime.api.RuntimeEventKind getKind();
+  public final long getTimestampEpochMillis();
+  public final java.lang.String getSessionId();
+  public final dev.alpine.runtime.api.RuntimeErrorCode getErrorCode();
+  public final java.util.Map<java.lang.String, java.lang.String> getAttributes();
+  public final dev.alpine.runtime.api.RuntimeEventKind component1();
+  public final long component2();
+  public final java.lang.String component3();
+  public final dev.alpine.runtime.api.RuntimeErrorCode component4();
+  public final java.util.Map<java.lang.String, java.lang.String> component5();
+  public final dev.alpine.runtime.api.RuntimeEvent copy(dev.alpine.runtime.api.RuntimeEventKind, long, java.lang.String, dev.alpine.runtime.api.RuntimeErrorCode, java.util.Map<java.lang.String, java.lang.String>);
+  public static dev.alpine.runtime.api.RuntimeEvent copy$default(dev.alpine.runtime.api.RuntimeEvent, dev.alpine.runtime.api.RuntimeEventKind, long, java.lang.String, dev.alpine.runtime.api.RuntimeErrorCode, java.util.Map, int, java.lang.Object);
+  public java.lang.String toString();
+  public int hashCode();
+  public boolean equals(java.lang.Object);
+  public dev.alpine.runtime.api.RuntimeEvent(dev.alpine.runtime.api.RuntimeEventKind, long, java.lang.String, dev.alpine.runtime.api.RuntimeErrorCode);
+  public dev.alpine.runtime.api.RuntimeEvent(dev.alpine.runtime.api.RuntimeEventKind, long, java.lang.String);
+  public dev.alpine.runtime.api.RuntimeEvent(dev.alpine.runtime.api.RuntimeEventKind, long);
+}
+Compiled from "RuntimeLifecycle.kt"
+public final class dev.alpine.runtime.api.RuntimeEventKind extends java.lang.Enum<dev.alpine.runtime.api.RuntimeEventKind> {
+  public static final dev.alpine.runtime.api.RuntimeEventKind STATE_CHANGED;
+  public static final dev.alpine.runtime.api.RuntimeEventKind INSTALL_PROGRESS;
+  public static final dev.alpine.runtime.api.RuntimeEventKind SESSION_STARTED;
+  public static final dev.alpine.runtime.api.RuntimeEventKind SESSION_STOPPED;
+  public static final dev.alpine.runtime.api.RuntimeEventKind COMMAND_FINISHED;
+  public static final dev.alpine.runtime.api.RuntimeEventKind TERMINAL_OPENED;
+  public static final dev.alpine.runtime.api.RuntimeEventKind TERMINAL_CLOSED;
+  public static final dev.alpine.runtime.api.RuntimeEventKind HEALTH_CHANGED;
+  public static final dev.alpine.runtime.api.RuntimeEventKind ERROR;
+  public static dev.alpine.runtime.api.RuntimeEventKind[] values();
+  public static dev.alpine.runtime.api.RuntimeEventKind valueOf(java.lang.String);
+  public static kotlin.enums.EnumEntries<dev.alpine.runtime.api.RuntimeEventKind> getEntries();
+}
+Compiled from "RuntimeLifecycle.kt"
+public interface dev.alpine.runtime.api.RuntimeEventListener {
+  public abstract void onEvent(dev.alpine.runtime.api.RuntimeEvent);
+}
+Compiled from "RuntimeLifecycle.kt"
+public interface dev.alpine.runtime.api.RuntimeEventSink {
+  public abstract void emit(dev.alpine.runtime.api.RuntimeEvent);
+}
+Compiled from "AlpineRuntimeManager.kt"
+public final class dev.alpine.runtime.api.RuntimeHealth {
+  public dev.alpine.runtime.api.RuntimeHealth(boolean, dev.alpine.runtime.api.RuntimeLifecycleState, long, dev.alpine.runtime.api.RuntimeErrorCode, java.util.Map<java.lang.String, java.lang.Boolean>);
+  public dev.alpine.runtime.api.RuntimeHealth(boolean, dev.alpine.runtime.api.RuntimeLifecycleState, long, dev.alpine.runtime.api.RuntimeErrorCode, java.util.Map, int, kotlin.jvm.internal.DefaultConstructorMarker);
+  public final boolean getHealthy();
+  public final dev.alpine.runtime.api.RuntimeLifecycleState getLifecycle();
+  public final long getCheckedAtEpochMillis();
+  public final dev.alpine.runtime.api.RuntimeErrorCode getErrorCode();
+  public final java.util.Map<java.lang.String, java.lang.Boolean> getChecks();
+  public final boolean component1();
+  public final dev.alpine.runtime.api.RuntimeLifecycleState component2();
+  public final long component3();
+  public final dev.alpine.runtime.api.RuntimeErrorCode component4();
+  public final java.util.Map<java.lang.String, java.lang.Boolean> component5();
+  public final dev.alpine.runtime.api.RuntimeHealth copy(boolean, dev.alpine.runtime.api.RuntimeLifecycleState, long, dev.alpine.runtime.api.RuntimeErrorCode, java.util.Map<java.lang.String, java.lang.Boolean>);
+  public static dev.alpine.runtime.api.RuntimeHealth copy$default(dev.alpine.runtime.api.RuntimeHealth, boolean, dev.alpine.runtime.api.RuntimeLifecycleState, long, dev.alpine.runtime.api.RuntimeErrorCode, java.util.Map, int, java.lang.Object);
+  public java.lang.String toString();
+  public int hashCode();
+  public boolean equals(java.lang.Object);
+  public dev.alpine.runtime.api.RuntimeHealth(boolean, dev.alpine.runtime.api.RuntimeLifecycleState, long, dev.alpine.runtime.api.RuntimeErrorCode);
+  public dev.alpine.runtime.api.RuntimeHealth(boolean, dev.alpine.runtime.api.RuntimeLifecycleState, long);
+}
+Compiled from "RuntimeLifecycle.kt"
+public final class dev.alpine.runtime.api.RuntimeHostProcessEvent {
+  public dev.alpine.runtime.api.RuntimeHostProcessEvent(dev.alpine.runtime.api.RuntimeHostProcessEventKind, java.lang.String, long, long);
+  public final dev.alpine.runtime.api.RuntimeHostProcessEventKind getKind();
+  public final java.lang.String getSessionId();
+  public final long getProcessId();
+  public final long getTimestampEpochMillis();
+  public final dev.alpine.runtime.api.RuntimeHostProcessEventKind component1();
+  public final java.lang.String component2();
+  public final long component3();
+  public final long component4();
+  public final dev.alpine.runtime.api.RuntimeHostProcessEvent copy(dev.alpine.runtime.api.RuntimeHostProcessEventKind, java.lang.String, long, long);
+  public static dev.alpine.runtime.api.RuntimeHostProcessEvent copy$default(dev.alpine.runtime.api.RuntimeHostProcessEvent, dev.alpine.runtime.api.RuntimeHostProcessEventKind, java.lang.String, long, long, int, java.lang.Object);
+  public java.lang.String toString();
+  public int hashCode();
+  public boolean equals(java.lang.Object);
+}
+Compiled from "RuntimeLifecycle.kt"
+public final class dev.alpine.runtime.api.RuntimeHostProcessEventKind extends java.lang.Enum<dev.alpine.runtime.api.RuntimeHostProcessEventKind> {
+  public static final dev.alpine.runtime.api.RuntimeHostProcessEventKind STARTED;
+  public static final dev.alpine.runtime.api.RuntimeHostProcessEventKind STOPPED;
+  public static dev.alpine.runtime.api.RuntimeHostProcessEventKind[] values();
+  public static dev.alpine.runtime.api.RuntimeHostProcessEventKind valueOf(java.lang.String);
+  public static kotlin.enums.EnumEntries<dev.alpine.runtime.api.RuntimeHostProcessEventKind> getEntries();
+}
+Compiled from "RuntimeLifecycle.kt"
+public interface dev.alpine.runtime.api.RuntimeHostProcessListener {
+  public abstract void onProcessEvent(dev.alpine.runtime.api.RuntimeHostProcessEvent);
+}
+Compiled from "AlpineRuntimeManager.kt"
+public final class dev.alpine.runtime.api.RuntimeInstallRequest {
+  public dev.alpine.runtime.api.RuntimeInstallRequest(dev.alpine.runtime.api.RuntimeArtifactRequest, boolean);
+  public dev.alpine.runtime.api.RuntimeInstallRequest(dev.alpine.runtime.api.RuntimeArtifactRequest, boolean, int, kotlin.jvm.internal.DefaultConstructorMarker);
+  public final dev.alpine.runtime.api.RuntimeArtifactRequest getArtifactRequest();
+  public final boolean getForceReinstall();
+  public final dev.alpine.runtime.api.RuntimeArtifactRequest component1();
+  public final boolean component2();
+  public final dev.alpine.runtime.api.RuntimeInstallRequest copy(dev.alpine.runtime.api.RuntimeArtifactRequest, boolean);
+  public static dev.alpine.runtime.api.RuntimeInstallRequest copy$default(dev.alpine.runtime.api.RuntimeInstallRequest, dev.alpine.runtime.api.RuntimeArtifactRequest, boolean, int, java.lang.Object);
+  public java.lang.String toString();
+  public int hashCode();
+  public boolean equals(java.lang.Object);
+  public dev.alpine.runtime.api.RuntimeInstallRequest(dev.alpine.runtime.api.RuntimeArtifactRequest);
+  public dev.alpine.runtime.api.RuntimeInstallRequest();
+}
+Compiled from "AlpineRuntimeManager.kt"
+public final class dev.alpine.runtime.api.RuntimeInstallResult {
+  public dev.alpine.runtime.api.RuntimeInstallResult(java.lang.String, java.util.List<java.lang.String>, boolean);
+  public final java.lang.String getRuntimeVersion();
+  public final java.util.List<java.lang.String> getInstalledArtifactIds();
+  public final boolean getReusedExistingInstall();
+  public final java.lang.String component1();
+  public final java.util.List<java.lang.String> component2();
+  public final boolean component3();
+  public final dev.alpine.runtime.api.RuntimeInstallResult copy(java.lang.String, java.util.List<java.lang.String>, boolean);
+  public static dev.alpine.runtime.api.RuntimeInstallResult copy$default(dev.alpine.runtime.api.RuntimeInstallResult, java.lang.String, java.util.List, boolean, int, java.lang.Object);
+  public java.lang.String toString();
+  public int hashCode();
+  public boolean equals(java.lang.Object);
+}
+Compiled from "RuntimeLifecycle.kt"
+public final class dev.alpine.runtime.api.RuntimeLifecycleState extends java.lang.Enum<dev.alpine.runtime.api.RuntimeLifecycleState> {
+  public static final dev.alpine.runtime.api.RuntimeLifecycleState NOT_INSTALLED;
+  public static final dev.alpine.runtime.api.RuntimeLifecycleState INSTALLING;
+  public static final dev.alpine.runtime.api.RuntimeLifecycleState READY;
+  public static final dev.alpine.runtime.api.RuntimeLifecycleState STARTING;
+  public static final dev.alpine.runtime.api.RuntimeLifecycleState RUNNING;
+  public static final dev.alpine.runtime.api.RuntimeLifecycleState STOPPING;
+  public static final dev.alpine.runtime.api.RuntimeLifecycleState REPAIR_REQUIRED;
+  public static final dev.alpine.runtime.api.RuntimeLifecycleState FAILED;
+  public static dev.alpine.runtime.api.RuntimeLifecycleState[] values();
+  public static dev.alpine.runtime.api.RuntimeLifecycleState valueOf(java.lang.String);
+  public static kotlin.enums.EnumEntries<dev.alpine.runtime.api.RuntimeLifecycleState> getEntries();
+}
+Compiled from "RuntimeLifecycle.kt"
+public final class dev.alpine.runtime.api.RuntimeOperationException extends java.lang.RuntimeException {
+  public dev.alpine.runtime.api.RuntimeOperationException(dev.alpine.runtime.api.RuntimeErrorCode);
+  public final dev.alpine.runtime.api.RuntimeErrorCode getErrorCode();
+}
+Compiled from "RuntimePackages.kt"
+public final class dev.alpine.runtime.api.RuntimePackageAllowlistPolicy implements dev.alpine.runtime.api.RuntimePackagePolicy {
+  public dev.alpine.runtime.api.RuntimePackageAllowlistPolicy(java.util.Set<java.lang.String>);
+  public dev.alpine.runtime.api.RuntimePackagePolicyDecision evaluate(dev.alpine.runtime.api.RuntimePackageInstallRequest);
+}
+Compiled from "RuntimePackages.kt"
+public interface dev.alpine.runtime.api.RuntimePackageApproval {
+  public abstract java.util.concurrent.CompletionStage<java.lang.Boolean> requestApproval(dev.alpine.runtime.api.RuntimePackageApprovalRequest);
+}
+Compiled from "RuntimePackages.kt"
+public final class dev.alpine.runtime.api.RuntimePackageApprovalRequest {
+  public dev.alpine.runtime.api.RuntimePackageApprovalRequest(java.util.List<java.lang.String>);
+  public final java.util.List<java.lang.String> getPackages();
+  public final java.util.List<java.lang.String> component1();
+  public final dev.alpine.runtime.api.RuntimePackageApprovalRequest copy(java.util.List<java.lang.String>);
+  public static dev.alpine.runtime.api.RuntimePackageApprovalRequest copy$default(dev.alpine.runtime.api.RuntimePackageApprovalRequest, java.util.List, int, java.lang.Object);
+  public java.lang.String toString();
+  public int hashCode();
+  public boolean equals(java.lang.Object);
+}
+Compiled from "RuntimePackages.kt"
+public final class dev.alpine.runtime.api.RuntimePackageInstallOutcome extends java.lang.Enum<dev.alpine.runtime.api.RuntimePackageInstallOutcome> {
+  public static final dev.alpine.runtime.api.RuntimePackageInstallOutcome INSTALLED;
+  public static final dev.alpine.runtime.api.RuntimePackageInstallOutcome POLICY_DENIED;
+  public static final dev.alpine.runtime.api.RuntimePackageInstallOutcome APPROVAL_DECLINED;
+  public static dev.alpine.runtime.api.RuntimePackageInstallOutcome[] values();
+  public static dev.alpine.runtime.api.RuntimePackageInstallOutcome valueOf(java.lang.String);
+  public static kotlin.enums.EnumEntries<dev.alpine.runtime.api.RuntimePackageInstallOutcome> getEntries();
+}
+Compiled from "RuntimePackages.kt"
+public final class dev.alpine.runtime.api.RuntimePackageInstallRequest {
+  public static final dev.alpine.runtime.api.RuntimePackageInstallRequest$Companion Companion;
+  public static final int MAX_PACKAGES_PER_REQUEST;
+  public dev.alpine.runtime.api.RuntimePackageInstallRequest(java.util.List<java.lang.String>, long);
+  public dev.alpine.runtime.api.RuntimePackageInstallRequest(java.util.List, long, int, kotlin.jvm.internal.DefaultConstructorMarker);
+  public final java.util.List<java.lang.String> getPackages();
+  public final long getTimeoutMillis();
+  public final java.util.List<java.lang.String> component1();
+  public final long component2();
+  public final dev.alpine.runtime.api.RuntimePackageInstallRequest copy(java.util.List<java.lang.String>, long);
+  public static dev.alpine.runtime.api.RuntimePackageInstallRequest copy$default(dev.alpine.runtime.api.RuntimePackageInstallRequest, java.util.List, long, int, java.lang.Object);
+  public java.lang.String toString();
+  public int hashCode();
+  public boolean equals(java.lang.Object);
+  public dev.alpine.runtime.api.RuntimePackageInstallRequest(java.util.List<java.lang.String>);
+}
+Compiled from "RuntimePackages.kt"
+public final class dev.alpine.runtime.api.RuntimePackageInstallResult {
+  public dev.alpine.runtime.api.RuntimePackageInstallResult(dev.alpine.runtime.api.RuntimePackageInstallOutcome, dev.alpine.runtime.api.RuntimeCommandResult);
+  public dev.alpine.runtime.api.RuntimePackageInstallResult(dev.alpine.runtime.api.RuntimePackageInstallOutcome, dev.alpine.runtime.api.RuntimeCommandResult, int, kotlin.jvm.internal.DefaultConstructorMarker);
+  public final dev.alpine.runtime.api.RuntimePackageInstallOutcome getOutcome();
+  public final dev.alpine.runtime.api.RuntimeCommandResult getCommandResult();
+  public final dev.alpine.runtime.api.RuntimePackageInstallOutcome component1();
+  public final dev.alpine.runtime.api.RuntimeCommandResult component2();
+  public final dev.alpine.runtime.api.RuntimePackageInstallResult copy(dev.alpine.runtime.api.RuntimePackageInstallOutcome, dev.alpine.runtime.api.RuntimeCommandResult);
+  public static dev.alpine.runtime.api.RuntimePackageInstallResult copy$default(dev.alpine.runtime.api.RuntimePackageInstallResult, dev.alpine.runtime.api.RuntimePackageInstallOutcome, dev.alpine.runtime.api.RuntimeCommandResult, int, java.lang.Object);
+  public java.lang.String toString();
+  public int hashCode();
+  public boolean equals(java.lang.Object);
+}
+Compiled from "RuntimePackages.kt"
+public final class dev.alpine.runtime.api.RuntimePackageInstaller {
+  public dev.alpine.runtime.api.RuntimePackageInstaller(dev.alpine.runtime.api.RuntimePackagePolicy);
+  public final java.util.concurrent.CompletionStage<dev.alpine.runtime.api.RuntimePackageInstallResult> install(dev.alpine.runtime.api.RuntimeSession, dev.alpine.runtime.api.RuntimePackageInstallRequest, dev.alpine.runtime.api.RuntimePackageApproval);
+}
+Compiled from "RuntimePackages.kt"
+public interface dev.alpine.runtime.api.RuntimePackagePolicy {
+  public abstract dev.alpine.runtime.api.RuntimePackagePolicyDecision evaluate(dev.alpine.runtime.api.RuntimePackageInstallRequest);
+}
+Compiled from "RuntimePackages.kt"
+public final class dev.alpine.runtime.api.RuntimePackagePolicyDecision extends java.lang.Enum<dev.alpine.runtime.api.RuntimePackagePolicyDecision> {
+  public static final dev.alpine.runtime.api.RuntimePackagePolicyDecision ALLOW;
+  public static final dev.alpine.runtime.api.RuntimePackagePolicyDecision DENY;
+  public static dev.alpine.runtime.api.RuntimePackagePolicyDecision[] values();
+  public static dev.alpine.runtime.api.RuntimePackagePolicyDecision valueOf(java.lang.String);
+  public static kotlin.enums.EnumEntries<dev.alpine.runtime.api.RuntimePackagePolicyDecision> getEntries();
+}
+Compiled from "AlpineRuntimeManager.kt"
+public final class dev.alpine.runtime.api.RuntimeProcessInfo {
+  public dev.alpine.runtime.api.RuntimeProcessInfo(long, java.lang.String, java.lang.String, java.lang.Long);
+  public dev.alpine.runtime.api.RuntimeProcessInfo(long, java.lang.String, java.lang.String, java.lang.Long, int, kotlin.jvm.internal.DefaultConstructorMarker);
+  public final long getProcessId();
+  public final java.lang.String getCommand();
+  public final java.lang.String getState();
+  public final java.lang.Long getStartedAtEpochMillis();
+  public final long component1();
+  public final java.lang.String component2();
+  public final java.lang.String component3();
+  public final java.lang.Long component4();
+  public final dev.alpine.runtime.api.RuntimeProcessInfo copy(long, java.lang.String, java.lang.String, java.lang.Long);
+  public static dev.alpine.runtime.api.RuntimeProcessInfo copy$default(dev.alpine.runtime.api.RuntimeProcessInfo, long, java.lang.String, java.lang.String, java.lang.Long, int, java.lang.Object);
+  public java.lang.String toString();
+  public int hashCode();
+  public boolean equals(java.lang.Object);
+  public dev.alpine.runtime.api.RuntimeProcessInfo(long, java.lang.String, java.lang.String);
+}
+Compiled from "AlpineRuntimeManager.kt"
+public interface dev.alpine.runtime.api.RuntimeSession extends java.lang.AutoCloseable {
+  public abstract java.lang.String getId();
+  public abstract long getStartedAtEpochMillis();
+  public abstract java.util.concurrent.CompletionStage<dev.alpine.runtime.api.RuntimeCommandResult> execute(dev.alpine.runtime.api.RuntimeCommandRequest);
+  public abstract java.util.concurrent.CompletionStage<dev.alpine.runtime.api.RuntimeTerminalSession> openTerminal(dev.alpine.runtime.api.RuntimeTerminalRequest);
+  public abstract java.util.concurrent.CompletionStage<java.util.List<dev.alpine.runtime.api.RuntimeProcessInfo>> listProcesses();
+  public abstract java.util.concurrent.CompletionStage<dev.alpine.runtime.api.RuntimeHealth> health();
+  public abstract java.util.concurrent.CompletionStage<java.lang.Void> stop(dev.alpine.runtime.api.RuntimeStopReason);
+  public abstract void close();
+}
+Compiled from "AlpineRuntimeManager.kt"
+public final class dev.alpine.runtime.api.RuntimeStartRequest {
+  public dev.alpine.runtime.api.RuntimeStartRequest(java.lang.String, java.util.Map<java.lang.String, java.lang.String>);
+  public dev.alpine.runtime.api.RuntimeStartRequest(java.lang.String, java.util.Map, int, kotlin.jvm.internal.DefaultConstructorMarker);
+  public final java.lang.String getWorkspacePath();
+  public final java.util.Map<java.lang.String, java.lang.String> getEnvironment();
+  public final java.lang.String component1();
+  public final java.util.Map<java.lang.String, java.lang.String> component2();
+  public final dev.alpine.runtime.api.RuntimeStartRequest copy(java.lang.String, java.util.Map<java.lang.String, java.lang.String>);
+  public static dev.alpine.runtime.api.RuntimeStartRequest copy$default(dev.alpine.runtime.api.RuntimeStartRequest, java.lang.String, java.util.Map, int, java.lang.Object);
+  public java.lang.String toString();
+  public int hashCode();
+  public boolean equals(java.lang.Object);
+  public dev.alpine.runtime.api.RuntimeStartRequest(java.lang.String);
+  public dev.alpine.runtime.api.RuntimeStartRequest();
+}
+Compiled from "RuntimeLifecycle.kt"
+public final class dev.alpine.runtime.api.RuntimeState {
+  public dev.alpine.runtime.api.RuntimeState(dev.alpine.runtime.api.RuntimeLifecycleState, java.lang.Integer, java.lang.String, dev.alpine.runtime.api.RuntimeErrorCode);
+  public dev.alpine.runtime.api.RuntimeState(dev.alpine.runtime.api.RuntimeLifecycleState, java.lang.Integer, java.lang.String, dev.alpine.runtime.api.RuntimeErrorCode, int, kotlin.jvm.internal.DefaultConstructorMarker);
+  public final dev.alpine.runtime.api.RuntimeLifecycleState getLifecycle();
+  public final java.lang.Integer getProgressPercent();
+  public final java.lang.String getActiveVersion();
+  public final dev.alpine.runtime.api.RuntimeErrorCode getDetailCode();
+  public final dev.alpine.runtime.api.RuntimeLifecycleState component1();
+  public final java.lang.Integer component2();
+  public final java.lang.String component3();
+  public final dev.alpine.runtime.api.RuntimeErrorCode component4();
+  public final dev.alpine.runtime.api.RuntimeState copy(dev.alpine.runtime.api.RuntimeLifecycleState, java.lang.Integer, java.lang.String, dev.alpine.runtime.api.RuntimeErrorCode);
+  public static dev.alpine.runtime.api.RuntimeState copy$default(dev.alpine.runtime.api.RuntimeState, dev.alpine.runtime.api.RuntimeLifecycleState, java.lang.Integer, java.lang.String, dev.alpine.runtime.api.RuntimeErrorCode, int, java.lang.Object);
+  public java.lang.String toString();
+  public int hashCode();
+  public boolean equals(java.lang.Object);
+  public dev.alpine.runtime.api.RuntimeState(dev.alpine.runtime.api.RuntimeLifecycleState, java.lang.Integer, java.lang.String);
+  public dev.alpine.runtime.api.RuntimeState(dev.alpine.runtime.api.RuntimeLifecycleState, java.lang.Integer);
+  public dev.alpine.runtime.api.RuntimeState(dev.alpine.runtime.api.RuntimeLifecycleState);
+}
+Compiled from "RuntimeLifecycle.kt"
+public interface dev.alpine.runtime.api.RuntimeStateListener {
+  public abstract void onStateChanged(dev.alpine.runtime.api.RuntimeState);
+}
+Compiled from "AlpineRuntimeManager.kt"
+public final class dev.alpine.runtime.api.RuntimeStopReason extends java.lang.Enum<dev.alpine.runtime.api.RuntimeStopReason> {
+  public static final dev.alpine.runtime.api.RuntimeStopReason USER_REQUEST;
+  public static final dev.alpine.runtime.api.RuntimeStopReason HOST_BACKGROUND_POLICY;
+  public static final dev.alpine.runtime.api.RuntimeStopReason HEALTH_FAILURE;
+  public static final dev.alpine.runtime.api.RuntimeStopReason RESET;
+  public static dev.alpine.runtime.api.RuntimeStopReason[] values();
+  public static dev.alpine.runtime.api.RuntimeStopReason valueOf(java.lang.String);
+  public static kotlin.enums.EnumEntries<dev.alpine.runtime.api.RuntimeStopReason> getEntries();
+}
+Compiled from "RuntimeLifecycle.kt"
+public interface dev.alpine.runtime.api.RuntimeSubscription extends java.lang.AutoCloseable {
+  public abstract void close();
+}
+Compiled from "RuntimeCommands.kt"
+public interface dev.alpine.runtime.api.RuntimeTerminalOutputListener {
+  public abstract void onOutput(byte[]);
+}
+Compiled from "RuntimeCommands.kt"
+public final class dev.alpine.runtime.api.RuntimeTerminalRequest {
+  public dev.alpine.runtime.api.RuntimeTerminalRequest(java.lang.String, int, int, java.lang.String, java.util.Map<java.lang.String, java.lang.String>);
+  public dev.alpine.runtime.api.RuntimeTerminalRequest(java.lang.String, int, int, java.lang.String, java.util.Map, int, kotlin.jvm.internal.DefaultConstructorMarker);
+  public final java.lang.String getShell();
+  public final int getColumns();
+  public final int getRows();
+  public final java.lang.String getWorkingDirectory();
+  public final java.util.Map<java.lang.String, java.lang.String> getEnvironment();
+  public final java.lang.String component1();
+  public final int component2();
+  public final int component3();
+  public final java.lang.String component4();
+  public final java.util.Map<java.lang.String, java.lang.String> component5();
+  public final dev.alpine.runtime.api.RuntimeTerminalRequest copy(java.lang.String, int, int, java.lang.String, java.util.Map<java.lang.String, java.lang.String>);
+  public static dev.alpine.runtime.api.RuntimeTerminalRequest copy$default(dev.alpine.runtime.api.RuntimeTerminalRequest, java.lang.String, int, int, java.lang.String, java.util.Map, int, java.lang.Object);
+  public java.lang.String toString();
+  public int hashCode();
+  public boolean equals(java.lang.Object);
+  public dev.alpine.runtime.api.RuntimeTerminalRequest(java.lang.String, int, int, java.lang.String);
+  public dev.alpine.runtime.api.RuntimeTerminalRequest(java.lang.String, int, int);
+  public dev.alpine.runtime.api.RuntimeTerminalRequest(java.lang.String, int);
+  public dev.alpine.runtime.api.RuntimeTerminalRequest(java.lang.String);
+  public dev.alpine.runtime.api.RuntimeTerminalRequest();
+}
+Compiled from "RuntimeCommands.kt"
+public final class dev.alpine.runtime.api.RuntimeTerminalResizeSupport extends java.lang.Enum<dev.alpine.runtime.api.RuntimeTerminalResizeSupport> {
+  public static final dev.alpine.runtime.api.RuntimeTerminalResizeSupport INITIAL_SIZE_ONLY;
+  public static final dev.alpine.runtime.api.RuntimeTerminalResizeSupport DYNAMIC;
+  public static dev.alpine.runtime.api.RuntimeTerminalResizeSupport[] values();
+  public static dev.alpine.runtime.api.RuntimeTerminalResizeSupport valueOf(java.lang.String);
+  public static kotlin.enums.EnumEntries<dev.alpine.runtime.api.RuntimeTerminalResizeSupport> getEntries();
+}
+Compiled from "RuntimeCommands.kt"
+public interface dev.alpine.runtime.api.RuntimeTerminalSession extends java.lang.AutoCloseable {
+  public abstract java.lang.String getId();
+  public abstract boolean isOpen();
+  public abstract dev.alpine.runtime.api.RuntimeTerminalResizeSupport getResizeSupport();
+  public abstract dev.alpine.runtime.api.RuntimeSubscription addOutputListener(dev.alpine.runtime.api.RuntimeTerminalOutputListener);
+  public abstract java.util.concurrent.CompletionStage<java.lang.Void> write(byte[]);
+  public abstract java.util.concurrent.CompletionStage<java.lang.Void> resize(int, int);
+  public abstract java.util.concurrent.CompletionStage<java.lang.Void> signal(dev.alpine.runtime.api.RuntimeTerminalSignal);
+  public abstract java.util.concurrent.CompletionStage<java.lang.Void> closeAsync();
+  public abstract void close();
+}
+Compiled from "RuntimeCommands.kt"
+public final class dev.alpine.runtime.api.RuntimeTerminalSignal extends java.lang.Enum<dev.alpine.runtime.api.RuntimeTerminalSignal> {
+  public static final dev.alpine.runtime.api.RuntimeTerminalSignal INTERRUPT;
+  public static final dev.alpine.runtime.api.RuntimeTerminalSignal TERMINATE;
+  public static final dev.alpine.runtime.api.RuntimeTerminalSignal KILL;
+  public static final dev.alpine.runtime.api.RuntimeTerminalSignal END_OF_FILE;
+  public static dev.alpine.runtime.api.RuntimeTerminalSignal[] values();
+  public static dev.alpine.runtime.api.RuntimeTerminalSignal valueOf(java.lang.String);
+  public static kotlin.enums.EnumEntries<dev.alpine.runtime.api.RuntimeTerminalSignal> getEntries();
+}

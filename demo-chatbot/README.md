@@ -2,6 +2,10 @@
 
 `demo-chatbot`은 `:android` 라이브러리를 직접 사용하는 별도 Android 테스트 앱이다. 저장된 OAuth LLM 프로필 가운데 인증된 연결을 선택하고, 대화별 Provider·모델·기본 스킬·응답 페르소나로 새 메시지를 스트리밍 요청한다. 여러 대화와 초안은 기기 안에 암호화해 보존한다.
 
+Phase 5부터 저장 모델은 대화별 `FAST_CHAT`/`ALPINE_WORKSPACE` 실행 모드를 포함한다. 기존
+schema 1·2 대화는 `FAST_CHAT`으로 안전하게 migration한다. 이 데모의 실제 전송 경로는 계속
+빠른 채팅 기준선이며 mode selector와 Alpine adapter 조립은 Phase 6 통합 Host에서 제공한다.
+
 UI는 Material 3 Compose로 구현되어 light/dark theme, Android 12+ dynamic color,
 840dp 최대 콘텐츠 폭과 작은 가로 화면의 스크롤을 지원한다. 세부 token,
 컴포넌트, 접근성 및 안정적인 test tag 계약은 [디자인 가이드](DESIGN.md)를
@@ -91,7 +95,7 @@ OAuth access/refresh token은 프로필 JSON에 저장하지 않고 `:android`�
 - 복구: index 또는 대화 한 파일이 손상되면 읽을 수 없는 파일만 격리하고 나머지를
   스캔해 복원한다. ciphertext·내부 복호화 예외·대화 원문은 사용자 오류나 로그에
   노출하지 않는다.
-- 프로세스 종료: 저장된 대화·초안·선택 Provider·모델·스킬·페르소나와 마지막 active 대화를 복원한다.
+- 프로세스 종료: 저장된 대화·초안·선택 Provider·모델·실행 모드·스킬·페르소나와 마지막 active 대화를 복원한다.
   종료 당시 `STREAMING`이던 응답은 다음 시작에서 `CANCELLED`로 정상화해 생성 중 상태가
   영구 고착되지 않게 한다.
 - 삭제: 해당 대화 파일과 index 항목을 로컬에서 제거한다. 서버 동기화·기기간 복원·검색·

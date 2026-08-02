@@ -1,5 +1,6 @@
 package dev.alpine.llm.demo.data
 
+import dev.alpine.chat.routing.ChatExecutionMode
 import dev.alpine.llm.demo.model.ChatConversation
 import dev.alpine.llm.demo.model.ChatMessage
 import dev.alpine.llm.demo.model.ChatMessageState
@@ -35,6 +36,7 @@ object ConversationCodec {
             .put("draft", conversation.draft)
             .putNullable("selectedProfileId", conversation.selectedProfileId)
             .putNullable("selectedModel", conversation.selectedModel)
+            .put("executionMode", conversation.executionMode.name)
             .put("selectedSkillId", conversation.selectedSkillId)
             .put("selectedPersonaId", conversation.selectedPersonaId)
             .put("generationState", conversation.generationState.name)
@@ -63,12 +65,17 @@ object ConversationCodec {
             draft = root.requiredBoundedString("draft", MAX_DRAFT_BYTES),
             selectedProfileId = root.optionalBoundedString("selectedProfileId", MAX_METADATA_BYTES),
             selectedModel = root.optionalBoundedString("selectedModel", MAX_METADATA_BYTES),
-            selectedSkillId = if (schema >= CONVERSATION_SCHEMA_VERSION) {
+            executionMode = if (schema >= EXECUTION_MODE_SCHEMA_VERSION) {
+                enumValueOfStrict(root.getString("executionMode"))
+            } else {
+                ChatExecutionMode.FAST_CHAT
+            },
+            selectedSkillId = if (schema >= ASSISTANT_MODE_SCHEMA_VERSION) {
                 root.requiredAssistantModeId("selectedSkillId")
             } else {
                 AssistantSelection.DEFAULT_SKILL_ID
             },
-            selectedPersonaId = if (schema >= CONVERSATION_SCHEMA_VERSION) {
+            selectedPersonaId = if (schema >= ASSISTANT_MODE_SCHEMA_VERSION) {
                 root.requiredAssistantModeId("selectedPersonaId")
             } else {
                 AssistantSelection.DEFAULT_PERSONA_ID
@@ -93,6 +100,7 @@ object ConversationCodec {
                     .put("preview", summary.preview)
                     .putNullable("selectedProfileId", summary.selectedProfileId)
                     .putNullable("selectedModel", summary.selectedModel)
+                    .put("executionMode", summary.executionMode.name)
                     .put("generationState", summary.generationState.name)
                     .put("hasUnreadCompletion", summary.hasUnreadCompletion)
                     .put("updatedAtMs", summary.updatedAtMs),
@@ -108,7 +116,8 @@ object ConversationCodec {
     fun decodeIndex(bytes: ByteArray): ConversationIndex {
         requireBounded(bytes, MAX_INDEX_BYTES, "conversation index")
         val root = JSONObject(bytes.toString(Charsets.UTF_8))
-        require(root.getInt("schema") == INDEX_SCHEMA_VERSION) {
+        val schema = root.getInt("schema")
+        require(schema in SUPPORTED_INDEX_SCHEMAS) {
             "Unsupported conversation index schema"
         }
         val array = root.getJSONArray("summaries")
@@ -129,6 +138,11 @@ object ConversationCodec {
                             "selectedModel",
                             MAX_METADATA_BYTES,
                         ),
+                        executionMode = if (schema >= INDEX_EXECUTION_MODE_SCHEMA_VERSION) {
+                            enumValueOfStrict(item.getString("executionMode"))
+                        } else {
+                            ChatExecutionMode.FAST_CHAT
+                        },
                         generationState = enumValueOfStrict(
                             item.getString("generationState"),
                         ),
@@ -204,12 +218,12 @@ object ConversationCodec {
         providerProfileId = optionalBoundedString("providerProfileId", MAX_METADATA_BYTES),
         providerLabel = optionalBoundedString("providerLabel", MAX_METADATA_BYTES),
         model = optionalBoundedString("model", MAX_METADATA_BYTES),
-        assistantSkillId = if (schema >= CONVERSATION_SCHEMA_VERSION) {
+        assistantSkillId = if (schema >= ASSISTANT_MODE_SCHEMA_VERSION) {
             optionalAssistantModeId("assistantSkillId")
         } else {
             null
         },
-        assistantPersonaId = if (schema >= CONVERSATION_SCHEMA_VERSION) {
+        assistantPersonaId = if (schema >= ASSISTANT_MODE_SCHEMA_VERSION) {
             optionalAssistantModeId("assistantPersonaId")
         } else {
             null
@@ -263,12 +277,21 @@ object ConversationCodec {
             ?: throw IllegalArgumentException("Unknown enum value")
 
     private const val LEGACY_CONVERSATION_SCHEMA_VERSION = 1
-    private const val CONVERSATION_SCHEMA_VERSION = 2
+    private const val ASSISTANT_MODE_SCHEMA_VERSION = 2
+    private const val EXECUTION_MODE_SCHEMA_VERSION = 3
+    private const val CONVERSATION_SCHEMA_VERSION = EXECUTION_MODE_SCHEMA_VERSION
     private val SUPPORTED_CONVERSATION_SCHEMAS = setOf(
         LEGACY_CONVERSATION_SCHEMA_VERSION,
+        ASSISTANT_MODE_SCHEMA_VERSION,
         CONVERSATION_SCHEMA_VERSION,
     )
-    private const val INDEX_SCHEMA_VERSION = 1
+    private const val LEGACY_INDEX_SCHEMA_VERSION = 1
+    private const val INDEX_EXECUTION_MODE_SCHEMA_VERSION = 2
+    private const val INDEX_SCHEMA_VERSION = INDEX_EXECUTION_MODE_SCHEMA_VERSION
+    private val SUPPORTED_INDEX_SCHEMAS = setOf(
+        LEGACY_INDEX_SCHEMA_VERSION,
+        INDEX_SCHEMA_VERSION,
+    )
     private const val MAX_ID_LENGTH = 128
     private const val MAX_TITLE_BYTES = 512
     private const val MAX_PREVIEW_BYTES = 1_024

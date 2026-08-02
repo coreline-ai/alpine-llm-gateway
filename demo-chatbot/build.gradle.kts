@@ -1,3 +1,5 @@
+import java.util.zip.ZipFile
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -26,17 +28,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
-    lint {
+lint {
         disable += "AndroidGradlePluginVersion"
     }
 }
 
 dependencies {
     implementation(project(":android"))
+    implementation(project(":alpine-chat-routing"))
     implementation(platform("androidx.compose:compose-bom:2024.09.00"))
     implementation("androidx.activity:activity-compose:1.9.1")
     implementation("androidx.compose.foundation:foundation")
@@ -61,4 +60,36 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+}
+
+val verifyNoAlpineRuntimePayload by tasks.registering {
+    group = "verification"
+    description = "Fails if the fast-chat-only APK accidentally packages Alpine runtime payloads."
+    dependsOn("assembleDebug")
+    doLast {
+        val apk = layout.buildDirectory.file("outputs/apk/debug/demo-chatbot-debug.apk").get().asFile
+        check(apk.isFile) { "Debug APK was not produced: ${apk.absolutePath}" }
+        val forbiddenFragments = listOf(
+            "alpine-minirootfs",
+            "libproot.so",
+            "libproot-loader.so",
+            "META-INF/alpine-runtime/sbom.spdx.json",
+        )
+        val packaged = ZipFile(apk).use { archive ->
+            archive.entries().asSequence().map { it.name }.toList()
+        }
+        val forbidden = packaged.filter { entry ->
+            forbiddenFragments.any(entry::contains)
+        }
+        check(forbidden.isEmpty()) {
+            "Fast-chat APK must not contain Alpine runtime payloads: ${forbidden.joinToString()}"
+        }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        jvmDefault.set(org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode.DISABLE)
+    }
 }

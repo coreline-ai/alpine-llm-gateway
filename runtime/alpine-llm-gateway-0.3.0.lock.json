@@ -1,0 +1,19 @@
+{
+  "artifact": {
+    "format": "tar.gz",
+    "path": "alpine-llm-gateway-pack-bundled/src/main/assets/alpine-llm-gateway.tar.gz.asset",
+    "sha256": "c6e79f12c9902c728a2e2336b2b3bf9ce2bae7fe9ef37bbd3060de1cbbb22a96",
+    "size_bytes": 13019
+  },
+  "entrypoints": {
+    "gatewayd": "/usr/local/bin/llm-gatewayd",
+    "llmctl": "/usr/local/bin/llmctl"
+  },
+  "license": "NOASSERTION",
+  "minimum_python_version": "3.11",
+  "package_id": "alpine-llm-gateway",
+  "package_version": "0.3.0",
+  "protocol_version": "1",
+  "schema_version": "1",
+  "source": "repository alpine_llm package"
+}

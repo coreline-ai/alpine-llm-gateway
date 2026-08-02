@@ -5,6 +5,7 @@ import dev.alpine.llm.demo.model.AssistantSelection
 import dev.alpine.llm.demo.model.ChatConversation
 import dev.alpine.llm.demo.model.ConversationSummary
 import dev.alpine.llm.demo.model.ConversationText
+import dev.alpine.chat.routing.ChatExecutionMode
 import java.security.MessageDigest
 import java.util.UUID
 import kotlinx.coroutines.CoroutineDispatcher
@@ -52,6 +53,7 @@ class ConversationRepository(
     fun initialSnapshot(
         selectedProfileId: String? = null,
         selectedModel: String? = null,
+        executionMode: ChatExecutionMode = ChatExecutionMode.FAST_CHAT,
         assistantSelection: AssistantSelection = AssistantSelection.DEFAULT,
     ): ConversationSnapshot {
         val now = clock()
@@ -60,6 +62,7 @@ class ConversationRepository(
             id = idFactory(),
             selectedProfileId = selectedProfileId,
             selectedModel = selectedModel,
+            executionMode = executionMode,
             selectedSkillId = resolvedAssistant.skillId,
             selectedPersonaId = resolvedAssistant.personaId,
             createdAtMs = now,
@@ -76,6 +79,7 @@ class ConversationRepository(
         val source = storage ?: return initialSnapshot(
             fallbackProfileId,
             fallbackModel,
+            ChatExecutionMode.FAST_CHAT,
             fallbackAssistantSelection,
         )
         return withContext(ioDispatcher) {
@@ -90,6 +94,7 @@ class ConversationRepository(
                 initialSnapshot(
                     fallbackProfileId,
                     fallbackModel,
+                    ChatExecutionMode.FAST_CHAT,
                     fallbackAssistantSelection,
                 ).copy(
                     recoveredFileCount = loaded.failedFileCount,
@@ -118,6 +123,7 @@ class ConversationRepository(
         snapshot: ConversationSnapshot,
         selectedProfileId: String?,
         selectedModel: String?,
+        executionMode: ChatExecutionMode = snapshot.activeConversation.executionMode,
         assistantSelection: AssistantSelection = AssistantSelection.DEFAULT,
     ): ConversationSnapshot {
         if (snapshot.activeConversation.isCompletelyEmpty()) {
@@ -129,6 +135,7 @@ class ConversationRepository(
             id = idFactory(),
             selectedProfileId = selectedProfileId,
             selectedModel = selectedModel,
+            executionMode = executionMode,
             selectedSkillId = resolvedAssistant.skillId,
             selectedPersonaId = resolvedAssistant.personaId,
             createdAtMs = now,

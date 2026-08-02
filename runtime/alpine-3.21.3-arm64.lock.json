@@ -1,0 +1,55 @@
+{
+  "schema_version": 2,
+  "runtime_id": "alpine",
+  "runtime_version": "3.21.3-openminis-8cf13e9-winsize1",
+  "abi": "arm64-v8a",
+  "android": {
+    "min_sdk": 26,
+    "target_sdk_verified": 36,
+    "ndk": "28.2.13676358"
+  },
+  "rootfs": {
+    "distribution": "Alpine Linux",
+    "version": "3.21.3",
+    "architecture": "aarch64",
+    "source_url": "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/aarch64/alpine-minirootfs-3.21.3-aarch64.tar.gz",
+    "size_bytes": 3850365,
+    "sha256": "ead8a4b37867bd19e7417dd078748e2312c0aea364403d96758d63ea8ff261ea",
+    "license_note": "Aggregate distribution; package-level licenses are recorded by Alpine"
+  },
+  "proot": {
+    "repository": "https://github.com/OpenMinis/proot.git",
+    "commit": "8cf13e997cdc9472997aae19df8050c073c9a86c",
+    "build_android_api": 26,
+    "size_bytes": 280440,
+    "sha256": "336627708766ac2065485c4759048412761ea749787ca3111889f225585cfa4c",
+    "patches": [
+      {
+        "path": "scripts/runtime/patches/proot-android-winsize.patch",
+        "sha256": "20726d1ccf9bb8c952a6039d5158168dad58ec62bcf7cbf73bc3170b8c4a9a27"
+      }
+    ],
+    "license_declared": "GPL-2.0-or-later",
+    "license_concluded": "NOASSERTION",
+    "license_review_status": "REVIEW_REQUIRED"
+  },
+  "loader": {
+    "packaging": "stripped static loader packaged as libproot-loader.so",
+    "size_bytes": 17624,
+    "sha256": "12d2b63e897fd91a334fce23edea5d2419cae4d5fd2a369f05d03ab75682add0"
+  },
+  "talloc": {
+    "version": "2.4.2",
+    "linkage": "static",
+    "source_url": "https://download.samba.org/pub/talloc/talloc-2.4.2.tar.gz",
+    "source_sha256": "85ecf9e465e20f98f9950a52e9a411e14320bc555fa257d87697b7e7a9b1d8a6",
+    "license_declared": "LGPL-3.0-or-later",
+    "license_concluded": "LGPL-3.0-or-later",
+    "license_review_status": "SOURCE_VERIFIED_BINARY_REVIEW_REQUIRED"
+  },
+  "sbom": {
+    "format": "SPDX-2.3",
+    "path": "alpine-runtime-pack-bundled/src/main/resources/META-INF/alpine-runtime/sbom.spdx.json",
+    "sha256": "2bc527c3aa878765bab4393437886d11caa6f3dca86ba345e59b5c29f7d58b2e"
+  }
+}

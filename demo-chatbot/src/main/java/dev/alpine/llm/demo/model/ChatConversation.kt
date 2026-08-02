@@ -1,5 +1,6 @@
 package dev.alpine.llm.demo.model
 
+import dev.alpine.chat.routing.ChatExecutionMode
 import java.util.UUID
 
 enum class ConversationGenerationState {
@@ -17,6 +18,7 @@ data class ChatConversation(
     val draft: String = "",
     val selectedProfileId: String? = null,
     val selectedModel: String? = null,
+    val executionMode: ChatExecutionMode = ChatExecutionMode.FAST_CHAT,
     val selectedSkillId: String = AssistantSelection.DEFAULT_SKILL_ID,
     val selectedPersonaId: String = AssistantSelection.DEFAULT_PERSONA_ID,
     val generationState: ConversationGenerationState = ConversationGenerationState.IDLE,
@@ -35,6 +37,7 @@ data class ChatConversation(
         preview = ConversationText.preview(messages.lastOrNull()?.text.orEmpty()),
         selectedProfileId = selectedProfileId,
         selectedModel = selectedModel,
+        executionMode = executionMode,
         generationState = generationState,
         hasUnreadCompletion = hasUnreadCompletion,
         updatedAtMs = updatedAtMs,
@@ -71,6 +74,7 @@ data class ConversationSummary(
     val preview: String,
     val selectedProfileId: String?,
     val selectedModel: String?,
+    val executionMode: ChatExecutionMode,
     val generationState: ConversationGenerationState,
     val hasUnreadCompletion: Boolean,
     val updatedAtMs: Long,

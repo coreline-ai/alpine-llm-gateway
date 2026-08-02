@@ -1,7 +1,6 @@
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
-    id("maven-publish")
 }
 
 android {
@@ -19,11 +18,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
-    testOptions {
+testOptions {
+        targetSdk = 36
         unitTests.isIncludeAndroidResources = true
     }
 
@@ -33,11 +29,6 @@ android {
         disable += "AndroidGradlePluginVersion"
     }
 
-    publishing {
-        singleVariant("release") {
-            withSourcesJar()
-        }
-    }
 }
 
 dependencies {
@@ -52,27 +43,9 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.7.0")
 }
 
-publishing {
-    publications {
-        register<MavenPublication>("release") {
-            groupId = providers.gradleProperty("GROUP").get()
-            artifactId = providers.gradleProperty("POM_ARTIFACT_ID").get()
-            version = providers.gradleProperty("VERSION_NAME").get()
-            afterEvaluate {
-                from(components["release"])
-            }
-            pom {
-                name.set("Alpine LLM Android")
-                description.set(
-                    "Android OAuth, Host Bridge, and Provider adapters for an Alpine LLM runtime.",
-                )
-            }
-        }
-    }
-    repositories {
-        maven {
-            name = "project"
-            url = layout.buildDirectory.dir("repo").get().asFile.toURI()
-        }
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        jvmDefault.set(org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode.DISABLE)
     }
 }
