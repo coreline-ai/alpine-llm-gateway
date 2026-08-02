@@ -7,8 +7,8 @@
 - 현재 Python Gateway, Android LLM, Runtime SDK, Workspace, Sample과 배포 도구의 로컬 통합 검증은 통과했다.
 - 기존 `:android`에서 삭제된 Runtime·HostBridge 책임은 신규 독립 모듈로 이동됐고 경계 테스트가 이를 강제한다.
 - 생성된 `.cxx` 중간 파일, 기기 serial과 로컬 절대 경로는 Git 기준선에 포함되지 않도록 정리했다.
-- 내부 SDK bundle은 생성 가능하지만 외부 배포 Gate 7개와 기능 Gate 2개는 계속 fail-closed다.
-- 이 기록 시점의 잔여 Phase 0 작업은 Commit, Push, 원격 CI와 clean checkout 재현성 확인이다.
+- 내부 SDK bundle은 생성 가능하지만 외부 배포 Gate 6개와 기능 Gate 2개는 계속 fail-closed다.
+- 기능군별 Commit, main Push, clean checkout 재현과 GitHub 원격 CI까지 확인해 Phase 0 기준선을 확정했다.
 
 ## 변경 분류
 
@@ -64,6 +64,8 @@ scripts/release-local.sh
 | Gradle 9 readiness | warning 0, ready true |
 | x86_64 emulator | `SKIP_NO_X86_64_EMULATOR` |
 | Internal SDK bundle | `dist/alpine-sdk-0.3.0` 생성 |
+| clean checkout | Commit `c88d316`에서 전체 release script 통과 |
+| GitHub CI | Run `30744482850`, Python·Android·Artifact 모두 성공 |
 
 ## 유지되는 차단 상태
 
@@ -74,17 +76,20 @@ Release blocking:
 3. `PROVIDER_APPROVAL_REQUIRED`
 4. `PLAY_TRACK_NOT_CONFIGURED`
 5. `DESTRUCTIVE_DEVICE_TEST_APPROVAL_REQUIRED`
-6. `REMOTE_CI_NOT_VERIFIED`
-7. `RELEASE_DESTINATION_UNASSIGNED`
+6. `RELEASE_DESTINATION_UNASSIGNED`
 
 Capability blocking:
 
 1. `GUEST_WINSIZE_NOT_PROPAGATED`
 2. `X86_64_EMULATOR_UNAVAILABLE`
 
-## Phase 0 잔여 작업
+## Phase 0 완료 기록
 
-- [ ] 기능군별 Commit 생성
-- [ ] `main` 원격 Push
-- [ ] GitHub 원격 CI 확인
-- [ ] clean checkout에서 동일 bundle 구조 재현 확인
+- [x] 기능군별 Commit 생성
+- [x] `main` 원격 Push
+- [x] GitHub 원격 CI 확인
+- [x] clean checkout에서 동일 bundle 구조 재현 확인
+
+첫 원격 Run `30743827724`는 license compliance report 생성 단계 누락으로 SDK package가 실패했다.
+`.github/workflows/ci.yml`에 report 생성 단계를 추가한 뒤 Run `30744482850`이 전체 성공했으며,
+세부 근거는 `distribution/GITHUB_CI_STATUS.md`에 기록했다.

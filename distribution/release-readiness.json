@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-08-02T10:01:44Z",
+  "updated_at": "2026-08-02T11:01:50Z",
   "gates": [
     {
       "gate_id": "project_license",
@@ -55,12 +55,13 @@
     },
     {
       "gate_id": "github_remote_ci",
-      "state": "BLOCKED",
-      "owner": "UNASSIGNED",
+      "state": "READY",
+      "owner": "LOCAL_ENGINEERING",
       "release_blocking": true,
-      "blocker_code": "REMOTE_CI_NOT_VERIFIED",
+      "blocker_code": null,
       "evidence": [
-        ".github/workflows/ci.yml"
+        ".github/workflows/ci.yml",
+        "distribution/GITHUB_CI_STATUS.md"
       ]
     },
     {

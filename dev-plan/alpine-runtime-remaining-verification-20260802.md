@@ -8,7 +8,7 @@
   restart·repair·health는 정상이나 PRoot guest의 동적 terminal resize는 반영되지 않았다.
 - x86_64 pack은 arm64와 동일한 PRoot patch provenance로 동기화했지만 연결된 x86_64 emulator가
   없어 계속 experimental 상태다.
-- Provider 실계정, Play test track, reboot/Doze/process-kill, GitHub 원격 CI, 라이선스와 대응 소스는
+- Provider 실계정, Play test track, reboot/Doze/process-kill, 라이선스와 대응 소스는
   외부 승인·환경이 없어 `BLOCKED` 또는 `NOT_RUN`으로 유지한다.
 - 공개 배포는 **No-Go**다. 내부 개발용 SDK bundle만 생성했다.
 
@@ -126,7 +126,7 @@ x86_64은 publication/consumer payload와 ELF/16 KiB 검사는 통과했지만 �
 
 `PYTHON_BIN=python3.11 scripts/release-local.sh` 최종 결과:
 
-- Python: `88 tests`, **OK**
+- Python: `97 tests`, **OK**
 - Android 전체 debug/release/lint/unit/native gate: **통과**
 - SDK publication: `17`개 **통과**
 - 외부 published-consumer release/R8/lint matrix: `8`개 **통과**
@@ -148,8 +148,7 @@ Release blocking:
 3. `PROVIDER_APPROVAL_REQUIRED`
 4. `PLAY_TRACK_NOT_CONFIGURED`
 5. `DESTRUCTIVE_DEVICE_TEST_APPROVAL_REQUIRED`
-6. `REMOTE_CI_NOT_VERIFIED`
-7. `RELEASE_DESTINATION_UNASSIGNED`
+6. `RELEASE_DESTINATION_UNASSIGNED`
 
 Capability blocking:
 
@@ -157,3 +156,11 @@ Capability blocking:
 2. `X86_64_EMULATOR_UNAVAILABLE`
 
 따라서 내부 bundle은 개발·검증용으로만 사용하며 공개 Maven/Play 배포는 진행하지 않는다.
+
+## 9. GitHub 원격 CI 후속 검증
+
+- `main` Commit `44c735b0676e532d43bd9ba4cef887a0a1c27f20`
+- GitHub Actions Run `30744482850`: Python·Android·SDK package·Artifact upload 모두 성공
+- 첫 Run에서 발견한 license compliance report 생성 누락은 Workflow 단계 추가로 수정했다.
+- `github_remote_ci` Gate는 `READY`로 전환했다.
+- 근거: `distribution/GITHUB_CI_STATUS.md`
