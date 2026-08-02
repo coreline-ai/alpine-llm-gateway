@@ -79,8 +79,8 @@ class OpenAICompatibleProvider:
                 return
             try:
                 value = json.loads(data)
-            except json.JSONDecodeError:
-                continue
+            except json.JSONDecodeError as error:
+                raise ProviderError("provider returned invalid SSE JSON") from error
             choices = value.get("choices") or []
             choice = choices[0] if choices else {}
             delta = choice.get("delta", {})

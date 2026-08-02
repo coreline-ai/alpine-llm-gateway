@@ -8,7 +8,7 @@ import secrets
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Iterator
 
-from . import __version__
+from . import __protocol_version__, __version__
 from .config import Settings
 from .policy import Policy, PolicyError
 from .protocol import CompletionDelta, CompletionRequest, ProtocolError
@@ -63,7 +63,12 @@ def make_handler(service: GatewayService):
 
         def do_GET(self) -> None:  # noqa: N802
             if self.path == "/healthz":
-                self._json(200, {"status": "ok", "provider": service.settings.provider})
+                self._json(200, {
+                    "status": "ok",
+                    "provider": service.settings.provider,
+                    "version": __version__,
+                    "protocol_version": __protocol_version__,
+                })
                 return
             if self.path == "/v1/models":
                 self._json(200, {"object": "list", "data": service.models()})

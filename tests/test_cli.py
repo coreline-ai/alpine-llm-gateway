@@ -3,7 +3,10 @@ from contextlib import redirect_stderr, redirect_stdout
 from io import BytesIO, StringIO
 from unittest.mock import patch
 
-from alpine_llm.cli import _headers, _stream_request
+from pathlib import Path
+import tempfile
+
+from alpine_llm.cli import _headers, _resolve_session_token, _stream_request
 
 
 class FakeResponse(BytesIO):
@@ -28,6 +31,12 @@ class CliHeaderTests(unittest.TestCase):
     def test_no_authorization_without_session_token(self):
         self.assertNotIn("Authorization", _headers(None))
 
+    def test_session_token_can_be_resolved_from_capability_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory, "bridge.capability")
+            path.write_text("file-capability\n", encoding="utf-8")
+            self.assertEqual("file-capability", _resolve_session_token(None, str(path)))
+
     def test_stream_error_event_returns_failure(self):
         response = FakeResponse(
             b'data: {"type":"start"}\n\n'
@@ -47,7 +56,7 @@ class CliHeaderTests(unittest.TestCase):
                 )
         self.assertEqual(1, status)
         self.assertIn('"type": "error"', stdout.getvalue())
-        self.assertIn("provider stream failed", stderr.getvalue())
+        self.assertIn("gateway stream failed", stderr.getvalue())
 
 
 if __name__ == "__main__":

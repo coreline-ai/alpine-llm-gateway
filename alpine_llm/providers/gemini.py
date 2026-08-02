@@ -74,8 +74,8 @@ class GeminiProvider:
         ):
             try:
                 value = json.loads(data)
-            except json.JSONDecodeError:
-                continue
+            except json.JSONDecodeError as error:
+                raise ProviderError("provider returned invalid SSE JSON") from error
             usage = value.get("usageMetadata", {})
             yield CompletionDelta(
                 text=self._text(value),

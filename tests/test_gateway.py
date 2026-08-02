@@ -43,6 +43,14 @@ class GatewayTests(unittest.TestCase):
         service = GatewayService(Settings(default_model="fake", allowed_models=("fake",)))
         self.assertEqual("AlpineLLMGateway/0.3.0", make_handler(service).server_version)
 
+    def test_health_exposes_package_and_bridge_protocol_versions(self):
+        service = GatewayService(Settings(default_model="fake", allowed_models=("fake",)))
+        with self._server(service) as base_url:
+            with urlopen(base_url + "/healthz") as response:
+                health = json.loads(response.read().decode("utf-8"))
+        self.assertEqual("0.3.0", health["version"])
+        self.assertEqual("1", health["protocol_version"])
+
     def test_service_applies_policy_before_provider(self):
         service = GatewayService(Settings(default_model="fake", allowed_models=("fake",)))
         service.provider = FakeProvider()

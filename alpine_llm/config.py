@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Any
 
 
+MAX_CREDENTIAL_FILE_BYTES = 8 * 1024
+
+
 @dataclass(frozen=True)
 class Settings:
     host: str = "127.0.0.1"
@@ -80,8 +83,14 @@ class Settings:
         raw: dict[str, Any] = {}
         if path:
             raw = json.loads(Path(path).read_text(encoding="utf-8"))
-        api_key_env = str(raw.get("api_key_env", "LLM_API_KEY"))
-        api_key = os.environ.get(api_key_env, raw.get("api_key", ""))
+        api_key_file = str(
+            raw.get("api_key_file", os.environ.get("ALPINE_LLM_CREDENTIAL_FILE", "")),
+        ).strip()
+        if api_key_file:
+            api_key = _read_credential_file(api_key_file)
+        else:
+            api_key_env = str(raw.get("api_key_env", "LLM_API_KEY"))
+            api_key = str(os.environ.get(api_key_env, raw.get("api_key", "")))
         allowed = tuple(str(item) for item in raw.get("allowed_models", []))
         catalog = tuple(item for item in raw.get("model_catalog", []) if isinstance(item, dict))
         default_model = str(raw.get("default_model", os.environ.get("LLM_MODEL", "")))
@@ -125,4 +134,21 @@ def _boolean(raw: dict[str, Any], name: str, *, default: bool) -> bool:
     value = raw.get(name, default)
     if not isinstance(value, bool):
         raise ValueError(f"{name} must be a boolean")
+    return value
+
+
+def _read_credential_file(path: str) -> str:
+    credential = Path(path)
+    if not credential.is_file():
+        raise ValueError("credential file is unavailable")
+    with credential.open("rb") as source:
+        raw = source.read(MAX_CREDENTIAL_FILE_BYTES + 1)
+    if len(raw) > MAX_CREDENTIAL_FILE_BYTES:
+        raise ValueError("credential file is too large")
+    try:
+        value = raw.decode("utf-8").strip()
+    except UnicodeDecodeError as error:
+        raise ValueError("credential file is invalid") from error
+    if not value or "\x00" in value or "\n" in value or "\r" in value:
+        raise ValueError("credential file is invalid")
     return value

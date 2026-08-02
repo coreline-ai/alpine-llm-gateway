@@ -75,8 +75,8 @@ class AnthropicProvider:
         ):
             try:
                 value = json.loads(data)
-            except json.JSONDecodeError:
-                continue
+            except json.JSONDecodeError as error:
+                raise ProviderError("provider returned invalid SSE JSON") from error
             event = event or value.get("type")
             if event == "message_start":
                 input_tokens = (value.get("message", {}).get("usage", {}) or {}).get("input_tokens")

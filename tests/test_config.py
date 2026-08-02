@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -7,6 +8,39 @@ from alpine_llm.config import Settings
 
 
 class SettingsTests(unittest.TestCase):
+    def test_capability_can_be_loaded_from_a_bounded_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            capability = Path(directory, "bridge.capability")
+            capability.write_text("short-lived-capability\n", encoding="utf-8")
+            config = Path(directory, "config.json")
+            config.write_text(json.dumps({"api_key_file": str(capability)}), encoding="utf-8")
+
+            settings = Settings.from_file(str(config))
+
+            self.assertEqual("short-lived-capability", settings.api_key)
+
+    def test_capability_file_takes_precedence_without_exporting_oauth_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            capability = Path(directory, "bridge.capability")
+            capability.write_text("bridge-only", encoding="utf-8")
+            config = Path(directory, "config.json")
+            config.write_text(json.dumps({"api_key_file": str(capability)}), encoding="utf-8")
+            with unittest.mock.patch.dict(os.environ, {"LLM_API_KEY": "upstream-oauth-token"}):
+                settings = Settings.from_file(str(config))
+
+            self.assertEqual("bridge-only", settings.api_key)
+
+    def test_capability_file_rejects_empty_multiline_and_oversized_values(self):
+        with tempfile.TemporaryDirectory() as directory:
+            capability = Path(directory, "bridge.capability")
+            config = Path(directory, "config.json")
+            config.write_text(json.dumps({"api_key_file": str(capability)}), encoding="utf-8")
+            for value in (b"", b"first\nsecond", b"x" * (8 * 1024 + 1)):
+                with self.subTest(size=len(value)):
+                    capability.write_bytes(value)
+                    with self.assertRaisesRegex(ValueError, "credential file"):
+                        Settings.from_file(str(config))
+
     def test_allow_passthrough_must_be_a_boolean(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory, "config.json")

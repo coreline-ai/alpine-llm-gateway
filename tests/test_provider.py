@@ -3,6 +3,7 @@ import unittest
 from alpine_llm.config import Settings
 from alpine_llm.protocol import CompletionRequest
 from alpine_llm.providers.anthropic import AnthropicProvider
+from alpine_llm.providers.android_host_bridge import AndroidHostBridgeProvider
 from alpine_llm.providers.factory import create_provider
 from alpine_llm.providers.gemini import GeminiProvider
 from alpine_llm.providers.openai_compatible import OpenAICompatibleProvider
@@ -59,6 +60,7 @@ class ProviderRequestTests(unittest.TestCase):
     def test_factory_builds_all_supported_provider_adapters(self):
         cases = (
             ("openai-compatible", OpenAICompatibleProvider),
+            ("android-host-bridge", AndroidHostBridgeProvider),
             ("anthropic", AnthropicProvider),
             ("gemini", GeminiProvider),
         )

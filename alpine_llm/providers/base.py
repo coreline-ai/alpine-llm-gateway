@@ -243,7 +243,10 @@ def stream_request(
                         raise ProviderError("provider stream event exceeds limit")
                     if total_bytes > max_stream_bytes:
                         raise ProviderError("provider stream exceeds limit")
-                    line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+                    try:
+                        line = raw_line.decode("utf-8", errors="strict").rstrip("\r\n")
+                    except UnicodeDecodeError as error:
+                        raise ProviderError("provider stream contains invalid UTF-8") from error
                     if not line:
                         if data_lines:
                             yield event_name, "\n".join(data_lines)

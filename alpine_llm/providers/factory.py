@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .anthropic import AnthropicProvider
+from .android_host_bridge import AndroidHostBridgeProvider
 from .base import Provider, ProviderCircuitBreaker, ProviderError, RetryPolicy
 from .gemini import GeminiProvider
 from .openai_compatible import OpenAICompatibleProvider
@@ -23,6 +24,17 @@ def create_provider(settings: Settings) -> Provider:
     )
     if provider in {"openai", "openai-compatible", "openrouter", "xai", "kimi"}:
         return OpenAICompatibleProvider(
+            settings.base_url,
+            settings.api_key,
+            settings.timeout_seconds,
+            settings.max_response_bytes,
+            settings.max_stream_event_bytes,
+            settings.max_stream_bytes,
+            retry_policy,
+            circuit_breaker,
+        )
+    if provider == "android-host-bridge":
+        return AndroidHostBridgeProvider(
             settings.base_url,
             settings.api_key,
             settings.timeout_seconds,
