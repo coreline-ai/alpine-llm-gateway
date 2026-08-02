@@ -250,10 +250,16 @@ class HostBridgeServerTest {
         }
 
         val timedOut = post(endpoint.url, "{}", endpoint.sessionToken)
-        val recovered = post(endpoint.url, "{}", endpoint.sessionToken)
+        val permitReleased = (1..100).any {
+            val released = JSONObject(get(endpoint.url).body).getInt("active_requests") == 0
+            if (!released) Thread.sleep(10)
+            released
+        }
 
         assertEquals(504, timedOut.status)
         assertTrue(timedOut.body.contains("request_timeout"))
+        assertTrue(permitReleased)
+        val recovered = post(endpoint.url, "{}", endpoint.sessionToken)
         assertEquals(200, recovered.status)
     }
 
