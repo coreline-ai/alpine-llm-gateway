@@ -231,9 +231,11 @@ class HostBridgeServerTest {
         }
 
         val first = post(endpoint.url, "{}", endpoint.sessionToken)
+        val permitReleased = awaitNoActiveRequests(endpoint.url)
         val second = post(endpoint.url, "{}", endpoint.sessionToken)
 
         assertEquals(502, first.status)
+        assertTrue(permitReleased)
         assertEquals(200, second.status)
         assertEquals(2, calls.get())
     }
@@ -250,11 +252,7 @@ class HostBridgeServerTest {
         }
 
         val timedOut = post(endpoint.url, "{}", endpoint.sessionToken)
-        val permitReleased = (1..100).any {
-            val released = JSONObject(get(endpoint.url).body).getInt("active_requests") == 0
-            if (!released) Thread.sleep(10)
-            released
-        }
+        val permitReleased = awaitNoActiveRequests(endpoint.url)
 
         assertEquals(504, timedOut.status)
         assertTrue(timedOut.body.contains("request_timeout"))
@@ -330,6 +328,12 @@ class HostBridgeServerTest {
         )
         server = instance
         return instance.start()
+    }
+
+    private fun awaitNoActiveRequests(baseUrl: String): Boolean = (1..100).any {
+        val released = JSONObject(get(baseUrl).body).getInt("active_requests") == 0
+        if (!released) Thread.sleep(10)
+        released
     }
 
     private fun post(baseUrl: String, body: String, token: String? = null): Response {
