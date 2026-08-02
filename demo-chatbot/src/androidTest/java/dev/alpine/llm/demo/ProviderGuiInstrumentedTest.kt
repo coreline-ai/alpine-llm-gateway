@@ -29,7 +29,10 @@ import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
 import androidx.test.runner.lifecycle.Stage
 import dev.alpine.llm.AnthropicOAuthContract
 import dev.alpine.llm.OAuthTokenStore
-import dev.alpine.llm.demo.data.ProviderProfileStore
+import dev.alpine.chat.provider.android.ProviderDependencies
+import dev.alpine.chat.provider.android.activity.ProviderEditActivity
+import dev.alpine.chat.provider.android.activity.ProviderProfilesActivity
+import dev.alpine.chat.provider.android.data.ProviderProfileStore
 import dev.alpine.chat.feature.data.AssistantDefaultsStore
 import dev.alpine.chat.feature.data.ConversationCrypto
 import dev.alpine.chat.feature.data.ConversationIndex
@@ -37,11 +40,11 @@ import dev.alpine.chat.feature.data.ConversationStore
 import dev.alpine.chat.feature.model.ChatConversation
 import dev.alpine.chat.feature.model.ChatMessage
 import dev.alpine.chat.feature.model.ChatRole
-import dev.alpine.llm.demo.model.AnthropicProfileDefaults
-import dev.alpine.llm.demo.model.CodexProfileDefaults
-import dev.alpine.llm.demo.model.GeminiProfileDefaults
-import dev.alpine.llm.demo.model.ProviderType
-import dev.alpine.llm.demo.model.XaiProfileDefaults
+import dev.alpine.chat.provider.android.model.AnthropicProfileDefaults
+import dev.alpine.chat.provider.android.model.CodexProfileDefaults
+import dev.alpine.chat.provider.android.model.GeminiProfileDefaults
+import dev.alpine.chat.provider.android.model.ProviderType
+import dev.alpine.chat.provider.android.model.XaiProfileDefaults
 import dev.alpine.llm.demo.support.FakeProviderScenario
 import dev.alpine.llm.demo.support.ScriptedChatCompletionSession
 import dev.alpine.llm.demo.support.testProfile
@@ -72,12 +75,12 @@ class ProviderGuiInstrumentedTest {
         clearProfiles()
         clearConversations()
         clearAssistantDefaults()
-        DemoDependencies.installSessionFactoryForTests(null)
+        ProviderDependencies.installSessionFactoryForTests(null)
     }
 
     @After
     fun cleanupTestState() {
-        DemoDependencies.installSessionFactoryForTests(null)
+        ProviderDependencies.installSessionFactoryForTests(null)
         currentActivity?.let { activity ->
             instrumentation.runOnMainSync { activity.finish() }
         }
@@ -391,7 +394,7 @@ class ProviderGuiInstrumentedTest {
             respond(second.id, "unused")
             requireReauthentication(second.id)
         }
-        DemoDependencies.installSessionFactoryForTests { _, profile -> scenario.create(profile) }
+        ProviderDependencies.installSessionFactoryForTests { _, profile -> scenario.create(profile) }
 
         launch(ProviderProfilesActivity::class.java)
         compose.onNode(
@@ -529,7 +532,7 @@ class ProviderGuiInstrumentedTest {
             respond(gemini.id, "Gemini fixture answer")
             respond(compatible.id, "Compatible fixture answer")
         }
-        DemoDependencies.installSessionFactoryForTests { _, profile ->
+        ProviderDependencies.installSessionFactoryForTests { _, profile ->
             scenario.create(profile)
         }
 
@@ -580,7 +583,7 @@ class ProviderGuiInstrumentedTest {
                     "```kotlin\nval answer = 42\n```",
             )
         }
-        DemoDependencies.installSessionFactoryForTests { _, selected -> scenario.create(selected) }
+        ProviderDependencies.installSessionFactoryForTests { _, selected -> scenario.create(selected) }
 
         launch(MainActivity::class.java)
         compose.onNodeWithTag("message_input").performTextInput("Render this response")
@@ -614,7 +617,7 @@ class ProviderGuiInstrumentedTest {
         )
         ProviderProfileStore(context).upsert(profile)
         val session = ScriptedChatCompletionSession.constraintCorrect(profile)
-        DemoDependencies.installSessionFactoryForTests { _, _ -> session }
+        ProviderDependencies.installSessionFactoryForTests { _, _ -> session }
 
         launch(MainActivity::class.java)
         compose.onNodeWithTag("message_input").performTextInput("Reply in under five words.")
@@ -639,7 +642,7 @@ class ProviderGuiInstrumentedTest {
         )
         ProviderProfileStore(context).upsert(profile)
         val session = ScriptedChatCompletionSession.freshnessCorrect(profile)
-        DemoDependencies.installSessionFactoryForTests { _, _ -> session }
+        ProviderDependencies.installSessionFactoryForTests { _, _ -> session }
 
         launch(MainActivity::class.java)
         compose.onNodeWithTag("message_input")
@@ -671,7 +674,7 @@ class ProviderGuiInstrumentedTest {
         val scenario = FakeProviderScenario().apply {
             respond(profile.id, "Quick model answer")
         }
-        DemoDependencies.installSessionFactoryForTests { _, refreshedProfile ->
+        ProviderDependencies.installSessionFactoryForTests { _, refreshedProfile ->
             scenario.create(refreshedProfile)
         }
 
@@ -705,7 +708,7 @@ class ProviderGuiInstrumentedTest {
         )
         ProviderProfileStore(context).upsert(profile)
         val session = ScriptedChatCompletionSession.slow(profile)
-        DemoDependencies.installSessionFactoryForTests { _, _ -> session }
+        ProviderDependencies.installSessionFactoryForTests { _, _ -> session }
 
         launch(MainActivity::class.java)
         compose.onNodeWithTag("message_input").performTextInput("Start slow stream")
@@ -750,7 +753,7 @@ class ProviderGuiInstrumentedTest {
         )
         ProviderProfileStore(context).upsert(profile)
         val session = ScriptedChatCompletionSession.failThenRecover(profile)
-        DemoDependencies.installSessionFactoryForTests { _, _ -> session }
+        ProviderDependencies.installSessionFactoryForTests { _, _ -> session }
 
         launch(MainActivity::class.java)
         compose.onNodeWithTag("message_input").performTextInput("Retry this request")
@@ -828,7 +831,7 @@ class ProviderGuiInstrumentedTest {
         val scenario = FakeProviderScenario().apply {
             respond(profile.id, "Rotation-safe answer")
         }
-        DemoDependencies.installSessionFactoryForTests { _, selected ->
+        ProviderDependencies.installSessionFactoryForTests { _, selected ->
             scenario.create(selected)
         }
 
@@ -866,7 +869,7 @@ class ProviderGuiInstrumentedTest {
         val scenario = FakeProviderScenario().apply {
             respond(profile.id, "Saved history answer")
         }
-        DemoDependencies.installSessionFactoryForTests { _, selected -> scenario.create(selected) }
+        ProviderDependencies.installSessionFactoryForTests { _, selected -> scenario.create(selected) }
 
         launch(MainActivity::class.java)
         compose.onNodeWithTag("message_input").performTextInput("First saved topic")
@@ -929,7 +932,7 @@ class ProviderGuiInstrumentedTest {
         val scenario = FakeProviderScenario().apply {
             respond(profile.id, "History actions answer")
         }
-        DemoDependencies.installSessionFactoryForTests { _, selected -> scenario.create(selected) }
+        ProviderDependencies.installSessionFactoryForTests { _, selected -> scenario.create(selected) }
 
         launch(MainActivity::class.java)
         compose.onNodeWithTag("message_input").performTextInput("Rename target")
@@ -1062,7 +1065,7 @@ class ProviderGuiInstrumentedTest {
     private fun assertInjectedFailureRecovers(
         profileId: String,
         expectedFailure: String,
-        sessionFactory: (dev.alpine.llm.demo.model.ProviderProfile) ->
+        sessionFactory: (dev.alpine.chat.provider.android.model.ProviderProfile) ->
             ScriptedChatCompletionSession,
     ) {
         val profile = testProfile(
@@ -1074,7 +1077,7 @@ class ProviderGuiInstrumentedTest {
         )
         ProviderProfileStore(context).upsert(profile)
         val session = sessionFactory(profile)
-        DemoDependencies.installSessionFactoryForTests { _, _ -> session }
+        ProviderDependencies.installSessionFactoryForTests { _, _ -> session }
 
         launch(MainActivity::class.java)
         compose.onNodeWithTag("message_input").performTextInput("Recover this request")

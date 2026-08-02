@@ -110,6 +110,7 @@ fun AlpineChatScreen(
     failure: ChatFailure? = null,
     onDismissFailure: () -> Unit = {},
     onRetry: () -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -139,7 +140,7 @@ fun AlpineChatScreen(
         gesturesEnabled = drawerState.isOpen,
     ) {
         Scaffold(
-            modifier = Modifier
+            modifier = modifier
                 .testTag("chat_screen")
                 .semantics { testTagsAsResourceId = true },
             topBar = {

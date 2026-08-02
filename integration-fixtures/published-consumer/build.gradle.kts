@@ -11,6 +11,7 @@ val matrixDependencies = mapOf(
     "no-runtime" to listOf(
         "alpine-llm-android",
         "alpine-chat-feature",
+        "alpine-chat-provider-android",
     ),
     "runtime-only" to listOf(
         "alpine-runtime-android",
@@ -37,6 +38,7 @@ val matrixDependencies = mapOf(
         "alpine-llm-gateway-pack-bundled",
         "alpine-chat-routing",
         "alpine-chat-feature",
+        "alpine-chat-provider-android",
         "alpine-chat-backend-direct",
         "alpine-chat-backend-alpine",
         "alpine-workspace-android",

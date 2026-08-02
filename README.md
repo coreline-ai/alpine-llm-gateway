@@ -121,14 +121,19 @@ OAuth session을, `:alpine-chat-backend-alpine`은 Python Gateway를 연결합�
 
 통합 제품 Phase 1의 `:alpine-chat-feature`는 다중 대화·암호화 저장·모델·Skill·Persona·
 생성 상태와 Compose 채팅 화면을 재사용 AAR로 제공합니다. Provider/OAuth 원문과 Runtime을
-의존하지 않는 `ChatBackendSession` 경계를 사용하며, `:demo-chatbot`은 Android Provider
-adapter와 계정 관리만 소유하는 thin sample host로 동작합니다.
+의존하지 않는 `ChatBackendSession` 경계를 사용합니다. Phase 2의
+`:alpine-chat-provider-android`는 OAuth Provider profile UI, session adapter와
+`DirectChatHostController`를 재사용 AAR로 제공하므로 `:demo-chatbot`과 `:integrated-app`이
+동일 구현을 조립합니다.
 
 Phase 6의 `:alpine-runtime-host`는 Compose/Activity와 무관한 install/start/health/repair/reset,
 command, terminal과 package 상태 controller를 제공합니다. `:alpine-runtime-ui-compose`는 같은
 상태를 렌더링하는 선택형 화면이며 `:alpine-integration-sample`은 Compose 없이 XML/View만으로,
-`:integrated-app`은 Compose와 빠른 채팅/Alpine 작업 mode selector로 조립됩니다. 패키지 설치는
-정확한 allowlist와 사용자 승인을 모두 통과해야 하며 임의 shell 문자열을 실행하지 않습니다.
+`:integrated-app`은 Compose와 빠른 채팅/Alpine 작업 mode selector로 조립됩니다. 빠른 채팅은
+실제 공통 채팅 화면과 Android 직접 Provider 경로를 사용하며, 대화별 mode·모델·초안·기록을
+복원합니다. 스트리밍 중 Alpine 화면을 왕복해도 요청을 재전송하지 않고 돌아와 Stop할 수
+있습니다. Alpine 작업 모드의 Gateway 채팅 결합은 Phase 3 범위입니다. 패키지 설치는 정확한
+allowlist와 사용자 승인을 모두 통과해야 하며 임의 shell 문자열을 실행하지 않습니다.
 
 Host Bridge는 bounded concurrency, overload 429/`Retry-After`, request timeout, request ID와 누적 health 지표를 제공합니다. 선택적 resilient transport는 제한적 retry/backoff와 circuit breaker를 제공하고 운영 event schema에는 URL·header·body·credential 필드가 존재하지 않습니다.
 
@@ -158,8 +163,9 @@ python3 -m unittest discover -s tests -v
 ./gradlew :alpine-llm-bridge-probe:assembleDebug
 ./gradlew :alpine-chat-routing:check :alpine-chat-backend-direct:testDebugUnitTest :alpine-chat-backend-alpine:testDebugUnitTest
 ./gradlew :alpine-chat-feature:testDebugUnitTest :alpine-chat-feature:assembleRelease :alpine-chat-feature:lintDebug
+./gradlew :alpine-chat-provider-android:testDebugUnitTest :alpine-chat-provider-android:assembleRelease :alpine-chat-provider-android:lintDebug
 ./gradlew :alpine-runtime-host:check :alpine-runtime-ui-compose:testDebugUnitTest
-./gradlew :alpine-integration-sample:assembleDebug :integrated-app:assembleDebug
+./gradlew :alpine-integration-sample:assembleDebug :integrated-app:assembleDebug :integrated-app:assembleDebugAndroidTest
 ./scripts/runtime/run-llm-bridge-probe-device.sh <samsung-device-serial>
 ANDROID_SERIAL=<device-serial> ./gradlew :android:connectedDebugAndroidTest
 ./gradlew :android:assembleRelease :android:publishReleasePublicationToProjectRepository
@@ -173,7 +179,7 @@ CI 없이 검증과 release bundle 생성을 한 번에 수행할 수 있습니�
 ./scripts/release-local.sh
 ```
 
-결과는 `dist/alpine-sdk-0.3.0/`에 18개 AAR/JAR의 Maven repository, sources, POM,
+결과는 `dist/alpine-sdk-0.3.0/`에 19개 AAR/JAR의 Maven repository, sources, POM,
 Gradle module metadata, license/SBOM과 `SHA256SUMS`로 생성됩니다.
 
 ## 현재 제한

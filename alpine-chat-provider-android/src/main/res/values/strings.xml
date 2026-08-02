@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="provider_saved">LLM profile saved.</string>
+    <string name="connected">Connected</string>
+    <string name="profile_load_failed">The LLM profile could not be loaded.</string>
+    <string name="connection_failed_generic">Connection failed. Check the OAuth profile settings.</string>
+</resources>

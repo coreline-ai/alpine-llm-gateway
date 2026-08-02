@@ -1,8 +1,6 @@
 package dev.alpine.integrated
 
 import android.app.Application
-import android.content.Context
-import dev.alpine.chat.routing.ChatExecutionMode
 import dev.alpine.runtime.android.AndroidRuntimeConfiguration
 import dev.alpine.runtime.android.DefaultAndroidAlpineRuntimeFactory
 import dev.alpine.runtime.api.AlpineRuntimeManager
@@ -51,28 +49,11 @@ class IntegratedApplication : Application() {
         runtimeController = RuntimeHostController(runtimeManager)
     }
 
-    fun savedMode(): ChatExecutionMode = getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-        .getString(KEY_MODE, null)
-        ?.let { runCatching { ChatExecutionMode.valueOf(it) }.getOrNull() }
-        ?: ChatExecutionMode.FAST_CHAT
-
-    fun saveMode(mode: ChatExecutionMode) {
-        getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY_MODE, mode.name)
-            .apply()
-    }
-
     override fun onTerminate() {
         backgroundBinding?.close()
         backgroundController.stop()
         runtimeController.close()
         runtimeManager.close()
         super.onTerminate()
-    }
-
-    companion object {
-        private const val PREFERENCES = "integrated-app-mode"
-        private const val KEY_MODE = "chat-execution-mode"
     }
 }

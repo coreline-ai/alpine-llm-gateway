@@ -88,6 +88,11 @@ val sdkPublications = mapOf(
         "Alpine Chat Feature",
         "Reusable encrypted conversation state, backend-neutral chat orchestration, and Compose UI.",
     ),
+    ":alpine-chat-provider-android" to SdkPublication(
+        "alpine-chat-provider-android",
+        "Alpine Chat Provider Android",
+        "Reusable Android OAuth Provider profiles, account UI, and direct chat host assembly.",
+    ),
     ":alpine-chat-backend-direct" to SdkPublication(
         "alpine-chat-backend-direct",
         "Alpine Direct Chat Backend",

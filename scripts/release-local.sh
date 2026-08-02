@@ -106,6 +106,9 @@ GRADLE_TASKS=(
   :alpine-chat-feature:testDebugUnitTest
   :alpine-chat-feature:assembleRelease
   :alpine-chat-feature:lintDebug
+  :alpine-chat-provider-android:testDebugUnitTest
+  :alpine-chat-provider-android:assembleRelease
+  :alpine-chat-provider-android:lintDebug
   :alpine-chat-backend-direct:testDebugUnitTest
   :alpine-chat-backend-direct:assembleRelease
   :alpine-chat-backend-direct:lintDebug
@@ -128,6 +131,7 @@ GRADLE_TASKS=(
   :alpine-integration-sample:assembleDebug
   :alpine-integration-sample:lintDebug
   :integrated-app:assembleDebug
+  :integrated-app:assembleDebugAndroidTest
   :integrated-app:lintDebug
   :alpine-llm-bridge-probe:assembleDebug
   :alpine-llm-bridge-probe:lintDebug

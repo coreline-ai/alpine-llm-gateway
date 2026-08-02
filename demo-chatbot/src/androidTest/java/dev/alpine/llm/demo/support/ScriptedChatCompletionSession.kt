@@ -6,8 +6,8 @@ import dev.alpine.chat.feature.backend.ChatBackendException
 import dev.alpine.chat.feature.backend.ChatBackendFailureCode
 import dev.alpine.chat.feature.backend.ChatBackendStreamResult
 import dev.alpine.llm.OAuthAuthenticationState
-import dev.alpine.llm.demo.llm.ChatCompletionSession
-import dev.alpine.llm.demo.model.ProviderProfile
+import dev.alpine.chat.provider.android.session.ChatCompletionSession
+import dev.alpine.chat.provider.android.model.ProviderProfile
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.awaitCancellation

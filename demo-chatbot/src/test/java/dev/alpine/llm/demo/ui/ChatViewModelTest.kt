@@ -8,15 +8,15 @@ import dev.alpine.chat.feature.backend.ChatBackendFailureCode
 import dev.alpine.chat.feature.backend.ChatBackendStreamResult
 import dev.alpine.chat.routing.ChatExecutionMode
 import dev.alpine.llm.OAuthAuthenticationState
-import dev.alpine.llm.demo.llm.ChatCompletionSession
-import dev.alpine.llm.demo.llm.ProviderConnection
-import dev.alpine.llm.demo.llm.ProviderConnectionState
+import dev.alpine.chat.provider.android.session.ChatCompletionSession
+import dev.alpine.chat.provider.android.session.ProviderConnection
+import dev.alpine.chat.provider.android.session.ProviderConnectionState
 import dev.alpine.chat.feature.model.AssistantSelection
 import dev.alpine.chat.feature.model.ChatMessageState
 import dev.alpine.chat.feature.model.ChatRole
 import dev.alpine.chat.feature.ui.ChatViewModel
-import dev.alpine.llm.demo.model.ProviderProfile
-import dev.alpine.llm.demo.model.ProviderType
+import dev.alpine.chat.provider.android.model.ProviderProfile
+import dev.alpine.chat.provider.android.model.ProviderType
 import dev.alpine.chat.feature.ui.state.ChatFailureKind
 import dev.alpine.chat.feature.ui.state.ChatRecoveryAction
 import java.io.IOException
@@ -72,6 +72,27 @@ class ChatViewModelTest {
             assertEquals(ChatExecutionMode.ALPINE_WORKSPACE, viewModel.state.value.executionMode)
             viewModel.selectExecutionMode(ChatExecutionMode.FAST_CHAT)
             assertEquals(ChatExecutionMode.FAST_CHAT, viewModel.state.value.executionMode)
+        }
+
+    @Test
+    fun `execution mode remains switchable while active conversation is streaming`() =
+        runTest(dispatcher) {
+            val session = FakeSession.slow(
+                profile("mode-navigation", ProviderType.GEMINI),
+                "partial",
+            )
+            val viewModel = connectedViewModel(session)
+
+            viewModel.send("Keep generating", session)
+            runCurrent()
+            viewModel.selectExecutionMode(ChatExecutionMode.ALPINE_WORKSPACE)
+
+            assertTrue(viewModel.state.value.isStreaming)
+            assertEquals(ChatExecutionMode.ALPINE_WORKSPACE, viewModel.state.value.executionMode)
+            viewModel.selectExecutionMode(ChatExecutionMode.FAST_CHAT)
+            assertTrue(viewModel.state.value.isStreaming)
+            viewModel.stopStreaming()
+            runCurrent()
         }
 
     @Test

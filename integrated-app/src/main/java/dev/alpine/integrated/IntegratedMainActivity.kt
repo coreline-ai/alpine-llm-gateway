@@ -1,6 +1,7 @@
 package dev.alpine.integrated
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -15,11 +16,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -30,7 +28,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.alpine.chat.feature.data.AssistantDefaultsStore
+import dev.alpine.chat.feature.data.ConversationRepository
+import dev.alpine.chat.feature.data.ConversationStore
+import dev.alpine.chat.feature.ui.ChatViewModel
+import dev.alpine.chat.feature.ui.screens.chat.AlpineChatScreen
+import dev.alpine.chat.feature.ui.theme.AlpineChatTheme
+import dev.alpine.chat.provider.android.DirectChatHostController
+import dev.alpine.chat.provider.android.activity.ProviderProfilesActivity
 import dev.alpine.chat.routing.ChatExecutionMode
 import dev.alpine.runtime.api.RuntimePackageAllowlistPolicy
 import dev.alpine.runtime.api.RuntimePackageApproval
@@ -43,6 +52,8 @@ import java.util.concurrent.CompletableFuture
 
 class IntegratedMainActivity : ComponentActivity() {
     private val app by lazy { application as IntegratedApplication }
+    private lateinit var chatViewModel: ChatViewModel
+    private lateinit var directChat: DirectChatHostController
     private val notificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) {
@@ -53,11 +64,46 @@ class IntegratedMainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val assistantDefaults = AssistantDefaultsStore(this)
+        chatViewModel = ViewModelProvider(
+            this,
+            ChatViewModel.Factory(
+                repository = ConversationRepository(ConversationStore(this)),
+                initialAssistantSelection = assistantDefaults.load(),
+                persistAssistantDefaults = assistantDefaults::save,
+            ),
+        )[ChatViewModel::class.java]
+        directChat = DirectChatHostController(this, chatViewModel)
         setContent {
-            MaterialTheme {
-                IntegratedApp(app, app.runtimeController, ::startRuntimeWithNotificationConsent)
+            AlpineChatTheme {
+                IntegratedApp(
+                    controller = app.runtimeController,
+                    chatViewModel = chatViewModel,
+                    directChat = directChat,
+                    onManageProviders = ::openProviderProfiles,
+                    onStartRuntime = ::startRuntimeWithNotificationConsent,
+                )
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        directChat.refreshConnections()
+    }
+
+    override fun onStop() {
+        chatViewModel.flushPersistence()
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        directChat.close()
+        super.onDestroy()
+    }
+
+    private fun openProviderProfiles() {
+        startActivity(Intent(this, ProviderProfilesActivity::class.java))
     }
 
     private fun startRuntimeWithNotificationConsent() {
@@ -74,11 +120,14 @@ class IntegratedMainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun IntegratedApp(
-    app: IntegratedApplication,
     controller: RuntimeHostController,
+    chatViewModel: ChatViewModel,
+    directChat: DirectChatHostController,
+    onManageProviders: () -> Unit,
     onStartRuntime: () -> Unit,
 ) {
-    var mode by remember { mutableStateOf(app.savedMode()) }
+    val chatState = chatViewModel.state.collectAsStateWithLifecycle().value
+    val mode = chatState.executionMode
     var runtimeState by remember { mutableStateOf(controller.currentState()) }
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     DisposableEffect(controller) {
@@ -101,17 +150,37 @@ private fun IntegratedApp(
             ModeSelector(
                 mode = mode,
                 onModeChanged = { selected ->
-                    mode = selected
-                    app.saveMode(selected)
+                    chatViewModel.selectExecutionMode(selected)
                 },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .testTag("mode_selector"),
             )
             when (mode) {
-                ChatExecutionMode.FAST_CHAT -> FastChatShell(Modifier.padding(16.dp))
+                ChatExecutionMode.FAST_CHAT -> AlpineChatScreen(
+                    state = chatState,
+                    onSelectProvider = chatViewModel::selectProvider,
+                    onSelectModel = directChat::selectModel,
+                    onSelectAssistantMode = chatViewModel::selectAssistantMode,
+                    onResetAssistantMode = chatViewModel::resetAssistantMode,
+                    onNewChat = chatViewModel::newConversation,
+                    onSelectConversation = chatViewModel::selectConversation,
+                    onRenameConversation = chatViewModel::renameConversation,
+                    onDeleteConversation = chatViewModel::deleteConversation,
+                    onManageProviders = onManageProviders,
+                    onDraftChange = chatViewModel::updateDraft,
+                    onSend = directChat::send,
+                    onStop = chatViewModel::stopStreaming,
+                    failure = chatState.failure,
+                    onDismissFailure = chatViewModel::dismissFailure,
+                    onRetry = chatViewModel::retry,
+                    modifier = Modifier.weight(1f),
+                )
                 ChatExecutionMode.ALPINE_WORKSPACE -> AlpineWorkspace(
                     state = runtimeState,
                     controller = controller,
                     onStartRuntime = onStartRuntime,
+                    modifier = Modifier.weight(1f),
                 )
             }
         }
@@ -132,35 +201,18 @@ private fun ModeSelector(
             selected = mode == ChatExecutionMode.FAST_CHAT,
             onClick = { onModeChanged(ChatExecutionMode.FAST_CHAT) },
             label = { Text("빠른 채팅") },
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .testTag("mode_fast_chat"),
         )
         FilterChip(
             selected = mode == ChatExecutionMode.ALPINE_WORKSPACE,
             onClick = { onModeChanged(ChatExecutionMode.ALPINE_WORKSPACE) },
             label = { Text("Alpine 작업") },
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .testTag("mode_alpine_workspace"),
         )
-    }
-}
-
-@Composable
-private fun FastChatShell(modifier: Modifier = Modifier) {
-    Card(modifier = modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text("빠른 채팅 모드", style = MaterialTheme.typography.headlineSmall)
-            Text("Android에서 Provider에 직접 연결하는 경로입니다. Alpine 설치 없이 가장 빠르게 답변을 받을 수 있습니다.")
-            Text(
-                "Phase 5의 안전 라우터와 Android 직접 Provider backend가 이 앱에 포함되어 있습니다. " +
-                    "계정별 OAuth 화면은 기존 데모와 분리된 상태로 유지하며, Provider 요청 후에는 자동 fallback하지 않습니다.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Button(onClick = { /* Account-specific chat host is injected by the product app. */ }, enabled = false) {
-                Text("Provider 로그인 연결 후 사용")
-            }
-        }
     }
 }
 
@@ -169,6 +221,7 @@ private fun AlpineWorkspace(
     state: RuntimeHostState,
     controller: RuntimeHostController,
     onStartRuntime: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     RuntimeWorkspaceScreen(
         state = state,
@@ -191,6 +244,7 @@ private fun AlpineWorkspace(
                 approval = RuntimePackageApproval { CompletableFuture.completedFuture(true) },
             )
         },
+        modifier = modifier,
     )
 }
 

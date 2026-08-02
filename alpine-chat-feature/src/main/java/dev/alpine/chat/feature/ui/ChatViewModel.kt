@@ -185,9 +185,9 @@ class ChatViewModel(
         publish()
     }
 
-    /** Persists the host-selected mode; routing is connected by the integrating app in Phase 6. */
+    /** Persists the active conversation's mode without interrupting an in-flight generation. */
     fun selectExecutionMode(mode: ChatExecutionMode) {
-        if (isLoading || activeJobs.containsKey(snapshot.activeConversationId)) return
+        if (isLoading) return
         val active = snapshot.activeConversation
         if (active.executionMode == mode) return
         updateActiveConversation {

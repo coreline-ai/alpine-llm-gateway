@@ -35,6 +35,10 @@ ARTIFACTS = {
     "alpine-llm-gateway-pack-bundled": ("aar", {"alpine-llm-bridge"}),
     "alpine-chat-routing": ("jar", set()),
     "alpine-chat-feature": ("aar", {"alpine-chat-routing"}),
+    "alpine-chat-provider-android": (
+        "aar",
+        {"alpine-chat-feature", "alpine-llm-android"},
+    ),
     "alpine-chat-backend-direct": ("aar", {"alpine-chat-routing", "alpine-llm-android"}),
     "alpine-chat-backend-alpine": ("aar", {"alpine-chat-routing", "alpine-llm-bridge"}),
     "alpine-workspace-api": ("jar", set()),

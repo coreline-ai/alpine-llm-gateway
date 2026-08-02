@@ -17,6 +17,9 @@ Compose UI를 Host/Provider 구현에서 분리하며, Alpine Runtime 없이도 
 
 이 모듈은 OAuth, Provider profile CRUD, 실제 HTTP 호출과 Alpine Runtime을 포함하지 않는다.
 Host 앱은 `ChatBackendSession`을 구현하고 연결 목록을 `ChatBackendConnection`으로 공급한다.
+기본 Android OAuth Provider UI와 직접 session 조립이 필요한 Host는
+`dev.alpine.llm:alpine-chat-provider-android:0.3.0`의 `DirectChatHostController`를 사용할 수
+있다. 자체 Provider 구현을 사용하는 앱은 이 선택 모듈 없이 아래 계약만 구현하면 된다.
 
 ```kotlin
 val descriptor = ChatBackendDescriptor(

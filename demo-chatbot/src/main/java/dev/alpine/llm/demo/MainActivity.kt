@@ -6,22 +6,18 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.alpine.chat.provider.android.DirectChatHostController
+import dev.alpine.chat.provider.android.activity.ProviderProfilesActivity
 import dev.alpine.chat.feature.data.ConversationRepository
 import dev.alpine.chat.feature.data.ConversationStore
 import dev.alpine.chat.feature.data.AssistantDefaultsStore
-import dev.alpine.llm.demo.data.ProviderProfileStore
-import dev.alpine.llm.demo.llm.ChatCompletionSession
-import dev.alpine.llm.demo.llm.ConnectedProviderRegistry
 import dev.alpine.chat.feature.ui.ChatViewModel
 import dev.alpine.chat.feature.ui.screens.chat.AlpineChatScreen
 import dev.alpine.chat.feature.ui.theme.AlpineChatTheme
 
 class MainActivity : ComponentActivity() {
     private lateinit var viewModel: ChatViewModel
-    private lateinit var store: ProviderProfileStore
-    private lateinit var registry: ConnectedProviderRegistry
-    private var sessions: Map<String, ChatCompletionSession> = emptyMap()
-    private val modelSessions = mutableMapOf<String, ChatCompletionSession>()
+    private lateinit var directChat: DirectChatHostController
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,10 +30,7 @@ class MainActivity : ComponentActivity() {
                 persistAssistantDefaults = assistantDefaultsStore::save,
             ),
         )[ChatViewModel::class.java]
-        store = ProviderProfileStore(this)
-        registry = ConnectedProviderRegistry { profile ->
-            DemoDependencies.createSession(this, profile)
-        }
+        directChat = DirectChatHostController(this, viewModel)
 
         setContent {
             AlpineChatTheme {
@@ -45,7 +38,7 @@ class MainActivity : ComponentActivity() {
                 AlpineChatScreen(
                     state = state,
                     onSelectProvider = viewModel::selectProvider,
-                    onSelectModel = ::selectModel,
+                    onSelectModel = directChat::selectModel,
                     onSelectAssistantMode = viewModel::selectAssistantMode,
                     onResetAssistantMode = viewModel::resetAssistantMode,
                     onNewChat = viewModel::newConversation,
@@ -54,7 +47,7 @@ class MainActivity : ComponentActivity() {
                     onDeleteConversation = viewModel::deleteConversation,
                     onManageProviders = ::openProviderProfiles,
                     onDraftChange = viewModel::updateDraft,
-                    onSend = { text -> sendMessage(text) },
+                    onSend = directChat::send,
                     onStop = viewModel::stopStreaming,
                     failure = state.failure,
                     onDismissFailure = viewModel::dismissFailure,
@@ -66,41 +59,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        refreshConnections()
-    }
-
-    private fun refreshConnections() {
-        val connections = registry.snapshot(store.load())
-        sessions = connections.associate { it.profile.id to it.session }
-        viewModel.updateConnections(connections.map { it.asChatBackendConnection() })
-    }
-
-    private fun selectModel(profileId: String, model: String) {
-        val state = viewModel.state.value
-        val option = state.providers.firstOrNull { it.profileId == profileId } ?: return
-        if (model !in option.modelOptions || option.model == model) return
-
-        val profile = store.find(profileId) ?: return
-        viewModel.selectModel(profileId, model)
-        store.upsert(profile.copy(model = model))
-        refreshConnections()
-    }
-
-    private fun sendMessage(text: String) {
-        val state = viewModel.state.value
-        val profileId = state.selectedProfileId ?: return
-        val model = state.selectedModel ?: return
-        val session = sessionFor(profileId, model) ?: return
-        viewModel.send(text, session)
-    }
-
-    private fun sessionFor(profileId: String, model: String): ChatCompletionSession? {
-        sessions[profileId]?.takeIf { it.profile.model == model }?.let { return it }
-        val profile = store.find(profileId)?.copy(model = model) ?: return null
-        val key = "$profileId\u0000$model"
-        return modelSessions.getOrPut(key) {
-            DemoDependencies.createSession(this, profile)
-        }
+        directChat.refreshConnections()
     }
 
     private fun openProviderProfiles() {
@@ -113,9 +72,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        (sessions.values + modelSessions.values)
-            .distinct()
-            .forEach(ChatCompletionSession::cancelAuthorization)
+        directChat.close()
         super.onDestroy()
     }
 }

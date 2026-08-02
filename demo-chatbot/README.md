@@ -1,15 +1,15 @@
 # Alpine LLM Chat Demo
 
-`demo-chatbot`은 `:android`와 `:alpine-chat-feature`를 조립하는 thin sample host다. 저장된 OAuth LLM 프로필 가운데 인증된 연결을 선택하고, 대화별 Provider·모델·기본 스킬·응답 페르소나로 새 메시지를 스트리밍 요청한다. 여러 대화와 초안은 기기 안에 암호화해 보존한다.
+`demo-chatbot`은 `:alpine-chat-feature`와 `:alpine-chat-provider-android`를 조립하는 thin sample host다. 저장된 OAuth LLM 프로필 가운데 인증된 연결을 선택하고, 대화별 Provider·모델·기본 스킬·응답 페르소나로 새 메시지를 스트리밍 요청한다. 여러 대화와 초안은 기기 안에 암호화해 보존한다.
 
 다중 대화, 암호화 저장, ViewModel, Skill·Persona와 Compose 채팅 화면은 공통 Feature가
-소유한다. 이 앱에는 Provider profile CRUD, OAuth session 생성과 Provider event를 공통
-delta/error로 바꾸는 Android 직접 adapter만 남아 있다. `integrated-app` 연결은 전체 제품
-계획의 Phase 2에서 진행한다.
+소유한다. Provider profile CRUD, OAuth session 생성과 Provider event를 공통 delta/error로
+바꾸는 Android 직접 adapter는 재사용 Provider 모듈이 소유한다. 앱에는 Activity lifecycle과
+화면 callback 조립만 남으며 `integrated-app`도 같은 모듈을 사용한다.
 
 Phase 5부터 저장 모델은 대화별 `FAST_CHAT`/`ALPINE_WORKSPACE` 실행 모드를 포함한다. 기존
 schema 1·2 대화는 `FAST_CHAT`으로 안전하게 migration한다. 이 데모의 실제 전송 경로는 계속
-빠른 채팅 기준선이며 mode selector와 Alpine adapter 조립은 Phase 6 통합 Host에서 제공한다.
+빠른 채팅 기준선이며 mode selector와 Alpine adapter 조립은 `integrated-app`이 제공한다.
 
 UI는 Material 3 Compose로 구현되어 light/dark theme, Android 12+ dynamic color,
 840dp 최대 콘텐츠 폭과 작은 가로 화면의 스크롤을 지원한다. 세부 token,

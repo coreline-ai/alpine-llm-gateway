@@ -14,6 +14,7 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.3.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += "arm64-v8a" }
     }
 
@@ -22,7 +23,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-androidResources { noCompress += "asset" }
+    androidResources { noCompress += "asset" }
     packaging { jniLibs { useLegacyPackaging = true } }
     lint { disable += "AndroidGradlePluginVersion" }
 }
@@ -34,6 +35,8 @@ dependencies {
     implementation(project(":alpine-runtime-pack-bundled"))
     implementation(project(":alpine-runtime-ui-compose"))
     implementation(project(":alpine-chat-routing"))
+    implementation(project(":alpine-chat-feature"))
+    implementation(project(":alpine-chat-provider-android"))
     implementation(project(":alpine-chat-backend-direct"))
     implementation(project(":alpine-chat-backend-alpine"))
     implementation(project(":alpine-llm-gateway-pack-bundled"))
@@ -43,6 +46,14 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.4")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.4")
+
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2024.09.00"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
 kotlin {

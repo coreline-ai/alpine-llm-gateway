@@ -1,7 +1,7 @@
 package dev.alpine.llm.demo.support
 
-import dev.alpine.llm.demo.model.ProviderProfile
-import dev.alpine.llm.demo.model.ProviderType
+import dev.alpine.chat.provider.android.model.ProviderProfile
+import dev.alpine.chat.provider.android.model.ProviderType
 
 fun testProfile(
     id: String,

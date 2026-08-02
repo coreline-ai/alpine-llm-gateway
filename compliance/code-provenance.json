@@ -14,20 +14,20 @@
       "notes": "Protocol constants and independently structured adapter logic must be reviewed separately."
     },
     {
-      "path": "demo-chatbot/src/main/java/dev/alpine/llm/demo/model/AnthropicProfileDefaults.kt",
+      "path": "alpine-chat-provider-android/src/main/java/dev/alpine/chat/provider/android/model/AnthropicProfileDefaults.kt",
       "classification": "REVIEW_REQUIRED",
       "candidate_classification": "REFERENCE_ONLY",
       "review_status": "PENDING_FILE_LEVEL_COMPARISON",
       "origin": "PROJECT_WITH_OPENMINIS_REFERENCE",
-      "notes": "Demo defaults explicitly identify the OpenMinis reference."
+      "notes": "Reusable Android Provider defaults explicitly identify the OpenMinis reference."
     },
     {
-      "path": "demo-chatbot/src/main/java/dev/alpine/llm/demo/model/XaiProfileDefaults.kt",
+      "path": "alpine-chat-provider-android/src/main/java/dev/alpine/chat/provider/android/model/XaiProfileDefaults.kt",
       "classification": "REVIEW_REQUIRED",
       "candidate_classification": "REFERENCE_ONLY",
       "review_status": "PENDING_FILE_LEVEL_COMPARISON",
       "origin": "PROJECT_WITH_OPENMINIS_REFERENCE",
-      "notes": "Demo defaults explicitly identify the inspected OpenMinis source."
+      "notes": "Reusable Android Provider defaults explicitly identify the inspected OpenMinis source."
     },
     {
       "path": "scripts/runtime/build-proot-android.sh",

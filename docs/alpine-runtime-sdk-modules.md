@@ -21,6 +21,7 @@ Alpine 기능을 특정 채팅 앱에 고정하지 않고, 필요한 기능만 �
 | `:alpine-runtime-testkit` | fake runtime, 결정적 dispatcher, virtual artifact | 테스트에서만 필요 |
 | `:alpine-chat-routing` | 공통 request/stream/failure, mode, fallback, audit, request ledger 계약 | Android/Compose 없음 |
 | `:alpine-chat-feature` | 다중 대화·암호화 저장·모델·Skill·Persona·생성 상태와 Compose 채팅 UI | Android/Compose 필요, Runtime 없음 |
+| `:alpine-chat-provider-android` | OAuth Provider profile CRUD·계정 UI·직접 채팅 Host 조립 | Android/Compose 필요, Runtime 없음 |
 | `:alpine-chat-backend-direct` | 기존 Android OAuth/Provider 빠른 채팅 adapter | Android LLM만 필요 |
 | `:alpine-chat-backend-alpine` | Runtime/Bridge/Python Gateway 작업 모드 adapter | Alpine LLM 사용 시 필요 |
 | `:alpine-workspace-api` | 안전 상대경로·quota·bounded 파일 작업 계약 | Android/Compose 없음 |
@@ -53,8 +54,9 @@ dependencies {
 | Alpine에서 Android LLM/OAuth 사용 | `api` + `android` + runtime artifact + `llm-bridge` + Gateway artifact |
 | SDK 제공 Compose UI 사용 | 위 구성 + `host` + `ui-compose` |
 | JVM 계약 테스트 | `api` + `testkit` |
-| 빠른 채팅만 사용 | 기존 `:android`; Alpine 모듈 추가 없음 |
-| 빠른 채팅 공통 routing 사용 | `:android` + `:alpine-chat-routing` + `:alpine-chat-backend-direct` |
+| 자체 UI로 Android Provider 사용 | `:android` + 자체 profile/session Host |
+| 공통 UI로 빠른 채팅 사용 | `:alpine-chat-feature` + `:alpine-chat-provider-android` |
+| 빠른 채팅 공통 routing 사용 | 위 구성 + `:alpine-chat-backend-direct` |
 | 두 모드 통합 | 위 구성 + runtime/bridge/Gateway artifact + `:alpine-chat-backend-alpine` |
 
 ## 공개 계약 원칙
@@ -88,7 +90,8 @@ dependencies {
   현재 연결된 x86_64 emulator가 없어 상태는 `experimental_requires_emulator_e2e`다.
 - 선택형 background, Play Asset Delivery와 workspace 모듈은 runtime core/빠른 채팅에 역의존하지 않는다.
 - host-provided와 Ed25519 signed-download provider 경계가 분리되어 있다.
-- `:demo-chatbot`은 빠른 채팅 기준선을 유지하며 Alpine SDK에 의존하지 않는다.
+- `:demo-chatbot`과 `:integrated-app`은 동일 `:alpine-chat-feature`와
+  `:alpine-chat-provider-android`를 조립하며 Provider 구현을 복사하지 않는다.
 - `AlpineLlmBridgeController`가 Host Bridge, runtime session, Python Gateway의 start/health/stop/restart를 단일 소유한다.
 - Python Gateway `0.3.0`/protocol `1` layer는 rootfs와 별도 checksum lock으로 공급된다.
 - 삼성 `SM-S931N` API 36에서 `llmctl models/run/stream/cancel`, token 회전과 process cleanup을 통과했다.
@@ -96,8 +99,10 @@ dependencies {
 - 기존 conversation schema는 실행 모드가 없으면 `FAST_CHAT`으로 migration하며 새 데이터는 대화별 mode를 저장한다.
 - Phase 6에서 Android-free `RuntimeHostController`, 상태·복구·터미널·패키지 Compose UI,
   Compose 없는 XML sample과 `:integrated-app`의 명시적 mode selector를 연결했다.
+- 통합 제품 Phase 2에서 `:integrated-app`의 빠른 채팅을 실제 Provider 계정 UI·모델 선택·
+  stream/Stop/retry·대화 복원에 연결했다. Alpine Gateway 채팅 결합은 Phase 3 범위다.
 - Host lifecycle/service/notification/manifest/저장소 지침은
   [Host 통합 가이드](alpine-runtime-host-integration.md)를 따른다.
-- 현재 18개 AAR/JAR의 sources/POM/Gradle metadata/checksum, 8개 외부 release 축소 앱,
+- 현재 19개 AAR/JAR의 sources/POM/Gradle metadata/checksum, 8개 외부 release 축소 앱,
   payload·permission·arm64/x86_64 ABI 분리를 자동 검증한다. 공개 배포 전 프로젝트 라이선스와 copyleft
   source archive gate는 [배포 가이드](sdk-publication-and-distribution.md)를 따른다.
