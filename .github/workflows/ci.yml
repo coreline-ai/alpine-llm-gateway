@@ -28,8 +28,22 @@ jobs:
         env:
           PYTHONPYCACHEPREFIX: ${{ github.workspace }}/build/python-cache
         run: python -m compileall -q alpine_llm
+      - name: Verify deterministic Python Gateway layer
+        run: |
+          python scripts/runtime/build-python-gateway-pack.py
+          git diff --exit-code -- \
+            alpine-llm-gateway-pack-bundled/src/main/assets/alpine-llm-gateway.tar.gz.asset \
+            runtime/alpine-llm-gateway-0.3.0.lock.json
       - name: Smoke test CLI
         run: python -B -m alpine_llm.cli run --help > /dev/null
+      - name: Verify redacted Provider E2E template
+        run: python scripts/verify-provider-e2e-report.py integration-fixtures/provider-e2e/report.template.json
+      - name: Verify redacted Play E2E template
+        run: python scripts/verify-play-e2e-report.py integration-fixtures/play-e2e/report.template.json
+      - name: Verify redacted Samsung lifecycle template
+        run: python scripts/verify-samsung-lifecycle-report.py integration-fixtures/samsung-lifecycle/report.template.json
+      - name: Verify fail-closed release readiness
+        run: python scripts/verify-release-readiness.py distribution/release-readiness.json --check-evidence
 
   android:
     name: Android modules
@@ -51,11 +65,89 @@ jobs:
           :android:lintDebug
           :android:assembleDebugAndroidTest
           :android:assembleRelease
+          :alpine-runtime-api:check
+          :alpine-runtime-android:testDebugUnitTest
+          :alpine-runtime-android:assembleRelease
+          :alpine-runtime-android:lintDebug
+          :alpine-runtime-background-android:testDebugUnitTest
+          :alpine-runtime-background-android:assembleRelease
+          :alpine-runtime-background-android:lintDebug
+          :alpine-runtime-artifact-play:testDebugUnitTest
+          :alpine-runtime-artifact-play:assembleRelease
+          :alpine-runtime-artifact-play:lintDebug
+          :alpine-runtime-pack-bundled:testDebugUnitTest
+          :alpine-runtime-pack-bundled:assembleRelease
+          :alpine-runtime-pack-bundled:lintDebug
+          :alpine-runtime-pack-bundled:verifyBundledRuntimeArtifacts
+          :alpine-runtime-pack-x86_64:testDebugUnitTest
+          :alpine-runtime-pack-x86_64:assembleRelease
+          :alpine-runtime-pack-x86_64:lintDebug
+          :alpine-runtime-pack-x86_64:verifyX8664RuntimeArtifacts
+          :alpine-llm-bridge:testDebugUnitTest
+          :alpine-llm-bridge:assembleRelease
+          :alpine-llm-bridge:assembleDebugAndroidTest
+          :alpine-llm-bridge:lintDebug
+          :alpine-llm-gateway-pack-bundled:testDebugUnitTest
+          :alpine-llm-gateway-pack-bundled:assembleRelease
+          :alpine-llm-gateway-pack-bundled:lintDebug
+          :alpine-llm-gateway-pack-bundled:verifyBundledPythonGatewayArtifact
+          :alpine-runtime-ui-compose:testDebugUnitTest
+          :alpine-runtime-ui-compose:assembleRelease
+          :alpine-runtime-ui-compose:assembleDebugAndroidTest
+          :alpine-runtime-ui-compose:lintDebug
+          :alpine-runtime-host:check
+          :alpine-runtime-testkit:check
+          :alpine-chat-routing:check
+          :alpine-chat-backend-direct:testDebugUnitTest
+          :alpine-chat-backend-direct:assembleRelease
+          :alpine-chat-backend-direct:lintDebug
+          :alpine-chat-backend-alpine:testDebugUnitTest
+          :alpine-chat-backend-alpine:assembleRelease
+          :alpine-chat-backend-alpine:lintDebug
+          :alpine-workspace-api:check
+          :alpine-workspace-android:testDebugUnitTest
+          :alpine-workspace-android:assembleRelease
+          :alpine-workspace-android:lintDebug
           :sample:assembleDebug
           :sample:lintDebug
           :demo-chatbot:testDebugUnitTest
           :demo-chatbot:assembleDebug
           :demo-chatbot:assembleDebugAndroidTest
           :demo-chatbot:lintDebug
+          :demo-chatbot:verifyNoAlpineRuntimePayload
+          :alpine-runtime-probe:assembleDebug
+          :alpine-runtime-probe:lintDebug
+          :alpine-integration-sample:assembleDebug
+          :alpine-integration-sample:lintDebug
+          :integrated-app:assembleDebug
+          :integrated-app:lintDebug
+          :alpine-llm-bridge-probe:assembleDebug
+          :alpine-llm-bridge-probe:lintDebug
           --no-daemon
           --stacktrace
+      - name: Audit Gradle 9 readiness
+        run: scripts/audit-gradle9-readiness.sh
+      - name: Publish reusable SDK artifacts
+        run: ./gradlew publishPhase7Artifacts --no-daemon --stacktrace
+      - name: Verify publication metadata and payload isolation
+        run: python3 scripts/verify-sdk-publication.py
+      - name: Build published-artifact consumer matrix
+        run: >-
+          ./gradlew
+          -p integration-fixtures/published-consumer
+          assembleRelease
+          lintRelease
+          --no-daemon
+          --stacktrace
+      - name: Verify consumer payload and permission matrix
+        run: python3 scripts/verify-published-consumer.py
+      - name: Record x86_64 emulator gate availability
+        run: scripts/runtime/run-x86_64-emulator-gate.sh --allow-skip
+      - name: Package internal SDK release bundle
+        run: python3 scripts/package-sdk-release.py
+      - name: Upload Phase 7 internal release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpine-sdk-${{ github.sha }}
+          path: dist/alpine-sdk-0.3.0/
+          if-no-files-found: error

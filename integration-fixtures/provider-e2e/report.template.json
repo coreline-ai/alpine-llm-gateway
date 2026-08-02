@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "executed": false,
+  "executed_at": null,
+  "approval_reference": null,
+  "device": {
+    "model": "NOT_RECORDED",
+    "api_level": null
+  },
+  "providers": []
+}

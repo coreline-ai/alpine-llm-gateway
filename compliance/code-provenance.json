@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "coverage_scope": "RELEASE_CRITICAL_AND_REFERENCE_SENSITIVE_FILES",
+  "coverage_status": "PARTIAL_REVIEW_REQUIRED",
+  "external_release_blocking": true,
+  "reference_repository": "https://github.com/OpenMinis/OpenMinis",
+  "entries": [
+    {
+      "path": "android/src/main/java/dev/alpine/llm/AnthropicOAuthContract.kt",
+      "classification": "REVIEW_REQUIRED",
+      "candidate_classification": "REFERENCE_ONLY",
+      "review_status": "PENDING_FILE_LEVEL_COMPARISON",
+      "origin": "PROJECT_WITH_OPENMINIS_REFERENCE",
+      "notes": "Protocol constants and independently structured adapter logic must be reviewed separately."
+    },
+    {
+      "path": "demo-chatbot/src/main/java/dev/alpine/llm/demo/model/AnthropicProfileDefaults.kt",
+      "classification": "REVIEW_REQUIRED",
+      "candidate_classification": "REFERENCE_ONLY",
+      "review_status": "PENDING_FILE_LEVEL_COMPARISON",
+      "origin": "PROJECT_WITH_OPENMINIS_REFERENCE",
+      "notes": "Demo defaults explicitly identify the OpenMinis reference."
+    },
+    {
+      "path": "demo-chatbot/src/main/java/dev/alpine/llm/demo/model/XaiProfileDefaults.kt",
+      "classification": "REVIEW_REQUIRED",
+      "candidate_classification": "REFERENCE_ONLY",
+      "review_status": "PENDING_FILE_LEVEL_COMPARISON",
+      "origin": "PROJECT_WITH_OPENMINIS_REFERENCE",
+      "notes": "Demo defaults explicitly identify the inspected OpenMinis source."
+    },
+    {
+      "path": "scripts/runtime/build-proot-android.sh",
+      "classification": "REVIEW_REQUIRED",
+      "candidate_classification": "PROJECT_ORIGINAL",
+      "review_status": "PENDING_FILE_LEVEL_COMPARISON",
+      "origin": "PROJECT_WITH_OPENMINIS_BUILD_REFERENCE",
+      "notes": "The build sequence and flags overlap with the OpenMinis PRoot build and require provenance review."
+    },
+    {
+      "path": "scripts/runtime/patches/proot-android-winsize.patch",
+      "classification": "THIRD_PARTY_PATCHED",
+      "candidate_classification": "THIRD_PARTY_PATCHED",
+      "review_status": "SOURCE_OFFER_REQUIRED",
+      "origin": "PROJECT_PATCH_AGAINST_OPENMINIS_PROOT",
+      "notes": "Patch context contains third-party PRoot source and must ship with the PRoot source snapshot."
+    },
+    {
+      "path": "alpine-runtime-pack-bundled/src/main/jniLibs/arm64-v8a/libproot.so",
+      "classification": "GENERATED",
+      "candidate_classification": "GENERATED",
+      "review_status": "SOURCE_BUNDLE_REQUIRED",
+      "origin": "OPENMINIS_PROOT_PLUS_TALLOC_PLUS_LOCAL_PATCH",
+      "notes": "Executable payload launched through ProcessBuilder; talloc is statically linked."
+    },
+    {
+      "path": "alpine-runtime-pack-x86_64/src/main/jniLibs/x86_64/libproot.so",
+      "classification": "GENERATED",
+      "candidate_classification": "GENERATED",
+      "review_status": "SOURCE_BUNDLE_REQUIRED",
+      "origin": "OPENMINIS_PROOT_PLUS_TALLOC_PLUS_LOCAL_PATCH",
+      "notes": "Experimental x86_64 executable payload."
+    },
+    {
+      "path": "alpine-runtime-pack-bundled/src/main/assets/alpine-minirootfs.tar.gz.asset",
+      "classification": "THIRD_PARTY_UNMODIFIED",
+      "candidate_classification": "THIRD_PARTY_UNMODIFIED",
+      "review_status": "PACKAGE_SOURCE_MIRROR_REQUIRED",
+      "origin": "ALPINE_LINUX_3_21_3_AARCH64",
+      "notes": "Aggregate rootfs; package-level source obligations are tracked separately."
+    },
+    {
+      "path": "alpine-runtime-pack-x86_64/src/main/assets/alpine-minirootfs-x86_64.tar.gz.asset",
+      "classification": "THIRD_PARTY_UNMODIFIED",
+      "candidate_classification": "THIRD_PARTY_UNMODIFIED",
+      "review_status": "PACKAGE_SOURCE_MIRROR_REQUIRED",
+      "origin": "ALPINE_LINUX_3_21_3_X86_64",
+      "notes": "Experimental aggregate rootfs; package-level source obligations are tracked separately."
+    }
+  ]
+}

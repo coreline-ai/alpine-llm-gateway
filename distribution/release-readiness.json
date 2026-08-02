@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-08-02T10:01:44Z",
+  "gates": [
+    {
+      "gate_id": "project_license",
+      "state": "BLOCKED",
+      "owner": "UNASSIGNED",
+      "release_blocking": true,
+      "blocker_code": "PROJECT_LICENSE_UNDECLARED",
+      "evidence": [
+        "distribution/PROJECT_LICENSE_STATUS.md"
+      ]
+    },
+    {
+      "gate_id": "corresponding_source",
+      "state": "BLOCKED",
+      "owner": "UNASSIGNED",
+      "release_blocking": true,
+      "blocker_code": "ROOTFS_PACKAGE_SOURCE_MIRROR_MISSING",
+      "evidence": [
+        "distribution/SOURCE_OFFER_STATUS.md",
+        "scripts/build-oss-source-bundle.py",
+        "runtime/alpine-package-inventory-arm64-v8a.json",
+        "runtime/alpine-package-inventory-x86_64.json"
+      ]
+    },
+    {
+      "gate_id": "provider_accounts",
+      "state": "BLOCKED",
+      "owner": "UNASSIGNED",
+      "release_blocking": true,
+      "blocker_code": "PROVIDER_APPROVAL_REQUIRED",
+      "evidence": [
+        "integration-fixtures/provider-e2e/report.template.json"
+      ]
+    },
+    {
+      "gate_id": "play_test_track",
+      "state": "BLOCKED",
+      "owner": "UNASSIGNED",
+      "release_blocking": true,
+      "blocker_code": "PLAY_TRACK_NOT_CONFIGURED",
+      "evidence": []
+    },
+    {
+      "gate_id": "samsung_lifecycle_window",
+      "state": "BLOCKED",
+      "owner": "UNASSIGNED",
+      "release_blocking": true,
+      "blocker_code": "DESTRUCTIVE_DEVICE_TEST_APPROVAL_REQUIRED",
+      "evidence": [
+        "dev-plan/alpine-runtime-p1-p2-verification-20260801.md"
+      ]
+    },
+    {
+      "gate_id": "github_remote_ci",
+      "state": "BLOCKED",
+      "owner": "UNASSIGNED",
+      "release_blocking": true,
+      "blocker_code": "REMOTE_CI_NOT_VERIFIED",
+      "evidence": [
+        ".github/workflows/ci.yml"
+      ]
+    },
+    {
+      "gate_id": "release_destination",
+      "state": "BLOCKED",
+      "owner": "UNASSIGNED",
+      "release_blocking": true,
+      "blocker_code": "RELEASE_DESTINATION_UNASSIGNED",
+      "evidence": []
+    },
+    {
+      "gate_id": "terminal_dynamic_resize",
+      "state": "BLOCKED",
+      "owner": "LOCAL_ENGINEERING",
+      "release_blocking": false,
+      "blocker_code": "GUEST_WINSIZE_NOT_PROPAGATED",
+      "evidence": [
+        "dev-plan/alpine-runtime-p1-p2-verification-20260801.md"
+      ]
+    },
+    {
+      "gate_id": "x86_64_emulator",
+      "state": "BLOCKED",
+      "owner": "LOCAL_ENGINEERING",
+      "release_blocking": false,
+      "blocker_code": "X86_64_EMULATOR_UNAVAILABLE",
+      "evidence": [
+        "scripts/runtime/run-x86_64-emulator-gate.sh"
+      ]
+    },
+    {
+      "gate_id": "gradle9_migration",
+      "state": "READY",
+      "owner": "LOCAL_ENGINEERING",
+      "release_blocking": false,
+      "blocker_code": null,
+      "evidence": [
+        "scripts/audit-gradle9-readiness.sh",
+        "dev-plan/alpine-runtime-remaining-verification-20260802.md"
+      ]
+    }
+  ]
+}

@@ -106,6 +106,25 @@ Android 모듈은 다음 두 실행 방식을 분리합니다.
 
 Android 배포 경로는 `OAuthManager → OAuthLlmSession → OAuthHttpLlmBridge → HostBridgeServer`로 구현되어 있습니다. OpenAI-compatible, Anthropic Messages, Gemini generateContent와 별도 Codex account Responses adapter가 포함됩니다. non-stream JSON과 Provider SSE를 공통 `start/delta/done` event로 전달합니다.
 
+Phase 4부터 `HostBridgeServer`와 Gateway client는 선택형 `:alpine-llm-bridge`에 있으며,
+`AlpineLlmBridgeController`가 Host Bridge·runtime session·Python Gateway를 단일 lifecycle로
+관리합니다. Python package는 `:alpine-llm-gateway-pack-bundled`의 별도 checksum lock 자산이므로
+runtime-only 앱에는 포함되지 않습니다. guest config에는 OAuth token 대신 TTL capability 파일
+경로만 기록됩니다.
+
+Phase 5의 `:alpine-chat-routing`은 빠른 채팅과 Alpine 작업 모드의 공통
+request/stream/failure/audit 계약을 제공합니다. `:alpine-chat-backend-direct`는 기존 Android
+OAuth session을, `:alpine-chat-backend-alpine`은 Python Gateway를 연결합니다. Alpine 준비
+실패 fallback은 사용자 승인 전까지만 허용하며, Provider dispatch 또는 첫 delta 이후에는
+다른 backend로 자동 재전송하지 않습니다. request ledger가 동시·완료 request ID 재사용을
+차단하고 현재 두 adapter의 Provider idempotency capability는 안전하게 `NONE`입니다.
+
+Phase 6의 `:alpine-runtime-host`는 Compose/Activity와 무관한 install/start/health/repair/reset,
+command, terminal과 package 상태 controller를 제공합니다. `:alpine-runtime-ui-compose`는 같은
+상태를 렌더링하는 선택형 화면이며 `:alpine-integration-sample`은 Compose 없이 XML/View만으로,
+`:integrated-app`은 Compose와 빠른 채팅/Alpine 작업 mode selector로 조립됩니다. 패키지 설치는
+정확한 allowlist와 사용자 승인을 모두 통과해야 하며 임의 shell 문자열을 실행하지 않습니다.
+
 Host Bridge는 bounded concurrency, overload 429/`Retry-After`, request timeout, request ID와 누적 health 지표를 제공합니다. 선택적 resilient transport는 제한적 retry/backoff와 circuit breaker를 제공하고 운영 event schema에는 URL·header·body·credential 필드가 존재하지 않습니다.
 
 이미지 입력은 허용 media type의 5 MiB 이하 base64 data URL만 지원하며, Claude/Gemini/Codex tool definition·tool call·tool result를 OpenAI 공통 형식으로 정규화합니다.
@@ -125,6 +144,17 @@ python3 -m unittest discover -s tests -v
 ./gradlew :android:testDebugUnitTest :android:assembleDebug
 ./gradlew :sample:assembleDebug :android:assembleDebugAndroidTest
 ./gradlew :demo-chatbot:testDebugUnitTest :demo-chatbot:assembleDebug :demo-chatbot:lintDebug
+./gradlew :alpine-runtime-api:check :alpine-runtime-android:testDebugUnitTest
+./gradlew :alpine-runtime-pack-bundled:verifyBundledRuntimeArtifacts :alpine-runtime-probe:assembleDebug
+./gradlew :alpine-runtime-pack-x86_64:verifyX8664RuntimeArtifacts
+./gradlew :alpine-runtime-background-android:testDebugUnitTest :alpine-runtime-artifact-play:testDebugUnitTest
+./gradlew :alpine-workspace-api:check :alpine-workspace-android:testDebugUnitTest
+./gradlew :alpine-llm-bridge:testDebugUnitTest :alpine-llm-gateway-pack-bundled:verifyBundledPythonGatewayArtifact
+./gradlew :alpine-llm-bridge-probe:assembleDebug
+./gradlew :alpine-chat-routing:check :alpine-chat-backend-direct:testDebugUnitTest :alpine-chat-backend-alpine:testDebugUnitTest
+./gradlew :alpine-runtime-host:check :alpine-runtime-ui-compose:testDebugUnitTest
+./gradlew :alpine-integration-sample:assembleDebug :integrated-app:assembleDebug
+./scripts/runtime/run-llm-bridge-probe-device.sh <samsung-device-serial>
 ANDROID_SERIAL=<device-serial> ./gradlew :android:connectedDebugAndroidTest
 ./gradlew :android:assembleRelease :android:publishReleasePublicationToProjectRepository
 ```
@@ -137,13 +167,28 @@ CI 없이 검증과 release bundle 생성을 한 번에 수행할 수 있습니�
 ./scripts/release-local.sh
 ```
 
-결과는 `dist/alpine-llm-android-0.3.0/`에 AAR, sources JAR, POM, Gradle module metadata, `SHA256SUMS`로 생성됩니다.
+결과는 `dist/alpine-sdk-0.3.0/`에 17개 AAR/JAR의 Maven repository, sources, POM,
+Gradle module metadata, license/SBOM과 `SHA256SUMS`로 생성됩니다.
 
 ## 현재 제한
 
-- Alpine rootfs와 PRoot 실행 바이너리는 포함하지 않습니다.
+- 기존 `:android`와 `:demo-chatbot`에는 rootfs/PRoot를 포함하지 않습니다. 선택형
+  `:alpine-runtime-pack-bundled`가 검증된 arm64-v8a Alpine 3.21.3 구성을 제공합니다.
+  `:alpine-runtime-pack-x86_64`는 별도 lock/SBOM/16 KiB gate를 통과한 실험 artifact지만,
+  x86_64 emulator E2E 전에는 제품 지원 ABI가 아닙니다.
+- 장시간 작업의 FGS/알림/복구, Play Asset Delivery와 app-private workspace는 각각 선택형
+  `:alpine-runtime-background-android`, `:alpine-runtime-artifact-play`,
+  `:alpine-workspace-*` 모듈로 분리되어 빠른 채팅 앱에 포함되지 않습니다.
+- PRoot/loader와 신규 native PTY의 모든 ELF `PT_LOAD` segment는 자동 검사에서 Android 16
+  16 KiB 기준인 `0x4000` 이상인지 확인합니다.
+- terminal 최초 크기는 native PTY에 적용됩니다. 현재 PRoot가 실행 후 창 크기 변경을 guest에
+  전달하지 않으므로 session은 `INITIAL_SIZE_ONLY`를 명시하고 동적 resize 요청을 거부합니다.
 - 실제 Provider OAuth client registration/client id는 앱 개발자가 준비해야 합니다.
 - Codex 경로는 로컬 mock 계약까지 구현했으며 실제 ChatGPT 계정, client registration 사용 권한과 Provider 정책 E2E는 아직 검증하지 않았습니다. 다른 앱의 public client ID를 복사해 배포하지 마세요.
 - Kimi device flow, xAI OIDC discovery와 Gemini project onboarding은 후속 범위입니다.
-- Keystore ciphertext, ABI selector와 loopback Host Bridge instrumentation 6건은 Samsung `SM-S931N` Android 16 `arm64-v8a`에서 검증했습니다. 통합 앱의 지원 기기에서도 같은 명령을 다시 실행해야 합니다.
+- Keystore instrumentation 2건, loopback Host Bridge 3건과 Compose 접근성·입력 2건은 Samsung `SM-S931N` Android 16 `arm64-v8a`에서 검증했습니다. runtime/PTY와 Python Gateway는 별도 device probe로 같은 기기에서 검증합니다.
 - 외부 Provider 실제 계정 end-to-end 검증은 credential이 없는 로컬 테스트에서 수행하지 않습니다.
+- 현재 저장소에는 프로젝트 전체 `LICENSE`가 없습니다. PRoot/talloc native source bundle 생성기는
+  구현되어 release bundle에 별도 artifact로 포함할 수 있지만, Alpine package-level exact source
+  mirror와 최종 OSS 검토가 남아 있으므로 `dist/alpine-sdk-0.3.0`은 계속 내부 검증용입니다.
+  공개 Maven/스토어 배포는 `external_distribution_ready=true`가 된 뒤 진행해야 합니다.

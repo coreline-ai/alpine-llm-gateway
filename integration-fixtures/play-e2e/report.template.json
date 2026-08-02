@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "executed": false,
+  "executed_at": null,
+  "approval_reference": null,
+  "track": null,
+  "application_id": null,
+  "app_version": null,
+  "asset_pack_name": null,
+  "device": {
+    "model": "NOT_RECORDED",
+    "api_level": null
+  },
+  "checks": {}
+}

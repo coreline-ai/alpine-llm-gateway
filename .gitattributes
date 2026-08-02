@@ -1,0 +1,4 @@
+# Patch artifacts preserve unified-diff context markers, including blank context
+# lines and upstream indentation that Git's generic whitespace checker would
+# otherwise report as errors in the outer repository diff.
+scripts/runtime/patches/*.patch whitespace=-trailing-space,-space-before-tab

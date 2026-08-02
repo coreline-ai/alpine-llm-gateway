@@ -1,5 +1,6 @@
 .gradle/
 **/build/
+**/.cxx/
 **/__pycache__/
 *.py[cod]
 dist/

@@ -1,5 +1,5 @@
 {
-  "device": "R3CY40PXCAP",
+  "device": "<SAMSUNG_DEVICE_SERIAL_REDACTED>",
   "package": "dev.alpine.llm.demo",
   "completed_at_utc": "2026-08-01T00:03:13.730598+00:00",
   "requested_turns": 10,

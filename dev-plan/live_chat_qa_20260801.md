@@ -3,7 +3,7 @@
 ## 개요
 
 - 실행 시각: 2026-08-01 09:03 KST
-- 기기: Samsung SM-S931N (`R3CY40PXCAP`)
+- 기기: Samsung SM-S931N (`<redacted>`)
 - 앱 패키지: `dev.alpine.llm.demo`
 - Provider: Codex OAuth
 - 모델: `gpt-5.3-codex-spark`
