@@ -143,6 +143,10 @@ jobs:
         run: python3 scripts/verify-published-consumer.py
       - name: Record x86_64 emulator gate availability
         run: scripts/runtime/run-x86_64-emulator-gate.sh --allow-skip
+      - name: Verify license compliance for release bundle
+        run: >-
+          python3 scripts/verify-license-compliance.py
+          --report build/reports/license-compliance.json
       - name: Package internal SDK release bundle
         run: python3 scripts/package-sdk-release.py
       - name: Upload Phase 7 internal release bundle
