@@ -17,7 +17,7 @@ import dev.alpine.llm.demo.llm.ProviderConnection
 import dev.alpine.llm.demo.llm.ProviderConnectionState
 import dev.alpine.llm.demo.model.ProviderType
 import dev.alpine.llm.demo.ui.screens.provider.ProviderProfilesScreen
-import dev.alpine.llm.demo.ui.theme.AlpineChatTheme
+import dev.alpine.chat.feature.ui.theme.AlpineChatTheme
 import dev.alpine.llm.OAuthException
 import java.util.concurrent.CancellationException
 import kotlinx.coroutines.launch

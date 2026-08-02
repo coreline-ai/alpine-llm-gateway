@@ -1,6 +1,11 @@
 # Alpine LLM Chat Demo
 
-`demo-chatbot`은 `:android` 라이브러리를 직접 사용하는 별도 Android 테스트 앱이다. 저장된 OAuth LLM 프로필 가운데 인증된 연결을 선택하고, 대화별 Provider·모델·기본 스킬·응답 페르소나로 새 메시지를 스트리밍 요청한다. 여러 대화와 초안은 기기 안에 암호화해 보존한다.
+`demo-chatbot`은 `:android`와 `:alpine-chat-feature`를 조립하는 thin sample host다. 저장된 OAuth LLM 프로필 가운데 인증된 연결을 선택하고, 대화별 Provider·모델·기본 스킬·응답 페르소나로 새 메시지를 스트리밍 요청한다. 여러 대화와 초안은 기기 안에 암호화해 보존한다.
+
+다중 대화, 암호화 저장, ViewModel, Skill·Persona와 Compose 채팅 화면은 공통 Feature가
+소유한다. 이 앱에는 Provider profile CRUD, OAuth session 생성과 Provider event를 공통
+delta/error로 바꾸는 Android 직접 adapter만 남아 있다. `integrated-app` 연결은 전체 제품
+계획의 Phase 2에서 진행한다.
 
 Phase 5부터 저장 모델은 대화별 `FAST_CHAT`/`ALPINE_WORKSPACE` 실행 모드를 포함한다. 기존
 schema 1·2 대화는 `FAST_CHAT`으로 안전하게 migration한다. 이 데모의 실제 전송 경로는 계속

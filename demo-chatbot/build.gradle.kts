@@ -35,6 +35,7 @@ lint {
 
 dependencies {
     implementation(project(":android"))
+    implementation(project(":alpine-chat-feature"))
     implementation(project(":alpine-chat-routing"))
     implementation(platform("androidx.compose:compose-bom:2024.09.00"))
     implementation("androidx.activity:activity-compose:1.9.1")

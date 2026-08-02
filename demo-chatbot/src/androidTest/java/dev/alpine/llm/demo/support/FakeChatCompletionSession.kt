@@ -1,8 +1,8 @@
 package dev.alpine.llm.demo.support
 
 import android.app.Activity
-import dev.alpine.llm.HostLlmStreamEvent
-import dev.alpine.llm.HostLlmStreamResult
+import dev.alpine.chat.feature.backend.ChatBackendDelta
+import dev.alpine.chat.feature.backend.ChatBackendStreamResult
 import dev.alpine.llm.OAuthAuthenticationState
 import dev.alpine.llm.OAuthTokenStore
 import dev.alpine.llm.demo.llm.ChatCompletionSession
@@ -47,15 +47,15 @@ class FakeChatCompletionSession(
         reauthenticationProfiles -= profile.id
     }
 
-    override suspend fun stream(requestJson: String): HostLlmStreamResult {
+    override suspend fun stream(requestJson: String): ChatBackendStreamResult {
         requestCounts
             .computeIfAbsent(profile.id) { AtomicInteger() }
             .incrementAndGet()
-        return HostLlmStreamResult(
+        return ChatBackendStreamResult(
             events = flow {
                 val splitAt = responseText.length / 2
-                emit(HostLlmStreamEvent.delta(responseText.substring(0, splitAt)))
-                emit(HostLlmStreamEvent.delta(responseText.substring(splitAt)))
+                emit(ChatBackendDelta(responseText.substring(0, splitAt)))
+                emit(ChatBackendDelta(responseText.substring(splitAt)))
             },
         )
     }

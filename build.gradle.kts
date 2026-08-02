@@ -83,6 +83,11 @@ val sdkPublications = mapOf(
         "Alpine Chat Routing",
         "Android-neutral fast-chat and Alpine-workspace routing and fallback contracts.",
     ),
+    ":alpine-chat-feature" to SdkPublication(
+        "alpine-chat-feature",
+        "Alpine Chat Feature",
+        "Reusable encrypted conversation state, backend-neutral chat orchestration, and Compose UI.",
+    ),
     ":alpine-chat-backend-direct" to SdkPublication(
         "alpine-chat-backend-direct",
         "Alpine Direct Chat Backend",

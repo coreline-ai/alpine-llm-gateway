@@ -23,6 +23,7 @@ class AndroidModuleBoundaryTests(unittest.TestCase):
         "alpine-runtime-testkit": {"alpine-runtime-api"},
         "alpine-runtime-host": {"alpine-runtime-api"},
         "alpine-chat-routing": set(),
+        "alpine-chat-feature": {"alpine-chat-routing"},
         "alpine-chat-backend-direct": {"alpine-chat-routing", "android"},
         "alpine-chat-backend-alpine": {"alpine-chat-routing", "alpine-llm-bridge"},
         "alpine-workspace-api": set(),
@@ -157,6 +158,7 @@ class AndroidModuleBoundaryTests(unittest.TestCase):
             "alpine-runtime-pack-x86_64",
             "alpine-llm-gateway-pack-bundled",
             "alpine-workspace-android",
+            "alpine-chat-feature",
         }
         for module in self.SDK_MODULES:
             source_root = ROOT / module / "src" / "main"
@@ -176,6 +178,35 @@ class AndroidModuleBoundaryTests(unittest.TestCase):
         self.assertIn("dev.alpine.runtime.api.AlpineRuntimeManager", text)
         self.assertNotIn("android.", text)
         self.assertNotIn("androidx.", text)
+
+    def test_common_chat_feature_is_backend_neutral_and_reused_by_demo(self) -> None:
+        settings = (ROOT / "settings.gradle.kts").read_text()
+        feature_build = (ROOT / "alpine-chat-feature/build.gradle.kts").read_text()
+        demo_build = (ROOT / "demo-chatbot/build.gradle.kts").read_text()
+        feature_source = "\n".join(
+            path.read_text(errors="replace")
+            for path in (ROOT / "alpine-chat-feature/src/main").rglob("*.kt")
+        )
+        demo_source = "\n".join(
+            path.read_text(errors="replace")
+            for path in (ROOT / "demo-chatbot/src/main").rglob("*.kt")
+        )
+
+        self.assertIn('include(":alpine-chat-feature")', settings)
+        self.assertIn('project(":alpine-chat-feature")', demo_build)
+        self.assertIn('project(":alpine-chat-routing")', feature_build)
+        for dependency in (":android", ":alpine-runtime", ":alpine-chat-backend"):
+            self.assertNotIn(f'project("{dependency}', feature_build)
+        for marker in (
+            "OAuthManager",
+            "ProviderProfile",
+            "HostBridgeServer",
+            "AlpineRuntime",
+            "ChatCompletionSession",
+        ):
+            self.assertNotIn(marker, feature_source)
+        self.assertNotIn("class ChatViewModel", demo_source)
+        self.assertNotIn("fun AlpineChatScreen", demo_source)
 
     def test_llm_bridge_and_gateway_payload_are_optional_boundaries(self) -> None:
         settings = (ROOT / "settings.gradle.kts").read_text()

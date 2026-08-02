@@ -2,9 +2,13 @@
 
 ## 발행 대상
 
-`dev.alpine.llm` group 아래 17개 재사용 artifact를 발행한다. 앱 모듈과 probe는
+`dev.alpine.llm` group 아래 18개 재사용 artifact를 발행한다. 앱 모듈과 probe는
 발행하지 않는다. 각 artifact에는 AAR/JAR, sources JAR, POM, Gradle module metadata와 Gradle이
 생성한 checksum sidecar가 있다.
+
+공통 채팅 UI와 상태는 `dev.alpine.llm:alpine-chat-feature:0.3.0`으로 발행한다. 이 AAR의
+유일한 project dependency는 `alpine-chat-routing`이며 Provider/OAuth 구현과 Runtime payload는
+포함하지 않는다.
 
 ```bash
 ./gradlew publishPhase7Artifacts
@@ -20,7 +24,7 @@ optional payload owner, consumer metadata와 PRoot/loader/PTY ELF 16 KiB alignme
 
 | 앱 | 포함 범위 | 없어야 하는 payload |
 |---|---|---|
-| `no-runtime` | Android OAuth/Provider | rootfs, PRoot, PTY, Python Gateway |
+| `no-runtime` | Android OAuth/Provider + 공통 Chat Feature | rootfs, PRoot, PTY, Python Gateway |
 | `runtime-only` | runtime+bundled Alpine | Python Gateway |
 | `runtime-ui` | runtime+Compose UI | Python Gateway |
 | `runtime-llm` | runtime+Host Bridge+Gateway | Compose UI 직접 의존 |

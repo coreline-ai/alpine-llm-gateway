@@ -103,6 +103,9 @@ GRADLE_TASKS=(
   :alpine-runtime-host:check
   :alpine-runtime-testkit:check
   :alpine-chat-routing:check
+  :alpine-chat-feature:testDebugUnitTest
+  :alpine-chat-feature:assembleRelease
+  :alpine-chat-feature:lintDebug
   :alpine-chat-backend-direct:testDebugUnitTest
   :alpine-chat-backend-direct:assembleRelease
   :alpine-chat-backend-direct:lintDebug

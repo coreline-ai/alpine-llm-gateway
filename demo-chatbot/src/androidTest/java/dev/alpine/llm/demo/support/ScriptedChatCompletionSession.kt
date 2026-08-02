@@ -1,10 +1,11 @@
 package dev.alpine.llm.demo.support
 
 import android.app.Activity
-import dev.alpine.llm.HostLlmStreamEvent
-import dev.alpine.llm.HostLlmStreamResult
+import dev.alpine.chat.feature.backend.ChatBackendDelta
+import dev.alpine.chat.feature.backend.ChatBackendException
+import dev.alpine.chat.feature.backend.ChatBackendFailureCode
+import dev.alpine.chat.feature.backend.ChatBackendStreamResult
 import dev.alpine.llm.OAuthAuthenticationState
-import dev.alpine.llm.ProviderStreamException
 import dev.alpine.llm.demo.llm.ChatCompletionSession
 import dev.alpine.llm.demo.model.ProviderProfile
 import java.io.IOException
@@ -28,30 +29,30 @@ class ScriptedChatCompletionSession private constructor(
 
     override suspend fun authorize(activity: Activity) = Unit
 
-    override suspend fun stream(requestJson: String): HostLlmStreamResult {
+    override suspend fun stream(requestJson: String): ChatBackendStreamResult {
         val attempt = requests.incrementAndGet()
         return when (mode) {
-            Mode.SLOW -> HostLlmStreamResult(
+            Mode.SLOW -> ChatBackendStreamResult(
                 events = flow {
-                    emit(HostLlmStreamEvent.delta("Slow partial answer"))
+                    emit(ChatBackendDelta("Slow partial answer"))
                     awaitCancellation()
                 },
             )
             Mode.FAIL_THEN_RECOVER -> if (attempt == 1) {
-                HostLlmStreamResult(
+                ChatBackendStreamResult(
                     events = flow {
-                        emit(HostLlmStreamEvent.delta("Failed partial answer"))
+                        emit(ChatBackendDelta("Failed partial answer"))
                         throw IOException("redacted-test-provider-failure")
                     },
                 )
             } else {
-                HostLlmStreamResult(
-                    events = flowOf(HostLlmStreamEvent.delta("Recovered answer")),
+                ChatBackendStreamResult(
+                    events = flowOf(ChatBackendDelta("Recovered answer")),
                 )
             }
-            Mode.CONSTRAINT_CORRECT -> HostLlmStreamResult(
+            Mode.CONSTRAINT_CORRECT -> ChatBackendStreamResult(
                 events = flowOf(
-                    HostLlmStreamEvent.delta(
+                    ChatBackendDelta(
                         if (attempt == 1) {
                             "one two three four five six"
                         } else {
@@ -65,9 +66,7 @@ class ScriptedChatCompletionSession private constructor(
             Mode.MALFORMED_STREAM_THEN_RECOVER -> streamFailureThenRecover(
                 attempt = attempt,
                 partial = "Malformed partial answer",
-                error = ProviderStreamException(
-                    "raw-provider-body token=must-never-reach-the-ui",
-                ),
+                error = ChatBackendException(ChatBackendFailureCode.INVALID_RESPONSE),
             )
             Mode.INTERRUPTED_STREAM_THEN_RECOVER -> streamFailureThenRecover(
                 attempt = attempt,
@@ -75,7 +74,7 @@ class ScriptedChatCompletionSession private constructor(
                 error = IOException("https://provider.invalid secret=must-never-reach-the-ui"),
             )
             Mode.TIMEOUT_THEN_RECOVER -> if (attempt == 1) {
-                HostLlmStreamResult(
+                ChatBackendStreamResult(
                     events = flow {
                         withTimeout(25) { awaitCancellation() }
                     },
@@ -83,9 +82,9 @@ class ScriptedChatCompletionSession private constructor(
             } else {
                 recovered()
             }
-            Mode.FRESHNESS_CORRECT -> HostLlmStreamResult(
+            Mode.FRESHNESS_CORRECT -> ChatBackendStreamResult(
                 events = flowOf(
-                    HostLlmStreamEvent.delta(
+                    ChatBackendDelta(
                         if (attempt == 1) {
                             "I checked the web today and verified the current value."
                         } else {
@@ -97,11 +96,10 @@ class ScriptedChatCompletionSession private constructor(
         }
     }
 
-    private fun statusThenRecover(attempt: Int, statusCode: Int): HostLlmStreamResult =
+    private fun statusThenRecover(attempt: Int, statusCode: Int): ChatBackendStreamResult =
         if (attempt == 1) {
-            HostLlmStreamResult(
+            ChatBackendStreamResult(
                 statusCode = statusCode,
-                errorBodyJson = """{"error":"raw-secret-must-not-render"}""",
             )
         } else {
             recovered()
@@ -111,10 +109,10 @@ class ScriptedChatCompletionSession private constructor(
         attempt: Int,
         partial: String,
         error: Exception,
-    ): HostLlmStreamResult = if (attempt == 1) {
-        HostLlmStreamResult(
+    ): ChatBackendStreamResult = if (attempt == 1) {
+        ChatBackendStreamResult(
             events = flow {
-                emit(HostLlmStreamEvent.delta(partial))
+                emit(ChatBackendDelta(partial))
                 throw error
             },
         )
@@ -122,8 +120,8 @@ class ScriptedChatCompletionSession private constructor(
         recovered()
     }
 
-    private fun recovered() = HostLlmStreamResult(
-        events = flowOf(HostLlmStreamEvent.delta("Recovered answer")),
+    private fun recovered() = ChatBackendStreamResult(
+        events = flowOf(ChatBackendDelta("Recovered answer")),
     )
 
     override fun logout() = Unit

@@ -6,15 +6,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.alpine.llm.demo.data.ConversationRepository
-import dev.alpine.llm.demo.data.ConversationStore
-import dev.alpine.llm.demo.data.AssistantDefaultsStore
+import dev.alpine.chat.feature.data.ConversationRepository
+import dev.alpine.chat.feature.data.ConversationStore
+import dev.alpine.chat.feature.data.AssistantDefaultsStore
 import dev.alpine.llm.demo.data.ProviderProfileStore
 import dev.alpine.llm.demo.llm.ChatCompletionSession
 import dev.alpine.llm.demo.llm.ConnectedProviderRegistry
-import dev.alpine.llm.demo.ui.ChatViewModel
-import dev.alpine.llm.demo.ui.screens.chat.AlpineChatScreen
-import dev.alpine.llm.demo.ui.theme.AlpineChatTheme
+import dev.alpine.chat.feature.ui.ChatViewModel
+import dev.alpine.chat.feature.ui.screens.chat.AlpineChatScreen
+import dev.alpine.chat.feature.ui.theme.AlpineChatTheme
 
 class MainActivity : ComponentActivity() {
     private lateinit var viewModel: ChatViewModel
@@ -72,7 +72,7 @@ class MainActivity : ComponentActivity() {
     private fun refreshConnections() {
         val connections = registry.snapshot(store.load())
         sessions = connections.associate { it.profile.id to it.session }
-        viewModel.updateConnections(connections)
+        viewModel.updateConnections(connections.map { it.asChatBackendConnection() })
     }
 
     private fun selectModel(profileId: String, model: String) {

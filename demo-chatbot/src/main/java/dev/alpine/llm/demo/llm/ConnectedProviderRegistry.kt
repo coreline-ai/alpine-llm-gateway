@@ -1,6 +1,8 @@
 package dev.alpine.llm.demo.llm
 
 import dev.alpine.llm.OAuthAuthenticationState
+import dev.alpine.chat.feature.backend.ChatBackendConnection
+import dev.alpine.chat.feature.backend.ChatBackendConnectionState
 import dev.alpine.llm.demo.model.ProviderProfile
 
 enum class ProviderConnectionState {
@@ -13,7 +15,18 @@ data class ProviderConnection(
     val profile: ProviderProfile,
     val state: ProviderConnectionState,
     val session: ChatCompletionSession,
-)
+) {
+    fun asChatBackendConnection(): ChatBackendConnection = ChatBackendConnection(
+        descriptor = session.descriptor,
+        state = when (state) {
+            ProviderConnectionState.AUTHENTICATED -> ChatBackendConnectionState.AVAILABLE
+            ProviderConnectionState.SIGNED_OUT -> ChatBackendConnectionState.SIGNED_OUT
+            ProviderConnectionState.REAUTHENTICATION_REQUIRED ->
+                ChatBackendConnectionState.REAUTHENTICATION_REQUIRED
+        },
+        session = session,
+    )
+}
 
 class ConnectedProviderRegistry(
     private val sessionFactory: (ProviderProfile) -> ChatCompletionSession,

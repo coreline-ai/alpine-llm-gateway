@@ -1,24 +1,24 @@
 package dev.alpine.llm.demo.ui
 
 import android.app.Activity
+import dev.alpine.chat.feature.backend.ChatBackendConnection
+import dev.alpine.chat.feature.backend.ChatBackendDelta
+import dev.alpine.chat.feature.backend.ChatBackendException
+import dev.alpine.chat.feature.backend.ChatBackendFailureCode
+import dev.alpine.chat.feature.backend.ChatBackendStreamResult
 import dev.alpine.chat.routing.ChatExecutionMode
-import dev.alpine.llm.HostLlmStreamEvent
-import dev.alpine.llm.HostLlmStreamResult
 import dev.alpine.llm.OAuthAuthenticationState
-import dev.alpine.llm.OAuthException
-import dev.alpine.llm.OAuthFailureKind
-import dev.alpine.llm.ProviderCircuitOpenException
-import dev.alpine.llm.ProviderStreamException
 import dev.alpine.llm.demo.llm.ChatCompletionSession
 import dev.alpine.llm.demo.llm.ProviderConnection
 import dev.alpine.llm.demo.llm.ProviderConnectionState
-import dev.alpine.llm.demo.model.AssistantSelection
-import dev.alpine.llm.demo.model.ChatMessageState
-import dev.alpine.llm.demo.model.ChatRole
+import dev.alpine.chat.feature.model.AssistantSelection
+import dev.alpine.chat.feature.model.ChatMessageState
+import dev.alpine.chat.feature.model.ChatRole
+import dev.alpine.chat.feature.ui.ChatViewModel
 import dev.alpine.llm.demo.model.ProviderProfile
 import dev.alpine.llm.demo.model.ProviderType
-import dev.alpine.llm.demo.ui.state.ChatFailureKind
-import dev.alpine.llm.demo.ui.state.ChatRecoveryAction
+import dev.alpine.chat.feature.ui.state.ChatFailureKind
+import dev.alpine.chat.feature.ui.state.ChatRecoveryAction
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.util.ArrayDeque
@@ -183,7 +183,7 @@ class ChatViewModelTest {
             val session = FakeSession(
                 profile("assistant-mode-retry", ProviderType.GEMINI),
                 Step.Failure(IOException("temporary")),
-                Step.Result(HostLlmStreamResult(events = flowOf(HostLlmStreamEvent.delta("ok")))),
+                Step.Result(ChatBackendStreamResult(events = flowOf(ChatBackendDelta("ok")))),
             )
             val viewModel = connectedViewModel(session)
             viewModel.selectAssistantMode("code_review", "critical_reviewer")
@@ -209,13 +209,13 @@ class ChatViewModelTest {
         val session = FakeSession(
             profile("constraint-correct", ProviderType.CODEX),
             Step.Result(
-                HostLlmStreamResult(
-                    events = flowOf(HostLlmStreamEvent.delta("one two three four five six")),
+                ChatBackendStreamResult(
+                    events = flowOf(ChatBackendDelta("one two three four five six")),
                 ),
             ),
             Step.Result(
-                HostLlmStreamResult(
-                    events = flowOf(HostLlmStreamEvent.delta("one two three four")),
+                ChatBackendStreamResult(
+                    events = flowOf(ChatBackendDelta("one two three four")),
                 ),
             ),
         )
@@ -241,10 +241,10 @@ class ChatViewModelTest {
         val session = FakeSession(
             profile("constraint-still-invalid", ProviderType.GEMINI),
             Step.Result(
-                HostLlmStreamResult(events = flowOf(HostLlmStreamEvent.delta("one two three"))),
+                ChatBackendStreamResult(events = flowOf(ChatBackendDelta("one two three"))),
             ),
             Step.Result(
-                HostLlmStreamResult(events = flowOf(HostLlmStreamEvent.delta("four five six"))),
+                ChatBackendStreamResult(events = flowOf(ChatBackendDelta("four five six"))),
             ),
         )
         val viewModel = connectedViewModel(session)
@@ -268,7 +268,7 @@ class ChatViewModelTest {
             val session = FakeSession(
                 profile("constraint-fallback", ProviderType.OPENAI_COMPATIBLE),
                 Step.Result(
-                    HostLlmStreamResult(events = flowOf(HostLlmStreamEvent.delta(original))),
+                    ChatBackendStreamResult(events = flowOf(ChatBackendDelta(original))),
                 ),
                 Step.Failure(IOException("private correction failure")),
             )
@@ -293,14 +293,14 @@ class ChatViewModelTest {
         val session = FakeSession(
             profile("constraint-stop", ProviderType.OPENAI_COMPATIBLE),
             Step.Result(
-                HostLlmStreamResult(
-                    events = flowOf(HostLlmStreamEvent.delta("one two three")),
+                ChatBackendStreamResult(
+                    events = flowOf(ChatBackendDelta("one two three")),
                 ),
             ),
             Step.Result(
-                HostLlmStreamResult(
+                ChatBackendStreamResult(
                     events = flow {
-                        emit(HostLlmStreamEvent.delta("partial"))
+                        emit(ChatBackendDelta("partial"))
                         awaitCancellation()
                     },
                 ),
@@ -327,18 +327,18 @@ class ChatViewModelTest {
         val session = FakeSession(
             profile("freshness-correct", ProviderType.CODEX),
             Step.Result(
-                HostLlmStreamResult(
+                ChatBackendStreamResult(
                     events = flowOf(
-                        HostLlmStreamEvent.delta(
+                        ChatBackendDelta(
                             "I checked the web today and verified the temperature.",
                         ),
                     ),
                 ),
             ),
             Step.Result(
-                HostLlmStreamResult(
+                ChatBackendStreamResult(
                     events = flowOf(
-                        HostLlmStreamEvent.delta(
+                        ChatBackendDelta(
                             "I cannot access live web data here, so I cannot verify today's temperature.",
                         ),
                     ),
@@ -369,16 +369,16 @@ class ChatViewModelTest {
         val session = FakeSession(
             profile("freshness-bounded", ProviderType.GEMINI),
             Step.Result(
-                HostLlmStreamResult(
+                ChatBackendStreamResult(
                     events = flowOf(
-                        HostLlmStreamEvent.delta("I checked the web and verified one two three."),
+                        ChatBackendDelta("I checked the web and verified one two three."),
                     ),
                 ),
             ),
             Step.Result(
-                HostLlmStreamResult(
+                ChatBackendStreamResult(
                     events = flowOf(
-                        HostLlmStreamEvent.delta("I checked the web and verified four five six."),
+                        ChatBackendDelta("I checked the web and verified four five six."),
                     ),
                 ),
             ),
@@ -401,8 +401,8 @@ class ChatViewModelTest {
         val session = FakeSession(
             profile("slow", ProviderType.OPENAI_COMPATIBLE),
             Step.Result(
-                HostLlmStreamResult(events = flow {
-                    emit(HostLlmStreamEvent.delta("partial"))
+                ChatBackendStreamResult(events = flow {
+                    emit(ChatBackendDelta("partial"))
                     awaitCancellation()
                 }),
             ),
@@ -428,8 +428,8 @@ class ChatViewModelTest {
             val currentSession = FakeSession(
                 profile("current", ProviderType.OPENAI_COMPATIBLE),
                 Step.Result(
-                    HostLlmStreamResult(events = flow {
-                        emit(HostLlmStreamEvent.delta("partial"))
+                    ChatBackendStreamResult(events = flow {
+                        emit(ChatBackendDelta("partial"))
                         awaitCancellation()
                     }),
                 ),
@@ -468,8 +468,8 @@ class ChatViewModelTest {
         val session = FakeSession(
             profile("clear-active", ProviderType.OPENAI_COMPATIBLE),
             Step.Result(
-                HostLlmStreamResult(events = flow {
-                    emit(HostLlmStreamEvent.delta("discard me"))
+                ChatBackendStreamResult(events = flow {
+                    emit(ChatBackendDelta("discard me"))
                     awaitCancellation()
                 }),
             ),
@@ -487,7 +487,7 @@ class ChatViewModelTest {
         assertFalse(newConversation.isStreaming)
         assertTrue(newConversation.conversations.any {
             it.id == firstConversationId &&
-                it.generationState == dev.alpine.llm.demo.model.ConversationGenerationState.STREAMING
+                it.generationState == dev.alpine.chat.feature.model.ConversationGenerationState.STREAMING
         })
 
         viewModel.selectConversation(firstConversationId)
@@ -610,8 +610,8 @@ class ChatViewModelTest {
         val session = FakeSession(
             profile("single-flight", ProviderType.OPENAI_COMPATIBLE),
             Step.Result(
-                HostLlmStreamResult(events = flow {
-                    emit(HostLlmStreamEvent.delta("partial"))
+                ChatBackendStreamResult(events = flow {
+                    emit(ChatBackendDelta("partial"))
                     awaitCancellation()
                 }),
             ),
@@ -650,7 +650,7 @@ class ChatViewModelTest {
     fun `401 and invalid grant require reconnect and cannot be retried`() = runTest(dispatcher) {
         val unauthorized = FakeSession(
             profile("unauthorized", ProviderType.ANTHROPIC),
-            Step.Result(HostLlmStreamResult(statusCode = 401)),
+            Step.Result(ChatBackendStreamResult(statusCode = 401)),
         )
         val viewModel = connectedViewModel(unauthorized)
         viewModel.send("Request", unauthorized)
@@ -659,7 +659,9 @@ class ChatViewModelTest {
 
         val invalidGrant = FakeSession(
             profile("invalid-grant", ProviderType.GEMINI),
-            Step.Failure(OAuthException("provider-secret", OAuthFailureKind.INVALID_GRANT)),
+            Step.Failure(
+                ChatBackendException(ChatBackendFailureCode.REAUTHENTICATION_REQUIRED),
+            ),
         )
         val invalidGrantViewModel = connectedViewModel(invalidGrant)
         invalidGrantViewModel.send("Request", invalidGrant)
@@ -671,7 +673,7 @@ class ChatViewModelTest {
     fun `429 preserves only safe retry metadata`() = runTest(dispatcher) {
         val session = FakeSession(
             profile("overloaded", ProviderType.GEMINI),
-            Step.Result(HostLlmStreamResult(statusCode = 429)),
+            Step.Result(ChatBackendStreamResult(statusCode = 429)),
         )
         val viewModel = connectedViewModel(session)
         viewModel.send("Request", session)
@@ -689,7 +691,7 @@ class ChatViewModelTest {
         listOf(500, 503).forEach { statusCode ->
             val session = FakeSession(
                 profile("server-$statusCode", ProviderType.OPENAI_COMPATIBLE),
-                Step.Result(HostLlmStreamResult(statusCode = statusCode)),
+                Step.Result(ChatBackendStreamResult(statusCode = statusCode)),
             )
             val viewModel = connectedViewModel(session)
             viewModel.send("Request", session)
@@ -703,10 +705,12 @@ class ChatViewModelTest {
         runTest(dispatcher) {
             val rawSecret = "https://provider.invalid/v1 token=super-secret header=Bearer-nope"
             val cases = listOf(
-                ProviderCircuitOpenException() to ChatFailureKind.CIRCUIT_OPEN,
+                ChatBackendException(ChatBackendFailureCode.CIRCUIT_OPEN) to
+                    ChatFailureKind.CIRCUIT_OPEN,
                 IOException(rawSecret) to ChatFailureKind.NETWORK,
                 SocketTimeoutException(rawSecret) to ChatFailureKind.TIMEOUT,
-                ProviderStreamException(rawSecret) to ChatFailureKind.INVALID_RESPONSE,
+                ChatBackendException(ChatBackendFailureCode.INVALID_RESPONSE) to
+                    ChatFailureKind.INVALID_RESPONSE,
             )
             cases.forEachIndexed { index, (error, expectedKind) ->
                 val session = FakeSession(
@@ -731,7 +735,7 @@ class ChatViewModelTest {
             val session = FakeSession(
                 profile("coroutine-timeout", ProviderType.OPENAI_COMPATIBLE),
                 Step.Result(
-                    HostLlmStreamResult(events = flow {
+                    ChatBackendStreamResult(events = flow {
                         withTimeout(1) {
                             awaitCancellation()
                         }
@@ -756,7 +760,7 @@ class ChatViewModelTest {
         val session = FakeSession(
             profile("retry", ProviderType.GEMINI),
             Step.Failure(IOException("temporary-provider-secret")),
-            Step.Result(HostLlmStreamResult(events = flowOf(HostLlmStreamEvent.delta("Recovered")))),
+            Step.Result(ChatBackendStreamResult(events = flowOf(ChatBackendDelta("Recovered")))),
         )
         val viewModel = connectedViewModel(session)
 
@@ -781,8 +785,8 @@ class ChatViewModelTest {
             profile("one-retry", ProviderType.OPENAI_COMPATIBLE),
             Step.Failure(IOException("temporary")),
             Step.Result(
-                HostLlmStreamResult(events = flow {
-                    emit(HostLlmStreamEvent.delta("retry partial"))
+                ChatBackendStreamResult(events = flow {
+                    emit(ChatBackendDelta("retry partial"))
                     awaitCancellation()
                 }),
             ),
@@ -805,12 +809,12 @@ class ChatViewModelTest {
         val session = FakeSession(
             profile("partial", ProviderType.ANTHROPIC),
             Step.Result(
-                HostLlmStreamResult(events = flow {
-                    emit(HostLlmStreamEvent.delta("partial response"))
+                ChatBackendStreamResult(events = flow {
+                    emit(ChatBackendDelta("partial response"))
                     throw IOException("provider-body-secret")
                 }),
             ),
-            Step.Result(HostLlmStreamResult(events = flowOf(HostLlmStreamEvent.delta("complete response")))),
+            Step.Result(ChatBackendStreamResult(events = flowOf(ChatBackendDelta("complete response")))),
         )
         val viewModel = connectedViewModel(session)
         viewModel.send("Keep one user", session)
@@ -851,14 +855,14 @@ class ChatViewModelTest {
         model = "$id-model",
     )
 
-    private fun FakeSession.connected(): ProviderConnection = ProviderConnection(
+    private fun FakeSession.connected(): ChatBackendConnection = ProviderConnection(
         profile = profile,
         state = ProviderConnectionState.AUTHENTICATED,
         session = this,
-    )
+    ).asChatBackendConnection()
 
     private sealed interface Step {
-        data class Result(val result: HostLlmStreamResult) : Step
+        data class Result(val result: ChatBackendStreamResult) : Step
         data class Failure(val error: Throwable) : Step
     }
 
@@ -874,7 +878,7 @@ class ChatViewModelTest {
 
         override suspend fun authorize(activity: Activity) = Unit
 
-        override suspend fun stream(requestJson: String): HostLlmStreamResult {
+        override suspend fun stream(requestJson: String): ChatBackendStreamResult {
             requests += requestJson
             return when (val step = steps.removeFirst()) {
                 is Step.Result -> step.result
@@ -888,14 +892,14 @@ class ChatViewModelTest {
         companion object {
             fun success(profile: ProviderProfile, text: String) = FakeSession(
                 profile,
-                Step.Result(HostLlmStreamResult(events = flowOf(HostLlmStreamEvent.delta(text)))),
+                Step.Result(ChatBackendStreamResult(events = flowOf(ChatBackendDelta(text)))),
             )
 
             fun slow(profile: ProviderProfile, partial: String) = FakeSession(
                 profile,
                 Step.Result(
-                    HostLlmStreamResult(events = flow {
-                        emit(HostLlmStreamEvent.delta(partial))
+                    ChatBackendStreamResult(events = flow {
+                        emit(ChatBackendDelta(partial))
                         awaitCancellation()
                     }),
                 ),

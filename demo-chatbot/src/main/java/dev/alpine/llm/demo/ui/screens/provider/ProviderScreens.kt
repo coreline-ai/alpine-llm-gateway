@@ -69,7 +69,7 @@ import dev.alpine.llm.demo.model.GeminiProfileDefaults
 import dev.alpine.llm.demo.model.ProviderProfile
 import dev.alpine.llm.demo.model.ProviderType
 import dev.alpine.llm.demo.model.XaiProfileDefaults
-import dev.alpine.llm.demo.ui.theme.AlpineTheme
+import dev.alpine.chat.feature.ui.theme.AlpineTheme
 
 private val ContentMaxWidth = 840.dp
 

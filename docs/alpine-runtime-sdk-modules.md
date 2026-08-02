@@ -20,6 +20,7 @@ Alpine 기능을 특정 채팅 앱에 고정하지 않고, 필요한 기능만 �
 | `:alpine-runtime-ui-compose` | 선택형 Compose 상태·복구·터미널·패키지 UI | Compose 선택 시에만 필요 |
 | `:alpine-runtime-testkit` | fake runtime, 결정적 dispatcher, virtual artifact | 테스트에서만 필요 |
 | `:alpine-chat-routing` | 공통 request/stream/failure, mode, fallback, audit, request ledger 계약 | Android/Compose 없음 |
+| `:alpine-chat-feature` | 다중 대화·암호화 저장·모델·Skill·Persona·생성 상태와 Compose 채팅 UI | Android/Compose 필요, Runtime 없음 |
 | `:alpine-chat-backend-direct` | 기존 Android OAuth/Provider 빠른 채팅 adapter | Android LLM만 필요 |
 | `:alpine-chat-backend-alpine` | Runtime/Bridge/Python Gateway 작업 모드 adapter | Alpine LLM 사용 시 필요 |
 | `:alpine-workspace-api` | 안전 상대경로·quota·bounded 파일 작업 계약 | Android/Compose 없음 |
@@ -97,6 +98,6 @@ dependencies {
   Compose 없는 XML sample과 `:integrated-app`의 명시적 mode selector를 연결했다.
 - Host lifecycle/service/notification/manifest/저장소 지침은
   [Host 통합 가이드](alpine-runtime-host-integration.md)를 따른다.
-- 현재 17개 AAR/JAR의 sources/POM/Gradle metadata/checksum, 8개 외부 release 축소 앱,
+- 현재 18개 AAR/JAR의 sources/POM/Gradle metadata/checksum, 8개 외부 release 축소 앱,
   payload·permission·arm64/x86_64 ABI 분리를 자동 검증한다. 공개 배포 전 프로젝트 라이선스와 copyleft
   source archive gate는 [배포 가이드](sdk-publication-and-distribution.md)를 따른다.

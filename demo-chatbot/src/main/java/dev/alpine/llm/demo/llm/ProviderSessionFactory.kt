@@ -2,27 +2,42 @@ package dev.alpine.llm.demo.llm
 
 import android.app.Activity
 import android.content.Context
+import dev.alpine.chat.feature.backend.ChatBackendDelta
+import dev.alpine.chat.feature.backend.ChatBackendException
+import dev.alpine.chat.feature.backend.ChatBackendFailureCode
+import dev.alpine.chat.feature.backend.ChatBackendStreamResult
 import dev.alpine.llm.AnthropicOAuthContract
 import dev.alpine.llm.AnthropicMessagesOAuthAdapter
 import dev.alpine.llm.CodexOAuthContract
 import dev.alpine.llm.CodexResponsesOAuthAdapter
 import dev.alpine.llm.GeminiGenerateContentOAuthAdapter
 import dev.alpine.llm.GeminiOAuthContract
-import dev.alpine.llm.HostLlmStreamResult
 import dev.alpine.llm.OAuthAuthenticationState
+import dev.alpine.llm.OAuthException
+import dev.alpine.llm.OAuthFailureKind
 import dev.alpine.llm.OAuthHttpLlmBridge
 import dev.alpine.llm.OAuthLlmSession
 import dev.alpine.llm.OAuthManager
 import dev.alpine.llm.OAuthProviderConfig
+import dev.alpine.llm.OAuthRequiredException
 import dev.alpine.llm.OAuthTokenRequestEncoding
 import dev.alpine.llm.OpenAiCompatibleOAuthAdapter
 import dev.alpine.llm.ProviderCircuitBreaker
 import dev.alpine.llm.ProviderCircuitBreakerConfig
+import dev.alpine.llm.ProviderCircuitOpenException
 import dev.alpine.llm.ProviderRetryPolicy
+import dev.alpine.llm.ProviderStreamException
 import dev.alpine.llm.ResilientOAuthHttpTransport
 import dev.alpine.llm.XaiOAuthContract
 import dev.alpine.llm.demo.model.ProviderProfile
 import dev.alpine.llm.demo.model.ProviderType
+import java.io.IOException
+import java.net.SocketTimeoutException
+import java.util.concurrent.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flow
+import org.json.JSONObject
 
 object ProviderSessionFactory {
     fun create(context: Context, profile: ProviderProfile): ChatCompletionSession {
@@ -121,8 +136,32 @@ object ProviderSessionFactory {
             oauth.authorize(activity)
         }
 
-        override suspend fun stream(requestJson: String): HostLlmStreamResult =
-            session.stream(requestJson)
+        override suspend fun stream(requestJson: String): ChatBackendStreamResult {
+            val result = try {
+                session.stream(requestJson)
+            } catch (error: Throwable) {
+                throw normalizedBackendFailure(error)
+            }
+            return ChatBackendStreamResult(
+                statusCode = result.statusCode,
+                events = flow {
+                    try {
+                        result.events.collect { event ->
+                            val text = runCatching {
+                                JSONObject(event.dataJson).optString("text")
+                            }.getOrElse {
+                                throw ChatBackendException(
+                                    ChatBackendFailureCode.INVALID_RESPONSE,
+                                )
+                            }
+                            emit(ChatBackendDelta(text))
+                        }
+                    } catch (error: Throwable) {
+                        throw normalizedBackendFailure(error)
+                    }
+                },
+            )
+        }
 
         override fun logout() {
             oauth.logout()
@@ -131,5 +170,33 @@ object ProviderSessionFactory {
         override fun cancelAuthorization() {
             oauth.cancelAuthorization()
         }
+    }
+
+    private fun normalizedBackendFailure(error: Throwable): Throwable = when (error) {
+        is CancellationException -> error
+        is ChatBackendException -> error
+        is OAuthRequiredException -> ChatBackendException(
+            ChatBackendFailureCode.REAUTHENTICATION_REQUIRED,
+        )
+        is OAuthException -> when (error.kind) {
+            OAuthFailureKind.INVALID_GRANT,
+            OAuthFailureKind.STORAGE_INVALIDATED,
+            OAuthFailureKind.STORAGE_FAILURE,
+            -> ChatBackendException(ChatBackendFailureCode.REAUTHENTICATION_REQUIRED)
+            OAuthFailureKind.CALLBACK_TIMEOUT ->
+                ChatBackendException(ChatBackendFailureCode.TIMEOUT)
+            else -> ChatBackendException(ChatBackendFailureCode.UNKNOWN)
+        }
+        is ProviderCircuitOpenException -> ChatBackendException(
+            ChatBackendFailureCode.CIRCUIT_OPEN,
+        )
+        is ProviderStreamException -> ChatBackendException(
+            ChatBackendFailureCode.INVALID_RESPONSE,
+        )
+        is TimeoutCancellationException,
+        is SocketTimeoutException,
+        is IOException,
+        -> error
+        else -> ChatBackendException(ChatBackendFailureCode.UNKNOWN)
     }
 }

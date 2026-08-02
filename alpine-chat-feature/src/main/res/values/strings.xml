@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_thinking">Thinking…</string>
+    <string name="chat_generation_stopped">Generation stopped.</string>
+    <string name="chat_request_failed">The request could not be completed.</string>
+    <string name="chat_status_streaming">Streaming</string>
+    <string name="chat_status_stopped">Stopped</string>
+    <string name="chat_status_failed">Failed</string>
+    <string name="failure_reconnect">Connection expired. Reconnect this LLM.</string>
+    <string name="failure_overloaded">The provider is busy. Try again shortly.</string>
+    <string name="failure_timeout">The provider took too long to respond.</string>
+    <string name="failure_unavailable">The provider is temporarily unavailable.</string>
+    <string name="failure_invalid_response">The provider returned an unreadable response.</string>
+    <string name="failure_network">The provider connection was interrupted.</string>
+    <string name="failure_generic">The request could not be completed.</string>
+    <string name="failure_check_settings">Check this LLM connection and its profile settings.</string>
+    <string name="failure_action_retry">Retry</string>
+    <string name="failure_action_reconnect">Reconnect</string>
+    <string name="failure_action_connections">Connections</string>
+</resources>

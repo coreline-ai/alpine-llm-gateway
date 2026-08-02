@@ -9,7 +9,7 @@ import dev.alpine.llm.demo.data.ProviderProfileStore
 import dev.alpine.llm.demo.model.ProviderProfile
 import dev.alpine.llm.demo.model.ProviderType
 import dev.alpine.llm.demo.ui.screens.provider.ProviderEditScreen
-import dev.alpine.llm.demo.ui.theme.AlpineChatTheme
+import dev.alpine.chat.feature.ui.theme.AlpineChatTheme
 
 /** Compose host for one OAuth-enabled LLM profile. */
 class ProviderEditActivity : ComponentActivity() {

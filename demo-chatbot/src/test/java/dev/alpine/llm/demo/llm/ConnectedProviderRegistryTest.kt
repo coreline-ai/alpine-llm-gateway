@@ -1,12 +1,12 @@
 package dev.alpine.llm.demo.llm
 
 import android.app.Activity
-import dev.alpine.llm.HostLlmStreamResult
+import dev.alpine.chat.feature.backend.ChatBackendStreamResult
 import dev.alpine.llm.OAuthAuthenticationState
 import dev.alpine.llm.OAuthTokenStore
 import dev.alpine.llm.demo.model.ProviderProfile
 import dev.alpine.llm.demo.model.ProviderType
-import dev.alpine.llm.demo.ui.ChatViewModel
+import dev.alpine.chat.feature.ui.ChatViewModel
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -43,7 +43,7 @@ class ConnectedProviderRegistryTest {
         )
 
         val viewModel = ChatViewModel()
-        viewModel.updateConnections(connections)
+        viewModel.updateConnections(connections.map(ProviderConnection::asChatBackendConnection))
         assertEquals(listOf("claude"), viewModel.state.value.providers.map { it.profileId })
         assertEquals("claude", viewModel.state.value.selectedProfileId)
     }
@@ -66,8 +66,8 @@ class ConnectedProviderRegistryTest {
     ) : ChatCompletionSession {
         override fun authenticationState(): OAuthAuthenticationState = state
         override suspend fun authorize(activity: Activity) = Unit
-        override suspend fun stream(requestJson: String): HostLlmStreamResult =
-            HostLlmStreamResult()
+        override suspend fun stream(requestJson: String): ChatBackendStreamResult =
+            ChatBackendStreamResult()
         override fun logout() = Unit
         override fun cancelAuthorization() = Unit
     }

@@ -10,6 +10,7 @@ val sdk = { artifact: String -> "dev.alpine.llm:$artifact:${sdkVersion.get()}" }
 val matrixDependencies = mapOf(
     "no-runtime" to listOf(
         "alpine-llm-android",
+        "alpine-chat-feature",
     ),
     "runtime-only" to listOf(
         "alpine-runtime-android",
@@ -35,6 +36,7 @@ val matrixDependencies = mapOf(
         "alpine-llm-bridge",
         "alpine-llm-gateway-pack-bundled",
         "alpine-chat-routing",
+        "alpine-chat-feature",
         "alpine-chat-backend-direct",
         "alpine-chat-backend-alpine",
         "alpine-workspace-android",
