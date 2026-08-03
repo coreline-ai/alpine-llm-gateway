@@ -52,6 +52,7 @@ class AlpineLlmBridgeControllerTest {
 
         assertTrue(started.healthy)
         assertEquals(LlmBridgeLifecycleState.RUNNING, controller.currentState())
+        assertEquals(fixture.runtime.session, controller.activeRuntimeSession())
         assertTrue(capabilityValue.length >= 32)
         assertFalse(config.readText().contains(capabilityValue))
         assertFalse(config.readText().contains("oauth", ignoreCase = true))
@@ -72,6 +73,7 @@ class AlpineLlmBridgeControllerTest {
         controller.stop().toCompletableFuture().join()
 
         assertEquals(LlmBridgeLifecycleState.STOPPED, controller.currentState())
+        assertNull(controller.activeRuntimeSession())
         assertFalse(capability.exists())
         assertFalse(config.exists())
         assertTrue(privateDirectory.resolve("alpine-llm-gateway.tar.gz").isFile)
@@ -134,20 +136,65 @@ class AlpineLlmBridgeControllerTest {
     }
 
     @Test
+    fun `incompatible gateway protocol fails before runtime dispatch`() {
+        val fixture = fixture(protocolVersion = "2")
+        val controller = fixture.controller()
+
+        val error = assertThrows(Exception::class.java) {
+            controller.start().toCompletableFuture().join()
+        }
+        val safe = generateSequence<Throwable>(error) { it.cause }
+            .filterIsInstance<LlmBridgeOperationException>()
+            .first()
+
+        assertEquals(LlmBridgeErrorCode.PROTOCOL_MISMATCH, safe.errorCode)
+        assertEquals(0, fixture.runtime.startCount)
+        assertFalse(fixture.privateDirectory.resolve("bridge.capability").exists())
+        controller.close()
+    }
+
+    @Test
+    fun `gateway early exit fails closed and releases runtime owner`() {
+        val fixture = fixture(gatewayStartFails = true)
+        val controller = fixture.controller()
+
+        val error = assertThrows(Exception::class.java) {
+            controller.start().toCompletableFuture().join()
+        }
+        val safe = generateSequence<Throwable>(error) { it.cause }
+            .filterIsInstance<LlmBridgeOperationException>()
+            .first()
+
+        assertEquals(LlmBridgeErrorCode.GATEWAY_START_FAILED, safe.errorCode)
+        assertEquals(0, fixture.runtime.activeSessionCount)
+        assertFalse(fixture.privateDirectory.resolve("bridge.capability").exists())
+        assertTrue(
+            fixture.registry.endpointFor(
+                dev.alpine.runtime.api.RuntimeEnvironmentContext("session", "/workspace"),
+            ) == null,
+        )
+        controller.close()
+    }
+
+    @Test
     fun `configuration rejects an empty model allowlist`() {
         assertThrows(IllegalArgumentException::class.java) {
             AlpineLlmBridgeConfiguration(emptyList(), "auto")
         }
     }
 
-    private fun fixture(corruptDescriptor: Boolean = false): Fixture {
+    private fun fixture(
+        corruptDescriptor: Boolean = false,
+        protocolVersion: String = "1",
+        gatewayStartFails: Boolean = false,
+    ): Fixture {
         val workspace = temporaryFolder.newFolder("workspace-${System.nanoTime()}")
         val payload = "gateway-layer".toByteArray()
         val hash = sha256(payload)
         val descriptor = PythonGatewayArtifactDescriptor(
             id = "alpine-llm-gateway",
             packageVersion = "0.3.0",
-            protocolVersion = "1",
+            protocolVersion = protocolVersion,
             minimumPythonVersion = "3.11",
             sha256 = if (corruptDescriptor) "0".repeat(64) else hash,
             sizeBytes = payload.size.toLong(),
@@ -175,7 +222,7 @@ class AlpineLlmBridgeControllerTest {
         }
         return Fixture(
             workspace = workspace,
-            runtime = ImmediateRuntimeManager(),
+            runtime = ImmediateRuntimeManager(gatewayStartFails),
             registry = LlmBridgeEndpointRegistry(),
             provider = provider,
         )
@@ -215,7 +262,9 @@ class AlpineLlmBridgeControllerTest {
         .joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
 }
 
-private class ImmediateRuntimeManager : AlpineRuntimeManager {
+private class ImmediateRuntimeManager(
+    private val gatewayStartFails: Boolean = false,
+) : AlpineRuntimeManager {
     var state = RuntimeState(RuntimeLifecycleState.READY, activeVersion = "test")
     var startCount = 0
     var activeSessionCount = 0
@@ -231,7 +280,7 @@ private class ImmediateRuntimeManager : AlpineRuntimeManager {
         startCount++
         activeSessionCount++
         state = RuntimeState(RuntimeLifecycleState.RUNNING, activeVersion = "test")
-        session = ImmediateRuntimeSession {
+        session = ImmediateRuntimeSession(gatewayStartFails) {
             activeSessionCount--
             state = RuntimeState(RuntimeLifecycleState.READY, activeVersion = "test")
         }
@@ -246,12 +295,17 @@ private class ImmediateRuntimeManager : AlpineRuntimeManager {
     )
 }
 
-private class ImmediateRuntimeSession(private val onStop: () -> Unit) : RuntimeSession {
+private class ImmediateRuntimeSession(
+    gatewayStartFails: Boolean,
+    private val onStop: () -> Unit,
+) : RuntimeSession {
     override val id = "test-session"
     override val startedAtEpochMillis = System.currentTimeMillis()
     var lastRequest: RuntimeCommandRequest? = null
     private var stopped = false
-    private val gatewayProcess = CompletableFuture<RuntimeCommandResult>()
+    private val gatewayProcess = CompletableFuture<RuntimeCommandResult>().also { process ->
+        if (gatewayStartFails) process.complete(RuntimeCommandResult(1))
+    }
 
     fun crashGateway() {
         gatewayProcess.complete(RuntimeCommandResult(1))

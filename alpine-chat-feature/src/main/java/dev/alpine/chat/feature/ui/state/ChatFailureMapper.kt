@@ -88,6 +88,38 @@ object ChatFailureMapper {
             kind = ChatFailureKind.NETWORK,
             recoveryAction = ChatRecoveryAction.RETRY,
         )
+        ChatBackendFailureCode.RATE_LIMITED -> ChatFailure(
+            kind = ChatFailureKind.OVERLOADED,
+            recoveryAction = ChatRecoveryAction.RETRY,
+        )
+        ChatBackendFailureCode.PROVIDER_UNAVAILABLE -> ChatFailure(
+            kind = ChatFailureKind.PROVIDER_UNAVAILABLE,
+            recoveryAction = ChatRecoveryAction.RETRY,
+        )
+        ChatBackendFailureCode.RESPONSE_TOO_LARGE -> ChatFailure(
+            kind = ChatFailureKind.RESPONSE_TOO_LARGE,
+            recoveryAction = ChatRecoveryAction.CHECK_SETTINGS,
+        )
+        ChatBackendFailureCode.RUNTIME_NOT_INSTALLED -> ChatFailure(
+            kind = ChatFailureKind.RUNTIME_NOT_INSTALLED,
+            recoveryAction = ChatRecoveryAction.INSTALL_RUNTIME,
+        )
+        ChatBackendFailureCode.RUNTIME_REPAIR_REQUIRED -> ChatFailure(
+            kind = ChatFailureKind.RUNTIME_REPAIR_REQUIRED,
+            recoveryAction = ChatRecoveryAction.REPAIR_RUNTIME,
+        )
+        ChatBackendFailureCode.RUNTIME_BUSY -> ChatFailure(
+            kind = ChatFailureKind.RUNTIME_BUSY,
+            recoveryAction = ChatRecoveryAction.RETRY,
+        )
+        ChatBackendFailureCode.RUNTIME_START_FAILED -> ChatFailure(
+            kind = ChatFailureKind.RUNTIME_START_FAILED,
+            recoveryAction = ChatRecoveryAction.RESTART_RUNTIME,
+        )
+        ChatBackendFailureCode.FALLBACK_DECLINED -> ChatFailure(
+            kind = ChatFailureKind.FALLBACK_DECLINED,
+            recoveryAction = ChatRecoveryAction.RESTART_RUNTIME,
+        )
         ChatBackendFailureCode.UNKNOWN -> ChatFailure(
             kind = ChatFailureKind.UNKNOWN,
             recoveryAction = ChatRecoveryAction.CHECK_SETTINGS,

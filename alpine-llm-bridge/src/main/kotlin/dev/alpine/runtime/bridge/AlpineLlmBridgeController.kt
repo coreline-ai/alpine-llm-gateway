@@ -197,6 +197,10 @@ class AlpineLlmBridgeController internal constructor(
 
     fun currentState(): LlmBridgeLifecycleState = state
 
+    /** Active guest session retained by this owner. The caller must not stop it directly. */
+    fun activeRuntimeSession(): RuntimeSession? =
+        session?.takeIf { state == LlmBridgeLifecycleState.RUNNING }
+
     fun start(): CompletionStage<AlpineLlmBridgeHealth> = submitLifecycle {
         startOwned()
     }

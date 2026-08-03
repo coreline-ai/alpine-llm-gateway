@@ -45,11 +45,12 @@ class DirectChatHostController(
         val state = viewModel.state.value
         val profileId = state.selectedProfileId ?: return
         val model = state.selectedModel ?: return
-        val session = sessionFor(profileId, model) ?: return
+        val session = session(profileId, model) ?: return
         viewModel.send(text, session)
     }
 
-    private fun sessionFor(profileId: String, model: String): ChatCompletionSession? {
+    /** Returns a model-specific authenticated host session without exposing OAuth credentials. */
+    fun session(profileId: String, model: String): ChatCompletionSession? {
         sessions[profileId]?.takeIf { it.profile.model == model }?.let { return it }
         val profile = store.find(profileId)?.copy(model = model) ?: return null
         val key = "$profileId\u0000$model"

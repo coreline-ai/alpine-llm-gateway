@@ -26,7 +26,7 @@ import kotlinx.coroutines.flow.collect
 import org.json.JSONObject
 
 /** Existing Android OAuth/Provider session exposed through the shared Phase 5 backend contract. */
-class AndroidDirectChatBackend internal constructor(
+class AndroidDirectChatBackend constructor(
     override val id: String,
     private val streamRequest: suspend (String) -> HostLlmStreamResult,
 ) : ChatBackend {

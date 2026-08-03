@@ -110,6 +110,7 @@ fun AlpineChatScreen(
     failure: ChatFailure? = null,
     onDismissFailure: () -> Unit = {},
     onRetry: () -> Unit = {},
+    onRecoveryAction: ((ChatRecoveryAction) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -251,10 +252,19 @@ fun AlpineChatScreen(
                         FailureAction(
                             failure = visibleFailure,
                             onAction = {
-                                when (visibleFailure.recoveryAction) {
-                                    ChatRecoveryAction.RETRY -> onRetry()
-                                    ChatRecoveryAction.RECONNECT,
-                                    ChatRecoveryAction.CHECK_SETTINGS -> onManageProviders()
+                                val action = visibleFailure.recoveryAction
+                                if (onRecoveryAction != null) {
+                                    onRecoveryAction(action)
+                                } else {
+                                    when (action) {
+                                        ChatRecoveryAction.RETRY -> onRetry()
+                                        ChatRecoveryAction.RECONNECT,
+                                        ChatRecoveryAction.CHECK_SETTINGS,
+                                        ChatRecoveryAction.INSTALL_RUNTIME,
+                                        ChatRecoveryAction.REPAIR_RUNTIME,
+                                        ChatRecoveryAction.RESTART_RUNTIME,
+                                        -> onManageProviders()
+                                    }
                                 }
                             },
                             onDismiss = onDismissFailure,
@@ -785,9 +795,22 @@ private fun ChatFailure.userMessage(): String = when (recoveryAction) {
             stringResource(R.string.failure_invalid_response)
         dev.alpine.chat.feature.ui.state.ChatFailureKind.NETWORK ->
             stringResource(R.string.failure_network)
+        dev.alpine.chat.feature.ui.state.ChatFailureKind.RUNTIME_BUSY ->
+            stringResource(R.string.failure_runtime_busy)
         else -> stringResource(R.string.failure_generic)
     }
-    ChatRecoveryAction.CHECK_SETTINGS -> stringResource(R.string.failure_check_settings)
+    ChatRecoveryAction.CHECK_SETTINGS -> when (kind) {
+        dev.alpine.chat.feature.ui.state.ChatFailureKind.RESPONSE_TOO_LARGE ->
+            stringResource(R.string.failure_response_too_large)
+        else -> stringResource(R.string.failure_check_settings)
+    }
+    ChatRecoveryAction.INSTALL_RUNTIME -> stringResource(R.string.failure_runtime_not_installed)
+    ChatRecoveryAction.REPAIR_RUNTIME -> stringResource(R.string.failure_runtime_repair)
+    ChatRecoveryAction.RESTART_RUNTIME -> when (kind) {
+        dev.alpine.chat.feature.ui.state.ChatFailureKind.FALLBACK_DECLINED ->
+            stringResource(R.string.failure_fallback_declined)
+        else -> stringResource(R.string.failure_runtime_start)
+    }
 }
 
 @Composable
@@ -795,4 +818,7 @@ private fun ChatFailure.actionLabel(): String = when (recoveryAction) {
     ChatRecoveryAction.RETRY -> stringResource(R.string.failure_action_retry)
     ChatRecoveryAction.RECONNECT -> stringResource(R.string.failure_action_reconnect)
     ChatRecoveryAction.CHECK_SETTINGS -> stringResource(R.string.failure_action_connections)
+    ChatRecoveryAction.INSTALL_RUNTIME -> stringResource(R.string.failure_action_install_runtime)
+    ChatRecoveryAction.REPAIR_RUNTIME -> stringResource(R.string.failure_action_repair_runtime)
+    ChatRecoveryAction.RESTART_RUNTIME -> stringResource(R.string.failure_action_restart_runtime)
 }

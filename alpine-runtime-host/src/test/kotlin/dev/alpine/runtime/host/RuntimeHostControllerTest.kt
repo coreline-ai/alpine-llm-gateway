@@ -58,6 +58,25 @@ class RuntimeHostControllerTest {
         assertEquals("한글 red", controller.currentState().terminalText)
     }
 
+    @Test
+    fun `external owner session binding enables terminal without transferring lifecycle ownership`() {
+        val manager = ImmediateRuntimeManager()
+        val controller = RuntimeHostController(manager)
+        controller.install().toCompletableFuture().join()
+        val external = manager.start(RuntimeStartRequest()).toCompletableFuture().join()
+
+        val binding = controller.bindExternalSession(external)
+        controller.openTerminal().toCompletableFuture().join()
+        assertTrue(controller.currentState().sessionActive)
+        assertTrue(controller.currentState().terminalActive)
+
+        binding.close()
+
+        assertFalse(controller.currentState().sessionActive)
+        assertFalse(controller.currentState().terminalActive)
+        assertEquals(RuntimeLifecycleState.RUNNING, manager.currentState().lifecycle)
+    }
+
     private class ImmediateRuntimeManager : AlpineRuntimeManager {
         private val stateListeners = CopyOnWriteArrayList<RuntimeStateListener>()
         private val eventListeners = CopyOnWriteArrayList<RuntimeEventListener>()

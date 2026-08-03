@@ -705,7 +705,7 @@ class ChatViewModel(
         error: Throwable,
     ) {
         val failure = ChatFailureMapper.map(error)
-        val retryTarget = if (failure.recoveryAction == ChatRecoveryAction.RETRY) {
+        val retryTarget = if (failure.recoveryAction in RETRYABLE_RECOVERY_ACTIONS) {
             ChatRetryTarget(
                 userText = requestMessages.lastOrNull { it.role == ChatRole.USER }?.text.orEmpty(),
                 profileId = session.descriptor.profileId,
@@ -889,6 +889,12 @@ class ChatViewModel(
 
     companion object {
         const val MAX_CONCURRENT_GENERATIONS = 2
+        private val RETRYABLE_RECOVERY_ACTIONS = setOf(
+            ChatRecoveryAction.RETRY,
+            ChatRecoveryAction.INSTALL_RUNTIME,
+            ChatRecoveryAction.REPAIR_RUNTIME,
+            ChatRecoveryAction.RESTART_RUNTIME,
+        )
         private const val MAX_RESPONSE_CORRECTIONS = 1
         private const val MAX_DRAFT_CHARS = 128 * 1024
         private const val DEFAULT_PERSIST_DEBOUNCE_MS = 350L

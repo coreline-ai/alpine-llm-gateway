@@ -111,6 +111,34 @@ class RuntimeHostController @JvmOverloads constructor(
         return RuntimeSubscription { listeners -= listener }
     }
 
+    /**
+     * Makes a Runtime session owned by another lifecycle controller available to terminal/package
+     * UI. Closing the returned binding only detaches host references; it never stops the session.
+     */
+    fun bindExternalSession(externalSession: RuntimeSession): RuntimeSubscription {
+        require(manager.currentState().lifecycle in ACTIVE_SESSION_STATES) {
+            "external session requires an active runtime"
+        }
+        synchronized(lock) {
+            require(session == null || session === externalSession) {
+                "a different runtime session is already bound"
+            }
+            session = externalSession
+        }
+        update { it.copy(sessionActive = true) }
+        return RuntimeSubscription {
+            val detached = synchronized(lock) {
+                if (session === externalSession) {
+                    clearSessionReferences()
+                    true
+                } else {
+                    false
+                }
+            }
+            if (detached) update { it.copy(sessionActive = false, terminalActive = false) }
+        }
+    }
+
     fun install(request: RuntimeInstallRequest = RuntimeInstallRequest()): CompletionStage<RuntimeInstallResult> =
         track(RuntimeHostOperation.INSTALLING, { manager.install(request) })
 

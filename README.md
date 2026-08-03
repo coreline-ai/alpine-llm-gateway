@@ -132,7 +132,10 @@ command, terminal과 package 상태 controller를 제공합니다. `:alpine-runt
 `:integrated-app`은 Compose와 빠른 채팅/Alpine 작업 mode selector로 조립됩니다. 빠른 채팅은
 실제 공통 채팅 화면과 Android 직접 Provider 경로를 사용하며, 대화별 mode·모델·초안·기록을
 복원합니다. 스트리밍 중 Alpine 화면을 왕복해도 요청을 재전송하지 않고 돌아와 Stop할 수
-있습니다. Alpine 작업 모드의 Gateway 채팅 결합은 Phase 3 범위입니다. 패키지 설치는 정확한
+있습니다. Phase 3에서 Alpine 작업 모드도 같은 공통 채팅 화면을 사용하며 Application 단일 owner가
+Runtime·HostBridge·bundled Python Gateway lifecycle과 health를 관리합니다. Alpine 준비 실패의
+빠른 채팅 fallback은 dispatch 전 사용자 승인으로만 실행되며 OAuth token은 Guest로 전달되지
+않습니다. 패키지 설치는 정확한
 allowlist와 사용자 승인을 모두 통과해야 하며 임의 shell 문자열을 실행하지 않습니다.
 
 Host Bridge는 bounded concurrency, overload 429/`Retry-After`, request timeout, request ID와 누적 health 지표를 제공합니다. 선택적 resilient transport는 제한적 retry/backoff와 circuit breaker를 제공하고 운영 event schema에는 URL·header·body·credential 필드가 존재하지 않습니다.
@@ -167,6 +170,7 @@ python3 -m unittest discover -s tests -v
 ./gradlew :alpine-runtime-host:check :alpine-runtime-ui-compose:testDebugUnitTest
 ./gradlew :alpine-integration-sample:assembleDebug :integrated-app:assembleDebug :integrated-app:assembleDebugAndroidTest
 ./scripts/runtime/run-llm-bridge-probe-device.sh <samsung-device-serial>
+ANDROID_SERIAL=<device-serial> ./gradlew :integrated-app:connectedDebugAndroidTest
 ANDROID_SERIAL=<device-serial> ./gradlew :android:connectedDebugAndroidTest
 ./gradlew :android:assembleRelease :android:publishReleasePublicationToProjectRepository
 ```

@@ -15,6 +15,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.alpine.chat.feature.backend.ChatBackendDelta
 import dev.alpine.chat.feature.backend.ChatBackendStreamResult
+import dev.alpine.chat.backend.direct.AndroidDirectChatBackend
 import dev.alpine.chat.feature.data.AssistantDefaultsStore
 import dev.alpine.chat.feature.data.ConversationStore
 import dev.alpine.chat.provider.android.ProviderDependencies
@@ -22,6 +23,18 @@ import dev.alpine.chat.provider.android.data.ProviderProfileStore
 import dev.alpine.chat.provider.android.model.ProviderProfile
 import dev.alpine.chat.provider.android.model.ProviderType
 import dev.alpine.chat.provider.android.session.ChatCompletionSession
+import dev.alpine.chat.routing.ChatBackend
+import dev.alpine.chat.routing.ChatBackendCapabilities
+import dev.alpine.chat.routing.ChatBackendFailure
+import dev.alpine.chat.routing.ChatBackendFailureCode
+import dev.alpine.chat.routing.ChatBackendIdempotency
+import dev.alpine.chat.routing.ChatBackendKind
+import dev.alpine.chat.routing.ChatBackendPreparation
+import dev.alpine.chat.routing.ChatBackendRequest
+import dev.alpine.chat.routing.ChatBackendResult
+import dev.alpine.chat.routing.ChatFailureStage
+import dev.alpine.chat.routing.ChatStreamEmitter
+import dev.alpine.chat.routing.SafeChatRouter
 import dev.alpine.llm.OAuthAuthenticationState
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -50,11 +63,13 @@ class IntegratedFastChatInstrumentedTest {
     fun resetState() {
         clearState()
         ProviderDependencies.installSessionFactoryForTests(null)
+        IntegratedAlpineDependencies.installRouterFactoryForTests(null)
     }
 
     @After
     fun cleanup() {
         ProviderDependencies.installSessionFactoryForTests(null)
+        IntegratedAlpineDependencies.installRouterFactoryForTests(null)
         currentActivity?.let { activity ->
             instrumentation.runOnMainSync { activity.finish() }
         }
@@ -136,6 +151,51 @@ class IntegratedFastChatInstrumentedTest {
         assertEquals("gpt-5.6-luna", ProviderProfileStore(context).find(profile.id)?.model)
     }
 
+    @Test
+    fun alpineFallbackRequiresExplicitApprovalBeforeDirectProviderDispatch() {
+        val profile = codexProfile("integrated-alpine-fallback")
+        val scenario = IntegratedProviderScenario(startSignedOut = false, immediate = true)
+        ProviderProfileStore(context).upsert(profile)
+        ProviderDependencies.installSessionFactoryForTests { _, selected -> scenario.create(selected) }
+        installUnavailableAlpineRouter()
+
+        launch()
+        compose.onNodeWithTag("mode_alpine_workspace").performClick()
+        compose.onNodeWithTag("mode_alpine_workspace").assertIsSelected()
+        compose.onNodeWithTag("message_input").performTextInput("approved alpine fallback")
+        compose.onNodeWithTag("send_button").performClick()
+
+        compose.onNodeWithTag("fallback_approve").assertIsDisplayed()
+        assertEquals(0, scenario.requestCount.get())
+        compose.onNodeWithTag("fallback_approve").performClick()
+
+        waitForDisplayedText("Integrated recovered answer")
+        compose.onNodeWithText("Integrated recovered answer").assertIsDisplayed()
+        assertEquals(1, scenario.requestCount.get())
+    }
+
+    @Test
+    fun decliningAlpineFallbackNeverDispatchesDirectProvider() {
+        val profile = codexProfile("integrated-alpine-decline")
+        val scenario = IntegratedProviderScenario(startSignedOut = false, immediate = true)
+        ProviderProfileStore(context).upsert(profile)
+        ProviderDependencies.installSessionFactoryForTests { _, selected -> scenario.create(selected) }
+        installUnavailableAlpineRouter()
+
+        launch()
+        compose.onNodeWithTag("mode_alpine_workspace").performClick()
+        compose.onNodeWithTag("message_input").performTextInput("declined alpine fallback")
+        compose.onNodeWithTag("send_button").performClick()
+        compose.onNodeWithTag("fallback_decline").assertIsDisplayed()
+        compose.onNodeWithTag("fallback_decline").performClick()
+
+        val failureMessage =
+            "Fast-chat fallback was declined. Start Alpine and retry when ready."
+        waitForDisplayedText(failureMessage)
+        compose.onNodeWithText(failureMessage).assertIsDisplayed()
+        assertEquals(0, scenario.requestCount.get())
+    }
+
     private fun launch() {
         val activity = instrumentation.startActivitySync(
             Intent(context, IntegratedMainActivity::class.java)
@@ -153,11 +213,46 @@ class IntegratedFastChatInstrumentedTest {
         currentActivity = null
     }
 
+    private fun waitForDisplayedText(text: String) {
+        compose.waitUntil(5_000) {
+            runCatching {
+                compose.onNodeWithText(text).assertIsDisplayed()
+                true
+            }.getOrDefault(false)
+        }
+    }
+
     private fun clearState() {
         context.getSharedPreferences(ProviderProfileStore.FILE_NAME, Context.MODE_PRIVATE)
             .edit().clear().commit()
         ConversationStore(context).clear()
         AssistantDefaultsStore(context).clear()
+    }
+
+    private fun installUnavailableAlpineRouter() {
+        IntegratedAlpineDependencies.installRouterFactoryForTests { session ->
+            val direct = AndroidDirectChatBackend("test-direct") { requestJson ->
+                session.streamForHostBridge(requestJson)
+            }
+            val alpine = object : ChatBackend {
+                override val id = "test-alpine"
+                override val kind = ChatBackendKind.ALPINE_GATEWAY
+                override val capabilities = ChatBackendCapabilities(ChatBackendIdempotency.NONE)
+                override suspend fun prepare(request: ChatBackendRequest) =
+                    ChatBackendPreparation.Unavailable(
+                        ChatBackendFailure(
+                            ChatBackendFailureCode.RUNTIME_NOT_INSTALLED,
+                            ChatFailureStage.PREPARATION,
+                            retryable = false,
+                        ),
+                    )
+                override suspend fun stream(
+                    request: ChatBackendRequest,
+                    emitter: ChatStreamEmitter,
+                ): ChatBackendResult = error("unavailable backend must not dispatch")
+            }
+            SafeChatRouter(direct, alpine)
+        }
     }
 
     private fun codexProfile(id: String): ProviderProfile =

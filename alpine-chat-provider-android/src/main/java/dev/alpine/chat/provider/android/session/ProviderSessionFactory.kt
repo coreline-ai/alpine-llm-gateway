@@ -163,6 +163,9 @@ object ProviderSessionFactory {
             )
         }
 
+        override suspend fun streamForHostBridge(requestJson: String) =
+            session.stream(requestJson)
+
         override fun logout() {
             oauth.logout()
         }

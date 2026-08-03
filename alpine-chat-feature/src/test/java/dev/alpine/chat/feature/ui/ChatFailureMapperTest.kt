@@ -57,4 +57,21 @@ class ChatFailureMapperTest {
 
         assertEquals(ChatFailureKind.INVALID_RESPONSE, failure.kind)
     }
+
+    @Test
+    fun `runtime failures expose closed recovery actions`() {
+        val install = ChatFailureMapper.map(
+            ChatBackendException(ChatBackendFailureCode.RUNTIME_NOT_INSTALLED),
+        )
+        val repair = ChatFailureMapper.map(
+            ChatBackendException(ChatBackendFailureCode.RUNTIME_REPAIR_REQUIRED),
+        )
+        val restart = ChatFailureMapper.map(
+            ChatBackendException(ChatBackendFailureCode.RUNTIME_START_FAILED),
+        )
+
+        assertEquals(ChatRecoveryAction.INSTALL_RUNTIME, install.recoveryAction)
+        assertEquals(ChatRecoveryAction.REPAIR_RUNTIME, repair.recoveryAction)
+        assertEquals(ChatRecoveryAction.RESTART_RUNTIME, restart.recoveryAction)
+    }
 }
