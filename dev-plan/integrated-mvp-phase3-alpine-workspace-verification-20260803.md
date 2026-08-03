@@ -89,12 +89,27 @@ PYTHON_BIN=python3.11 ./scripts/release-local.sh
 - 내부 SDK bundle 생성 성공
 - x86_64는 연결 emulator가 없어 `SKIP_NO_X86_64_EMULATOR`
 
+### GitHub 원격 CI
+
+- 최초 실행 [30805725449](https://github.com/coreline-ai/alpine-llm-gateway/actions/runs/30805725449)은
+  `HostBridgeServerTest.metricsAndEventsExcludeRequestBodyAndCredential`의 완료 메트릭 조회 경합으로 실패했다.
+- HTTP 응답 수신 후 `active_requests == 0`을 확인한 다음 메트릭·완료 이벤트를 검증하도록 수정했다.
+- 수정 커밋 `54972a9`의 재실행 [30806598277](https://github.com/coreline-ai/alpine-llm-gateway/actions/runs/30806598277)은 통과했다.
+- Python 작업: 성공, `12s`
+- Android 전체 test·lint·assemble·SDK publication·consumer matrix·license 검사·bundle 업로드: 성공, `17m33s`
+- `actions/upload-artifact@v4`의 Node.js 20 deprecation 안내는 비차단 경고이며 CI 기능 실패는 아니다.
+
 ## 발견 이슈와 수정
 
 arm64 instrumentation에서 Alpine 상태 카드·sub-navigation·공통 채팅 화면이 함께 표시된 상태로
 IME가 열리면 답변과 오류 banner의 viewport가 부족한 문제가 재현됐다. 테스트 assertion만
 완화하지 않고, Alpine 채팅 중 IME가 보일 때 상태 카드와 sub-navigation을 임시로 접도록
 수정했다. 이후 fallback 승인·거절을 포함한 4개 실기기 test가 모두 통과했다.
+
+최초 원격 CI에서는 HTTP client가 응답 본문을 받은 직후 서버의 완료 메트릭 기록보다 먼저
+health를 읽을 수 있는 테스트 경합이 확인됐다. 운영 코드의 요청 처리는 정상이며 테스트가
+완료 경계를 기다리지 않은 문제였다. 활성 요청 해제를 명시적으로 기다리도록 보강한 뒤 Bridge
+전체 unit test와 원격 CI가 통과했다.
 
 ## 보안·동작 경계
 
@@ -106,8 +121,8 @@ IME가 열리면 답변과 오류 banner의 viewport가 부족한 문제가 재�
 
 ## 현재 판정
 
-Phase 3의 코드 구현과 일반 arm64 내부 MVP 검증은 완료됐다. 다만 계획에서 지정한 Samsung
-`SM-S931N`의 두 모드 왕복·Alpine 응답 재검증은 기기 미연결로 남아 있다. 따라서 Phase 3의
-기술 구현은 완료로 보되 Samsung 전용 실기기 gate와 실제 Provider 계정 gate는 완료로 표시하지
-않는다. 공개 배포는 프로젝트 license, source mirror, Provider 승인, Play track, 파괴적 Samsung
-lifecycle 승인과 배포 책임자 gate 때문에 계속 `No-Go`다.
+Phase 3의 코드 구현, 일반 arm64 내부 MVP, release-local과 GitHub 원격 CI 검증은 완료됐다.
+Samsung `SM-S931N`의 두 모드 왕복·Alpine 응답 재검증은 기기 미연결로 남아 Phase 9 실기기
+인증 gate로 이관한다. 따라서 Phase 3은 완료하되 Samsung 전용 인증과 실제 Provider 계정 gate는
+완료로 표시하지 않는다. 공개 배포는 프로젝트 license, source mirror, Provider 승인, Play track,
+파괴적 Samsung lifecycle 승인과 배포 책임자 gate 때문에 계속 `No-Go`다.
