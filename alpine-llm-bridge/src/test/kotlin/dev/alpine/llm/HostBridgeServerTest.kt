@@ -272,6 +272,7 @@ class HostBridgeServerTest {
         val secretBody = """{"prompt":"body-secret-value"}"""
 
         assertEquals(200, post(endpoint.url, secretBody, endpoint.sessionToken).status)
+        assertTrue(awaitNoActiveRequests(endpoint.url))
         val health = JSONObject(get(endpoint.url).body)
         val serializedEvents = events.joinToString()
 
