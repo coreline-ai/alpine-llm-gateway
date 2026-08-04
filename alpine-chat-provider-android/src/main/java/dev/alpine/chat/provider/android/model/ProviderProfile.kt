@@ -17,8 +17,8 @@ enum class ProviderType(
 ) {
     ANTHROPIC(
         wireName = "anthropic",
-        displayName = "Claude / Anthropic",
-        description = "Claude account OAuth with the Anthropic Messages protocol",
+        displayName = "Anthropic compatibility",
+        description = "Reference-only direct OAuth; not a MobileAgent release connector",
         inferenceEndpointPlaceholder = AnthropicOAuthContract.MESSAGES_ENDPOINT,
         defaultScopes = AnthropicOAuthContract.SCOPES.joinToString(" "),
     ),
@@ -38,15 +38,15 @@ enum class ProviderType(
     ),
     CODEX(
         wireName = "codex",
-        displayName = "Codex / ChatGPT",
-        description = "ChatGPT account OAuth with the Codex Responses protocol",
+        displayName = "Codex compatibility",
+        description = "Reference-only direct OAuth; not a MobileAgent release connector",
         inferenceEndpointPlaceholder = CodexOAuthContract.RESPONSES_ENDPOINT,
         defaultScopes = CodexOAuthContract.SCOPES.joinToString(" "),
     ),
     XAI(
         wireName = "xai",
-        displayName = "xAI / Grok",
-        description = "SuperGrok or X Premium+ browser OAuth",
+        displayName = "xAI compatibility",
+        description = "Reference-only direct OAuth; not a MobileAgent release connector",
         inferenceEndpointPlaceholder = XaiOAuthContract.CHAT_COMPLETIONS_ENDPOINT,
         defaultScopes = XaiOAuthContract.SCOPES.joinToString(" "),
     );
@@ -154,9 +154,6 @@ data class ProviderProfile(
                     Field.INFERENCE_ENDPOINT,
                     "Claude inference endpoint is fixed by the Provider contract",
                 )
-            }
-            if (clientId != AnthropicOAuthContract.PUBLIC_CLIENT_ID) {
-                put(Field.CLIENT_ID, "Claude public client ID is fixed by the compatibility contract")
             }
             if (scopes != AnthropicOAuthContract.SCOPES) {
                 put(Field.SCOPES, "Claude OAuth scopes are fixed by the Provider contract")
@@ -279,12 +276,7 @@ data class ProviderProfile(
                 else -> ""
             },
             inferenceEndpoint = type.inferenceEndpointPlaceholder,
-            clientId = when (type) {
-                ProviderType.ANTHROPIC -> AnthropicOAuthContract.PUBLIC_CLIENT_ID
-                ProviderType.CODEX -> CodexProfileDefaults.PUBLIC_CLIENT_ID
-                ProviderType.XAI -> XaiProfileDefaults.PUBLIC_CLIENT_ID
-                else -> ""
-            },
+            clientId = "",
             scopes = type.defaultScopes.split(" "),
             model = when (type) {
                 ProviderType.ANTHROPIC -> AnthropicProfileDefaults.DEFAULT_MODEL

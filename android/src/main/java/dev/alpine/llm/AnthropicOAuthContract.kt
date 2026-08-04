@@ -1,16 +1,17 @@
 package dev.alpine.llm
 
 /**
- * Claude account OAuth contract mirrored from the OpenMinis Android reference.
+ * Claude account OAuth compatibility contract.
  *
- * This compatibility registration is suitable for local demo validation only.
- * Production apps should use an Anthropic-owned registration and supported API terms.
+ * No third-party public client registration is bundled. Hosts must inject a
+ * registration that they own and are authorized to use. This contract remains
+ * reference-only; MobileAgent production traffic uses the server-side
+ * Anthropic API adapter behind the MobileAgent BFF.
  */
 object AnthropicOAuthContract {
     const val AUTHORIZATION_ENDPOINT = "https://claude.ai/oauth/authorize"
     const val TOKEN_ENDPOINT = "https://console.anthropic.com/v1/oauth/token"
     const val MESSAGES_ENDPOINT = "https://api.anthropic.com/v1/messages"
-    const val PUBLIC_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
     const val CALLBACK_PORT = 54545
     const val REDIRECT_PATH = "/callback"
     const val REDIRECT_HOST = "localhost"
@@ -24,10 +25,12 @@ object AnthropicOAuthContract {
 
     fun providerConfig(
         providerId: String,
-        clientId: String = PUBLIC_CLIENT_ID,
+        clientId: String,
         refreshSkewMs: Long = 5 * 60 * 1000L,
         callbackTimeoutMs: Long = 5 * 60 * 1000L,
-    ): OAuthProviderConfig = OAuthProviderConfig(
+    ): OAuthProviderConfig {
+        require(clientId.isNotBlank()) { "clientId must be supplied by the host" }
+        return OAuthProviderConfig(
         providerId = providerId,
         authorizationEndpoint = AUTHORIZATION_ENDPOINT,
         tokenEndpoint = TOKEN_ENDPOINT,
@@ -47,6 +50,7 @@ object AnthropicOAuthContract {
             }
         },
         refreshSkewMs = refreshSkewMs,
-        callbackTimeoutMs = callbackTimeoutMs,
-    )
+            callbackTimeoutMs = callbackTimeoutMs,
+        )
+    }
 }

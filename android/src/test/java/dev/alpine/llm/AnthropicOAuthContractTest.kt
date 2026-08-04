@@ -10,12 +10,15 @@ import org.junit.Test
 
 class AnthropicOAuthContractTest {
     @Test
-    fun anthropicContractPinsOpenMinisEndpointsScopesLoopbackAndPkce() {
-        val config = AnthropicOAuthContract.providerConfig("claude-profile")
+    fun anthropicCompatibilityContractRequiresHostRegistrationAndPinsWireContract() {
+        val config = AnthropicOAuthContract.providerConfig(
+            providerId = "claude-profile",
+            clientId = "host-owned-public-client",
+        )
 
         assertEquals(AnthropicOAuthContract.AUTHORIZATION_ENDPOINT, config.authorizationEndpoint)
         assertEquals(AnthropicOAuthContract.TOKEN_ENDPOINT, config.tokenEndpoint)
-        assertEquals(AnthropicOAuthContract.PUBLIC_CLIENT_ID, config.clientId)
+        assertEquals("host-owned-public-client", config.clientId)
         assertEquals(AnthropicOAuthContract.SCOPES, config.scopes)
         assertEquals("http://localhost:54545/callback", config.redirectUri())
         assertTrue(config.callbackFallbackPorts.isEmpty())
@@ -33,7 +36,10 @@ class AnthropicOAuthContractTest {
 
     @Test
     fun anthropicTokenExchangeEchoesStateInJsonButRefreshDoesNot() {
-        val adapter = AnthropicOAuthContract.providerConfig("claude-profile").tokenRequestAdapter
+        val adapter = AnthropicOAuthContract.providerConfig(
+            providerId = "claude-profile",
+            clientId = "host-owned-public-client",
+        ).tokenRequestAdapter
         val exchange = adapter.adapt(
             OAuthTokenRequestContext(
                 grantType = OAuthTokenGrantType.AUTHORIZATION_CODE,

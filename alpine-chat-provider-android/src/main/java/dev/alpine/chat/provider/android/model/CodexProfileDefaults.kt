@@ -1,8 +1,7 @@
 package dev.alpine.chat.provider.android.model
 
-/** Codex CLI compatibility defaults used by the standalone demo app. */
+/** Reference-only model labels used by the standalone compatibility demo. */
 object CodexProfileDefaults {
-    const val PUBLIC_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
     const val DEFAULT_MODEL = "gpt-5.6-luna"
 
     val MODELS = listOf(

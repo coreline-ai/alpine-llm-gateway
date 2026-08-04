@@ -1,8 +1,7 @@
 package dev.alpine.chat.provider.android.model
 
-/** xAI Grok compatibility defaults mirrored from the inspected OpenMinis Android source. */
+/** Reference-only model labels used by the standalone compatibility demo. */
 object XaiProfileDefaults {
-    const val PUBLIC_CLIENT_ID = "b1a00492-073a-47ea-816f-4c329264a828"
     const val DEFAULT_MODEL = "grok-4.5"
 
     val MODELS = listOf(

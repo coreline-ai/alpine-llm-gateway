@@ -1,6 +1,35 @@
 # Provider OAuth adapter 요구사항
 
-이 문서는 OpenMinis의 Provider별 구현에서 확인한 차이를 독립 모듈의 확장 지점에 대응시킨다. Endpoint, client id, scope는 Provider 정책에 따라 바뀔 수 있으므로 라이브러리에 고정하지 않는다.
+이 문서는 기존 compatibility Provider 구현과 신규 MobileAgent 제품 경로를 분리한다. Endpoint,
+client ID와 scope는 Provider 정책과 앱 소유 registration에 따라 관리하며 다른 앱/CLI 값을 고정하지 않는다.
+
+## MobileAgent Android/iOS 제품 결정
+
+Android/iOS Flutter 제품의 기본 출시 인증 경로는 **MobileAgent OIDC Authorization Code + PKCE → MobileAgent LLM BFF → Provider 공식 API**로 고정한다.
+
+- OpenAI·Anthropic·xAI server credential은 BFF secret boundary에만 저장한다.
+- 모바일은 MobileAgent OAuth token만 Android Keystore/iOS Keychain에 저장하고 raw token을 Dart나 Alpine Guest에 전달하지 않는다.
+- OpenAI는 공식 Responses API, Anthropic은 공식 Messages API, xAI는 공식 inference API를 사용한다.
+- ChatGPT/Claude/Grok consumer subscription이나 공식 CLI client ID를 MobileAgent 제품 인증으로 재사용하지 않는다.
+- Provider 직접 OAuth는 MobileAgent 명의 native client registration과 inference 권한을 Provider가 승인한 경우에만 조건부로 활성화한다.
+- Android/iOS 실제 계정에서 `login → stream → cancel → refresh → restart → logout/revoke`가 모두 통과하기 전에는 지원 완료로 표시하지 않는다.
+
+통합 구현 순서와 완료 기준은 [Android/iOS Flutter OAuth 실동작 계획](../dev-plan/implement_20260804_202612.md)을 따른다.
+
+## 현재 사실 기준선
+
+| 영역 | 현재 상태 | 제품 판정 |
+|---|---|---|
+| Android OAuth core | 기존 compatibility core와 신규 AppAuth/Keystore Flutter plugin 구현 | local build/test PASS |
+| Android Provider UI | copied client 기본값 제거, 명시적 앱 소유 client만 입력 | reference-only |
+| Flutter | 공통 앱·OAuth 계약·LLM transport·Run Card 구현 | local widget/contract PASS |
+| iOS | AppAuth-iOS, Keychain vault, native URLSession SSE/cancel 구현 | Simulator build PASS |
+| OIDC/BFF | Keycloak PKCE/refresh/revoke와 3개 공식 API server adapter 구현 | single-instance local PASS |
+| 실제 Provider E2E | 외부 Provider key/account가 없어 호출하지 않음 | `NOT_RUN` |
+| 외부 배포 | OAuth provenance review와 프로젝트 license gate가 남음 | 차단 |
+
+기존 `CodexOAuthContract`·`XaiOAuthContract` 등은 Android reference/compatibility 자산이다. Flutter
+MobileAgent 제품은 이 모듈을 의존하지 않고 AppAuth→MobileAgent OIDC→BFF만 사용한다.
 
 ## 현재 공통 모듈이 처리하는 부분
 
@@ -14,7 +43,7 @@
 - Host Bridge session token과 OAuth Provider token의 분리
 - OpenAI-compatible completion HTTP adapter
 - Anthropic Messages 및 Gemini generateContent protocol adapter
-- OpenMinis 참조 기반 Claude compatibility contract, 96-byte PKCE, JSON state echo
+- 기존 Claude compatibility contract, 96-byte PKCE, JSON state echo
 - OpenAI-compatible, Anthropic, Gemini SSE event normalization
 - Codex account 전용 고정 OAuth contract와 Responses request/response/SSE normalization
 - xAI Grok OIDC discovery, exact-host 검증, hex PKCE, nonce, challenge echo와 CORS preflight
@@ -34,27 +63,34 @@
 | Kimi 계열 | refresh coordinator와 encrypted token store 재사용 가능 | Authorization Code가 아닌 RFC 8628 Device Authorization Grant, polling interval/`slow_down`, device identity 구현 |
 | xAI Grok 계열 | `XaiOAuthContract`, `127.0.0.1:56121/callback`, exact `auth.x.ai` discovery 검증, hex PKCE, nonce, challenge echo, 제한된 CORS preflight, Chat Completions/SSE와 ID token 표시 claim | 앱 소유 client registration, 계정 등급별 403·실제 모델 접근 검증, device-code 대체 흐름 |
 
-## 구현 우선순위 제안
+위 표의 direct OAuth 조합은 reference/compatibility 상태다. Flutter 제품의 필수 출시 범위는 다음과 같다.
 
-1. 실제 앱에서 가장 먼저 지원할 Provider 하나를 정하고 앱 소유 client registration/redirect URI를 확정한다.
-2. 해당 Provider의 `OAuthProviderConfig`, `OAuthTokenRequestAdapter`, `OAuthTokenResponseAdapter`를 앱 모듈에 구현한다.
-3. 현재 adapter 설정으로 mock inference response와 공통 OpenAI 응답을 검증한다.
-4. mock token endpoint로 authorization/refresh HTTP 계약을 추가 검증한다.
-5. 실제 계정 테스트는 debug build와 별도 test tenant에서 수행하고 token/body logging을 금지한다.
+| 제품 Provider | 모바일 인증 | Provider 호출 인증 | 필수 실제 검증 |
+|---|---|---|---|
+| OpenAI | MobileAgent OIDC + PKCE | BFF의 OpenAI API key | Responses stream/cancel/usage/오류 |
+| Anthropic | MobileAgent OIDC + PKCE | BFF의 API key 또는 승인된 workload identity federation | Messages stream/cancel/usage/오류 |
+| xAI | MobileAgent OIDC + PKCE | BFF의 xAI API key Bearer | inference stream/cancel/usage/오류 |
+
+제품 UI는 공식 Provider API 연결과 consumer account OAuth를 구분한다. Provider가 승인하지 않은
+`chatgpt.com/backend-api`, Claude Code 식별 prompt/CLI fingerprint 또는 Grok CLI registration은
+release artifact에 포함하지 않는다.
 
 ## 다음 구현 우선순위
 
-1. 실제 Provider 하나의 client registration과 physical-device E2E
-2. Gemini userinfo/GCP project discovery
-3. 앱 process death와 Keystore invalidation instrumentation test를 emulator/실기기에서 실행
-4. Kimi device flow 또는 xAI device-code 대체 흐름
-5. 실제 Provider tool/image/stream physical-device E2E
+1. MobileAgent 소유 HTTPS issuer/BFF domain과 Android/iOS public client registration 확정
+2. Redis multi-instance request ownership/cancel/revocation과 backend secret manager 배포
+3. Android App Link·iOS Universal Link signing association 및 실기기 OAuth E2E
+4. OpenAI·Anthropic·xAI 실제 staging secret/billing cap으로 stream/cancel E2E
+5. cancel server ACK, delete account, auth state stream과 accessibility/lifecycle GUI E2E
+6. Gemini direct OAuth와 Kimi device flow는 앱 소유 공식 registration의 별도 후속 계획으로 분리
 
 ## 배포 전 필수 검증
 
-- Provider console에 등록한 redirect URI와 runtime의 port/path가 정확히 일치하는지 확인
-- Android 앱에 confidential client secret이 포함되지 않는지 확인
-- VPN, proxy, Private DNS 환경에서 Custom Tab과 앱 token exchange가 같은 네트워크 경로로 성공하는지 확인
-- 앱 process 종료/재시작, Keystore key invalidation, refresh token rotation을 실제 기기에서 검증
-- OAuth/Provider 응답 원문, Authorization header, PKCE verifier, session token이 로그·crash report에 포함되지 않는지 확인
-- rootfs/PRoot 공급망 검증과 ABI별 실행 테스트 수행
+- MobileAgent OIDC issuer에 Android/iOS native client, exact redirect와 PKCE requirement가 등록됐는지 확인
+- Android App Link/Digital Asset Links와 iOS Universal Link/AASA가 production signing identity와 연결되는지 확인
+- APK/IPA에 confidential client secret과 OpenAI·Anthropic·xAI API key가 포함되지 않는지 확인
+- VPN, proxy, Private DNS 환경에서 system browser와 native token exchange가 성공하는지 확인
+- Android/iPhone의 process 종료·재시작, Keystore/Keychain invalidation과 refresh token rotation을 검증
+- OAuth/Provider 응답 원문, Authorization header, PKCE verifier, prompt와 token이 Dart·Guest·로그·crash report에 포함되지 않는지 확인
+- 세 Provider의 actual stream/cancel/refresh/logout signed redacted E2E report를 확인
+- Android Alpine 기능을 포함하는 배포에서는 rootfs/PRoot 공급망과 ABI별 실행 테스트를 별도로 수행

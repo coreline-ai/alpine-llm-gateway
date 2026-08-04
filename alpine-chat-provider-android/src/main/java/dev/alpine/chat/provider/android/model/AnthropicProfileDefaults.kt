@@ -1,6 +1,6 @@
 package dev.alpine.chat.provider.android.model
 
-/** Claude model catalog and fast default mirrored from the OpenMinis reference. */
+/** Reference-only model labels used by the standalone compatibility demo. */
 object AnthropicProfileDefaults {
     const val DEFAULT_MODEL = "claude-haiku-4-5"
 

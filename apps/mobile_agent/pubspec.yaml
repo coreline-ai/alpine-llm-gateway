@@ -1,0 +1,24 @@
+name: mobile_agent
+description: MobileAgent OAuth client for Android and iOS external LLM services.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  mobile_agent_auth:
+    path: ../../packages/mobile_agent_auth
+  mobile_agent_llm_transport:
+    path: ../../packages/mobile_agent_llm_transport
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  plugin_platform_interface: ^2.1.8
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

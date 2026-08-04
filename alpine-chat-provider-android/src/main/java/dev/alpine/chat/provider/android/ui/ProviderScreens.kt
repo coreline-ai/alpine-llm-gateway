@@ -398,9 +398,6 @@ fun ProviderEditScreen(
         initialProfile.type == ProviderType.GEMINI ||
         initialProfile.type == ProviderType.CODEX ||
         initialProfile.type == ProviderType.XAI
-    val fixedClientRegistration = initialProfile.type == ProviderType.ANTHROPIC ||
-        initialProfile.type == ProviderType.CODEX ||
-        initialProfile.type == ProviderType.XAI
     val selectableModels = when (initialProfile.type) {
         ProviderType.ANTHROPIC -> AnthropicProfileDefaults.MODELS
         ProviderType.GEMINI -> GeminiProfileDefaults.MODELS
@@ -481,7 +478,7 @@ fun ProviderEditScreen(
                     ProfileTextField(
                         value = clientId, onValueChange = { clientId = it }, label = "OAuth public client ID",
                         error = errors[ProviderProfile.Field.CLIENT_ID], tag = "client_id",
-                        readOnly = fixedClientRegistration,
+                        readOnly = false,
                     )
                 }
                 item {
@@ -534,8 +531,9 @@ fun ProviderEditScreen(
                     }
                     item {
                         Text(
-                            text = "OpenMinis 공개 소스의 OAuth·PKCE·Messages 값입니다. " +
-                                "비공개 Claude Code 식별 시스템 프롬프트와 CLI 지문은 포함하지 않습니다.",
+                            text = "Reference-only direct OAuth contract입니다. 다른 앱이나 CLI의 " +
+                                "client ID를 복사하지 말고 사용 권한이 있는 registration을 입력하세요. " +
+                                "MobileAgent release는 BFF의 공식 Anthropic API를 사용합니다.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

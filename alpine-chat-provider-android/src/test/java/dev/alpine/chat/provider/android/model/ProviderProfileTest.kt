@@ -43,19 +43,22 @@ class ProviderProfileTest {
     }
 
     @Test
-    fun `anthropic draft prefills complete OpenMinis compatibility contract`() {
+    fun `anthropic draft requires a host owned client registration`() {
         val draft = ProviderProfile.draft(ProviderType.ANTHROPIC, "Claude")
 
         assertEquals(AnthropicOAuthContract.AUTHORIZATION_ENDPOINT, draft.authorizationEndpoint)
         assertEquals(AnthropicOAuthContract.TOKEN_ENDPOINT, draft.tokenEndpoint)
         assertEquals(AnthropicOAuthContract.MESSAGES_ENDPOINT, draft.inferenceEndpoint)
-        assertEquals(AnthropicOAuthContract.PUBLIC_CLIENT_ID, draft.clientId)
+        assertTrue(draft.clientId.isBlank())
         assertEquals(AnthropicOAuthContract.SCOPES, draft.scopes)
         assertEquals(AnthropicOAuthContract.CALLBACK_PORT, draft.callbackPort)
         assertEquals(AnthropicOAuthContract.OAUTH_BETA, draft.anthropicBeta)
         assertEquals(AnthropicProfileDefaults.DEFAULT_MODEL, draft.model)
         assertTrue(AnthropicProfileDefaults.DEFAULT_MODEL in AnthropicProfileDefaults.MODELS)
-        assertTrue(draft.validationErrors().isEmpty())
+        assertEquals(
+            "Public client ID is required",
+            draft.validationErrors()[ProviderProfile.Field.CLIENT_ID],
+        )
     }
 
     @Test
@@ -64,7 +67,7 @@ class ProviderProfileTest {
             authorizationEndpoint = "https://identity.example.test/authorize",
             tokenEndpoint = "https://identity.example.test/token",
             inferenceEndpoint = "https://relay.example.test/messages",
-            clientId = "replacement-client",
+            clientId = "host-owned-public-client",
             scopes = listOf("openid"),
             callbackPort = 54544,
             anthropicBeta = "different-beta",
@@ -74,7 +77,7 @@ class ProviderProfileTest {
         assertTrue(errors.containsKey(ProviderProfile.Field.AUTHORIZATION_ENDPOINT))
         assertTrue(errors.containsKey(ProviderProfile.Field.TOKEN_ENDPOINT))
         assertTrue(errors.containsKey(ProviderProfile.Field.INFERENCE_ENDPOINT))
-        assertTrue(errors.containsKey(ProviderProfile.Field.CLIENT_ID))
+        assertFalse(errors.containsKey(ProviderProfile.Field.CLIENT_ID))
         assertTrue(errors.containsKey(ProviderProfile.Field.SCOPES))
         assertTrue(errors.containsKey(ProviderProfile.Field.CALLBACK_PORT))
         assertTrue(errors.containsKey(ProviderProfile.Field.ANTHROPIC_BETA))
@@ -114,7 +117,7 @@ class ProviderProfileTest {
     }
 
     @Test
-    fun `codex draft uses compatibility client id and selectable model default`() {
+    fun `codex draft requires a host owned client registration`() {
         val draft = ProviderProfile.draft(ProviderType.CODEX, "Codex")
 
         assertEquals(CodexOAuthContract.AUTHORIZATION_ENDPOINT, draft.authorizationEndpoint)
@@ -122,10 +125,10 @@ class ProviderProfileTest {
         assertEquals(CodexOAuthContract.RESPONSES_ENDPOINT, draft.inferenceEndpoint)
         assertEquals(CodexOAuthContract.SCOPES, draft.scopes)
         assertEquals(CodexOAuthContract.CALLBACK_PORT, draft.callbackPort)
-        assertEquals(CodexProfileDefaults.PUBLIC_CLIENT_ID, draft.clientId)
+        assertTrue(draft.clientId.isBlank())
         assertEquals(CodexProfileDefaults.DEFAULT_MODEL, draft.model)
         assertTrue(CodexProfileDefaults.DEFAULT_MODEL in CodexProfileDefaults.MODELS)
-        assertTrue(draft.validationErrors().isEmpty())
+        assertTrue(draft.validationErrors().containsKey(ProviderProfile.Field.CLIENT_ID))
     }
 
     @Test
@@ -147,7 +150,7 @@ class ProviderProfileTest {
     }
 
     @Test
-    fun `xai draft uses inspected oauth contract and model catalog`() {
+    fun `xai draft requires a host owned client registration`() {
         val draft = ProviderProfile.draft(ProviderType.XAI, "Grok")
 
         assertEquals(XaiOAuthContract.AUTHORIZATION_ENDPOINT, draft.authorizationEndpoint)
@@ -155,10 +158,10 @@ class ProviderProfileTest {
         assertEquals(XaiOAuthContract.CHAT_COMPLETIONS_ENDPOINT, draft.inferenceEndpoint)
         assertEquals(XaiOAuthContract.SCOPES, draft.scopes)
         assertEquals(XaiOAuthContract.CALLBACK_PORT, draft.callbackPort)
-        assertEquals(XaiProfileDefaults.PUBLIC_CLIENT_ID, draft.clientId)
+        assertTrue(draft.clientId.isBlank())
         assertEquals(XaiProfileDefaults.DEFAULT_MODEL, draft.model)
         assertTrue(XaiProfileDefaults.DEFAULT_MODEL in XaiProfileDefaults.MODELS)
-        assertTrue(draft.validationErrors().isEmpty())
+        assertTrue(draft.validationErrors().containsKey(ProviderProfile.Field.CLIENT_ID))
     }
 
     @Test
@@ -327,14 +330,7 @@ class ProviderProfileTest {
             } else {
                 "https://identity.example.test/oauth/token"
             },
-            clientId = if (
-                type == ProviderType.ANTHROPIC ||
-                    type == ProviderType.CODEX || type == ProviderType.XAI
-            ) {
-                draft.clientId
-            } else {
-                "android-public-client"
-            },
+            clientId = "host-owned-public-client",
             model = "test-model",
             anthropicBeta = draft.anthropicBeta,
             googleProjectId = if (type == ProviderType.GEMINI) "test-project" else null,

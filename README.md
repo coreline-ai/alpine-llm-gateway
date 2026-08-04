@@ -106,6 +106,37 @@ Android 모듈은 다음 두 실행 방식을 분리합니다.
 
 Android 배포 경로는 `OAuthManager → OAuthLlmSession → OAuthHttpLlmBridge → HostBridgeServer`로 구현되어 있습니다. OpenAI-compatible, Anthropic Messages, Gemini generateContent와 별도 Codex account Responses adapter가 포함됩니다. non-stream JSON과 Provider SSE를 공통 `start/delta/done` event로 전달합니다.
 
+### Flutter Android/iOS MobileAgent 제품 OAuth
+
+`apps/mobile_agent`에 Android/iOS 공통 Flutter 앱, `packages/mobile_agent_auth`에 AppAuth 기반 native
+OAuth·Keystore/Keychain vault, `packages/mobile_agent_llm_transport`에 redacted SSE/Stop 계약을
+구현했습니다. `backend/mobile_agent_bff`는 MobileAgent OIDC access token을 검증하고
+OpenAI Responses·Anthropic Messages·xAI inference 공식 API를 server-side credential로 호출합니다.
+Flutter/native auth protocol capability와 redacted auth event stream을 추가했고, Stop은 local
+socket/task 즉시 중단과 BFF `accepted/not-active/unavailable` acknowledgment를 구분합니다.
+
+Flutter MobileAgent의 최근 대화는 제품 OAuth token vault와 분리해 기기 로컬에만 저장한다. Android는
+Keystore AES/GCM + no-backup private file, iOS는 device-only Keychain key + CryptoKit AES-GCM +
+file protection으로 암호화하며, 화면의 개별/전체 삭제는 이 로컬 사본에만 적용된다. BFF·Provider·IdP의
+prompt retention이나 account deletion과는 다른 동작이므로 별도 운영·법률 계약 없이는 서버 삭제 성공으로
+표시하지 않는다.
+
+다른 앱이나 공식 CLI의 public client ID와 first-party fingerprint를 복사한 direct consumer OAuth는
+제품 경로로 사용하지 않습니다. 기존 Android compatibility profile의 복사 client ID 기본값도 제거했고,
+MobileAgent 소스와 APK/IPA archive를 검사하는 `scripts/verify-mobile-oauth-release.py`를 추가했습니다.
+
+```bash
+make mobile-analyze mobile-test oauth-release-scan
+make bff-bootstrap bff-test
+make dev-up dev-oidc-test
+```
+
+로컬 Keycloak fixture에서는 실제 로그인 폼, Authorization Code + PKCE, BFF audience, refresh token
+rotation/replay 거부/revoke까지 검증합니다. 제품 앱은 HTTP issuer를 거부하므로 Android/iPhone 실제
+로그인은 MobileAgent 소유 HTTPS staging issuer, callback registration, signing 설정으로 수행해야 합니다.
+구현 상태와 외부 조건은
+[Android/iOS Flutter OAuth 실동작 계획](dev-plan/implement_20260804_202612.md)을 참고하세요.
+
 Phase 4부터 `HostBridgeServer`와 Gateway client는 선택형 `:alpine-llm-bridge`에 있으며,
 `AlpineLlmBridgeController`가 Host Bridge·runtime session·Python Gateway를 단일 lifecycle로
 관리합니다. Python package는 `:alpine-llm-gateway-pack-bundled`의 별도 checksum lock 자산이므로
@@ -146,13 +177,17 @@ Host Bridge는 bounded concurrency, overload 429/`Retry-After`, request timeout,
 
 ## 선택형 멀티 LLM 데모 앱
 
-별도 `:demo-chatbot` 앱은 Claude/Anthropic, Gemini, OpenAI-compatible과 Codex OAuth 프로필을 GUI에서 복수 등록하고, 인증된 연결 가운데 하나를 선택해 일반 채팅과 스트리밍 취소를 검증한다. Codex endpoint/scope/callback과 CLI 호환 public client ID는 고정값으로 표시하고, 실제 CLI 호출로 검증한 모델 목록에서 기본 모델을 선택한다. assistant Markdown은 표·안전 링크 확인·경량 코드 강조를 포함한 native Compose로 표시한다. 명시적인 단어·문장·목록 수 제한과 앱에 없는 웹 검증 주장 방지는 완료 후 로컬 검증하며, 두 검사 합계로 같은 요청에서 최대 1회만 자동 교정한다.
+별도 `:demo-chatbot` 앱은 Claude/Anthropic, Gemini, OpenAI-compatible과 Codex reference 프로필을 GUI에서 복수 등록하고, 인증된 연결 가운데 하나를 선택해 일반 채팅과 스트리밍 취소를 검증한다. client ID는 앱에 내장하지 않고 MobileAgent가 소유·승인받은 registration만 명시적으로 입력해야 한다. 이 Compose 앱은 compatibility/reference 경로이며 Flutter MobileAgent 출시 바이너리에는 연결하지 않는다. assistant Markdown은 표·안전 링크 확인·경량 코드 강조를 포함한 native Compose로 표시한다.
 
 설정 방법과 OAuth callback 제한은 [데모 챗봇 가이드](demo-chatbot/README.md)를 참고한다.
 
 ## 테스트
 
 ```bash
+make mobile-analyze mobile-test oauth-release-scan
+make bff-bootstrap bff-test
+make dev-up dev-oidc-test
+make mobile-build-debug
 python3 -m unittest discover -s tests -v
 ./gradlew :android:testDebugUnitTest :android:assembleDebug
 ./gradlew :sample:assembleDebug :android:assembleDebugAndroidTest
@@ -199,9 +234,12 @@ Gradle module metadata, license/SBOM과 `SHA256SUMS`로 생성됩니다.
   16 KiB 기준인 `0x4000` 이상인지 확인합니다.
 - terminal 최초 크기는 native PTY에 적용됩니다. 현재 PRoot가 실행 후 창 크기 변경을 guest에
   전달하지 않으므로 session은 `INITIAL_SIZE_ONLY`를 명시하고 동적 resize 요청을 거부합니다.
-- 실제 Provider OAuth client registration/client id는 앱 개발자가 준비해야 합니다.
-- Codex 경로는 로컬 mock 계약까지 구현했으며 실제 ChatGPT 계정, client registration 사용 권한과 Provider 정책 E2E는 아직 검증하지 않았습니다. 다른 앱의 public client ID를 복사해 배포하지 마세요.
-- Kimi device flow, xAI OIDC discovery와 Gemini project onboarding은 후속 범위입니다.
+- 실제 Provider direct OAuth를 활성화하려면 MobileAgent 명의 client registration과 inference 사용 승인이 필요합니다.
+- 기존 Android compatibility profile의 복사 client ID 기본값과 읽기 전용 입력은 제거했습니다. reference module의 direct consumer endpoint는 Flutter MobileAgent 제품 의존성에서 격리되어 있으며 공식 승인 전 제품 지원이 아닙니다.
+- Codex/Claude/Grok 제품 표시는 각각 BFF의 OpenAI Responses/Anthropic Messages/xAI inference adapter입니다. ChatGPT·Claude·Grok consumer subscription 로그인으로 간주하지 않습니다.
+- Android/iOS native OAuth·secure storage·auth state event·SSE/local cancel/server acknowledgment와 BFF adapter는 구현·자동 테스트·debug build를 통과했지만, 소유 HTTPS issuer와 세 Provider secret/account가 없어 실제 staging 계정 LLM E2E는 아직 `NOT_RUN`입니다.
+- BFF request/cancel/revocation registry는 현재 단일 process memory 구현입니다. 다중 replica 배포 전 Redis ownership·cancel pub/sub·quota/revocation TTL이 필요합니다.
+- 현재 Flutter 3.44.8에서는 Flutter 공식 가이드상 Built-in Kotlin 활성화가 Flutter 3.47+ 조건이므로 AGP 9 compatibility warning이 남아 있습니다.
 - Keystore instrumentation 2건, loopback Host Bridge 3건과 Compose 접근성·입력 2건은 Samsung `SM-S931N` Android 16 `arm64-v8a`에서 검증했습니다. runtime/PTY와 Python Gateway는 별도 device probe로 같은 기기에서 검증합니다.
 - 외부 Provider 실제 계정 end-to-end 검증은 credential이 없는 로컬 테스트에서 수행하지 않습니다.
 - 현재 저장소에는 프로젝트 전체 `LICENSE`가 없습니다. PRoot/talloc native source bundle 생성기는

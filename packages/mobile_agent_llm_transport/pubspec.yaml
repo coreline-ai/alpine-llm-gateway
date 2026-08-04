@@ -1,0 +1,19 @@
+name: mobile_agent_llm_transport
+description: Redacted native SSE and cancellation contract for the MobileAgent LLM BFF.
+version: 0.0.1
+homepage: https://github.com/coreline-ai/flutter_mobile_agent
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:

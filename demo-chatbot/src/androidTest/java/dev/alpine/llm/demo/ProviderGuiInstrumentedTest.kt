@@ -236,7 +236,7 @@ class ProviderGuiInstrumentedTest {
     }
 
     @Test
-    fun codexFormPrefillsClientIdAndAllowsModelSelection() {
+    fun codexFormRequiresHostClientIdAndAllowsModelSelection() {
         launch(
             ProviderEditActivity::class.java,
             Intent(context, ProviderEditActivity::class.java)
@@ -247,7 +247,7 @@ class ProviderGuiInstrumentedTest {
         )
 
         scrollToFormTag("client_id")
-        assertEditableTextContains("client_id", CodexProfileDefaults.PUBLIC_CLIENT_ID)
+        compose.onNodeWithTag("client_id").performTextInput("host-owned-codex-client")
         scrollToFormTag("model")
         assertEditableTextContains("model", CodexProfileDefaults.DEFAULT_MODEL)
         compose.onNodeWithTag("model").performClick()
@@ -261,12 +261,12 @@ class ProviderGuiInstrumentedTest {
         }
 
         val saved = ProviderProfileStore(context).load().single()
-        assertEquals(CodexProfileDefaults.PUBLIC_CLIENT_ID, saved.clientId)
+        assertEquals("host-owned-codex-client", saved.clientId)
         assertEquals("gpt-5.6-sol", saved.model)
     }
 
     @Test
-    fun anthropicFormPrefillsReferenceContractAndAllowsModelSelection() {
+    fun anthropicFormRequiresHostClientIdAndAllowsModelSelection() {
         launch(
             ProviderEditActivity::class.java,
             Intent(context, ProviderEditActivity::class.java)
@@ -282,7 +282,7 @@ class ProviderGuiInstrumentedTest {
             AnthropicOAuthContract.AUTHORIZATION_ENDPOINT,
         )
         scrollToFormTag("client_id")
-        assertEditableTextContains("client_id", AnthropicOAuthContract.PUBLIC_CLIENT_ID)
+        compose.onNodeWithTag("client_id").performTextInput("host-owned-anthropic-client")
         scrollToFormTag("callback_port")
         assertEditableTextContains("callback_port", "54545")
         scrollToFormTag("model")
@@ -305,7 +305,7 @@ class ProviderGuiInstrumentedTest {
     }
 
     @Test
-    fun xaiFormPrefillsPublicClientAndAllowsGrokModelSelection() {
+    fun xaiFormRequiresHostClientIdAndAllowsGrokModelSelection() {
         launch(
             ProviderEditActivity::class.java,
             Intent(context, ProviderEditActivity::class.java)
@@ -316,7 +316,7 @@ class ProviderGuiInstrumentedTest {
         )
 
         scrollToFormTag("client_id")
-        assertEditableTextContains("client_id", XaiProfileDefaults.PUBLIC_CLIENT_ID)
+        compose.onNodeWithTag("client_id").performTextInput("host-owned-xai-client")
         scrollToFormTag("callback_port")
         assertEditableTextContains("callback_port", "56121")
         scrollToFormTag("model")
