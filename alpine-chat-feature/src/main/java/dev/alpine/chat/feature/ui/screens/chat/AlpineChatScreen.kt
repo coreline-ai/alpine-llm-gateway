@@ -1,5 +1,6 @@
 package dev.alpine.chat.feature.ui.screens.chat
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -23,6 +24,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.AddComment
 import androidx.compose.material.icons.outlined.ArrowDropDown
@@ -31,8 +33,9 @@ import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.StopCircle
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -40,6 +43,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.DrawerValue
@@ -51,7 +55,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -76,6 +79,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.alpine.chat.feature.model.ChatMessage
 import dev.alpine.chat.feature.model.ChatMessageState
 import dev.alpine.chat.feature.model.ChatRole
@@ -87,6 +91,7 @@ import dev.alpine.chat.feature.ui.screens.assistant.AssistantModeControl
 import dev.alpine.chat.feature.ui.screens.conversation.ConversationHistory
 import dev.alpine.chat.feature.ui.state.ChatFailure
 import dev.alpine.chat.feature.ui.state.ChatRecoveryAction
+import dev.alpine.chat.feature.ui.theme.AlpineTheme
 import dev.alpine.chat.feature.R
 import kotlinx.coroutines.launch
 
@@ -145,61 +150,16 @@ fun AlpineChatScreen(
                 .testTag("chat_screen")
                 .semantics { testTagsAsResourceId = true },
             topBar = {
-                CenterAlignedTopAppBar(
-                    navigationIcon = {
-                        IconButton(
-                            onClick = {
-                                historyVisible = true
-                                scope.launch { drawerState.open() }
-                            },
-                            modifier = Modifier
-                                .size(48.dp)
-                                .testTag("conversation_history")
-                                .semantics { contentDescription = "Conversation history" },
-                        ) {
-                            Icon(Icons.Outlined.History, contentDescription = null)
-                        }
+                ChatToolbar(
+                    title = state.conversationTitle,
+                    activeGenerationCount = state.activeGenerationCount,
+                    newChatEnabled = !state.isLoadingConversations,
+                    onHistory = {
+                        historyVisible = true
+                        scope.launch { drawerState.open() }
                     },
-                    title = {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = state.conversationTitle,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            if (state.activeGenerationCount > 1) {
-                                Text(
-                                    text = "${state.activeGenerationCount} chats generating",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    },
-                    actions = {
-                        IconButton(
-                            onClick = onNewChat,
-                            enabled = !state.isLoadingConversations,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .testTag("new_chat")
-                                .semantics { contentDescription = "Start new chat" },
-                        ) {
-                            Icon(Icons.Outlined.AddComment, contentDescription = null)
-                        }
-                        IconButton(
-                            onClick = onManageProviders,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .testTag("manage_providers")
-                                .semantics { contentDescription = "Manage LLM connections" },
-                        ) {
-                            Icon(Icons.Outlined.Hub, contentDescription = null)
-                        }
-                    },
-                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
+                    onNewChat = onNewChat,
+                    onManageProviders = onManageProviders,
                 )
             },
             bottomBar = {
@@ -224,6 +184,9 @@ fun AlpineChatScreen(
                 Column(Modifier.fillMaxSize()) {
                     state.storageWarning?.let { warning ->
                         StorageWarning(warning)
+                    }
+                    if (state.providers.isEmpty()) {
+                        ConnectionNotice()
                     }
                     ProviderSelector(
                         providers = state.providers,
@@ -288,6 +251,112 @@ fun AlpineChatScreen(
     }
 }
 
+@Composable
+private fun ChatToolbar(
+    title: String,
+    activeGenerationCount: Int,
+    newChatEnabled: Boolean,
+    onHistory: () -> Unit,
+    onNewChat: () -> Unit,
+    onManageProviders: () -> Unit,
+) {
+    AdaptiveContent(horizontalPadding = 12.dp) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp, bottom = 6.dp),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(
+                    onClick = onHistory,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .testTag("conversation_history")
+                        .semantics { contentDescription = "Conversation history" },
+                ) {
+                    Icon(Icons.Outlined.History, contentDescription = null)
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (activeGenerationCount > 1) {
+                        Text(
+                            text = "$activeGenerationCount chats generating",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                IconButton(
+                    onClick = onNewChat,
+                    enabled = newChatEnabled,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .testTag("new_chat")
+                        .semantics { contentDescription = "Start new chat" },
+                ) {
+                    Icon(Icons.Outlined.AddComment, contentDescription = null)
+                }
+                IconButton(
+                    onClick = onManageProviders,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .testTag("manage_providers")
+                        .semantics { contentDescription = "Manage LLM connections" },
+                ) {
+                    Icon(Icons.Outlined.Hub, contentDescription = null)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConnectionNotice() {
+    val status = AlpineTheme.statusColors
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 4.dp),
+        shape = RoundedCornerShape(18.dp),
+        color = status.warning,
+        contentColor = status.onWarning,
+        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.WarningAmber,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+            )
+            Spacer(Modifier.size(10.dp))
+            Column {
+                Text("No connected LLM", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Connect an OAuth provider, then choose a model.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProviderSelector(
@@ -301,6 +370,7 @@ private fun ProviderSelector(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val selected = providers.firstOrNull { it.profileId == selectedProfileId }
+    val canOpen = providers.isEmpty() || enabled
     Column(Modifier.fillMaxWidth()) {
         ExposedDropdownMenuBox(
             expanded = expanded,
@@ -310,7 +380,7 @@ private fun ProviderSelector(
                 .padding(top = 8.dp)
                 .testTag("provider_selector")
                 .semantics {
-                    if (!enabled) disabled()
+                    if (!canOpen) disabled()
                 },
         ) {
             Surface(
@@ -320,38 +390,46 @@ private fun ProviderSelector(
                         type = MenuAnchorType.PrimaryNotEditable,
                         enabled = enabled,
                     )
-                    .clip(RoundedCornerShape(18.dp))
-                    .clickable(enabled = enabled && providers.isNotEmpty()) { expanded = true }
+                    .clip(RoundedCornerShape(20.dp))
+                    .clickable(enabled = canOpen) {
+                        if (providers.isEmpty()) onManageProviders() else expanded = true
+                    }
                     .semantics { contentDescription = "Connected LLM selector" },
-                shape = RoundedCornerShape(18.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline),
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.SmartToy,
+                        imageVector = Icons.Outlined.Hub,
                         contentDescription = null,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(24.dp),
                     )
-                    Spacer(Modifier.size(8.dp))
+                    Spacer(Modifier.size(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            text = selected?.label ?: "No connected LLM",
+                            text = selected?.label ?: "LLM connection",
                             style = MaterialTheme.typography.labelLarge,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            text = selected?.model ?: "Connect an LLM to begin",
-                            style = MaterialTheme.typography.labelSmall,
+                            text = selected?.model ?: "Choose a Provider",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
+                    Icon(
+                        if (providers.isEmpty()) Icons.AutoMirrored.Outlined.ArrowForward
+                        else Icons.Outlined.ArrowDropDown,
+                        contentDescription = null,
+                    )
                 }
             }
             ExposedDropdownMenu(
@@ -450,47 +528,54 @@ private fun EmptyChatState(
     onManageProviders: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        Column(
+    Box(
+        modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
             modifier = Modifier
-                .fillMaxHeight()
-                .widthIn(max = 340.dp)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+                .fillMaxWidth()
+                .widthIn(max = 620.dp),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.inverseSurface,
+            contentColor = MaterialTheme.colorScheme.inverseOnSurface,
         ) {
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
+            Column(
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 24.dp),
+                horizontalAlignment = Alignment.Start,
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.SmartToy,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(16.dp).size(32.dp),
+                Text(
+                    text = "QUICK CHAT",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.inversePrimary,
+                    letterSpacing = 1.4.sp,
                 )
-            }
-            Spacer(Modifier.height(16.dp))
-            Text(
-                text = if (hasProvider) "Start a conversation" else "Connect an LLM to start",
-                style = MaterialTheme.typography.titleLarge,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = if (hasProvider) {
-                    "Your selected provider and model will be shown on every response."
-                } else {
-                    "Add an OAuth-connected provider, then choose it here."
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-            if (!hasProvider) {
-                Spacer(Modifier.height(14.dp))
-                TextButton(onClick = onManageProviders) { Text("Manage LLM connections") }
+                Spacer(Modifier.height(18.dp))
+                Text(
+                    text = if (hasProvider) "Start a conversation" else "Connect an LLM to start",
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = if (hasProvider) {
+                        "Your selected provider and model will be shown on every response."
+                    } else {
+                        "Connect Codex, Claude, Gemini, or Grok, then choose a model."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.90f),
+                )
+                if (!hasProvider) {
+                    Spacer(Modifier.height(20.dp))
+                    Button(
+                        onClick = onManageProviders,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Manage LLM connections")
+                    }
+                }
             }
         }
     }
@@ -535,6 +620,7 @@ private fun FailureAction(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.error),
     ) {
         Row(
             modifier = Modifier.padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
@@ -650,6 +736,11 @@ private fun MessageBubble(message: ChatMessage) {
                 ),
                 color = bubbleColor,
                 contentColor = contentColor,
+                border = BorderStroke(
+                    1.dp,
+                    if (isError) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.outline,
+                ),
             ) {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                     val displayText = message.displayText()
@@ -667,7 +758,7 @@ private fun MessageBubble(message: ChatMessage) {
                             text = status,
                             style = MaterialTheme.typography.labelSmall,
                             fontStyle = FontStyle.Italic,
-                            color = contentColor.copy(alpha = 0.72f),
+                            color = contentColor.copy(alpha = 0.88f),
                         )
                     }
                 }
@@ -691,7 +782,8 @@ private fun ChatComposer(
             .navigationBarsPadding()
             .padding(vertical = 8.dp),
         shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline),
     ) {
         Row(
             modifier = Modifier.padding(start = 8.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
@@ -716,9 +808,15 @@ private fun ChatComposer(
                 maxLines = 5,
                 shape = RoundedCornerShape(24.dp),
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    disabledTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    disabledContainerColor = MaterialTheme.colorScheme.surface,
+                    focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
                     unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
                     disabledIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
@@ -752,6 +850,9 @@ private fun ChatComposer(
                         }
                     },
                     enabled = enabled && value.isNotBlank(),
+                    colors = IconButtonDefaults.iconButtonColors(
+                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
                     modifier = Modifier
                         .size(48.dp)
                         .testTag("send_button")

@@ -76,9 +76,17 @@ PRoot executable을 writable app home으로 복사해 실행하지 않는다. bu
 arm64/x86_64 Alpine package inventory도 각각 포함된다. native source 생성 성공만으로 rootfs package
 source mirror나 프로젝트 라이선스 gate가 자동 완료되지는 않는다.
 
+2026-08-07의 `distribution/release-readiness.json` 기준 release-blocking gate는 7개이며
+GitHub remote CI 기준선만 `READY`, 다음 6개는 `BLOCKED`다.
+
 1. 저장소 소유자가 프로젝트 전체 라이선스를 명시한다.
-2. 고정 PRoot/talloc native source와 Alpine package-level source mirror를 release에 연결한다.
-3. 실제 Provider 계정 E2E는 자격 증명을 추출하지 않는 opt-in 절차로 승인·실행한다.
-4. Maven/App Store 배포 위치와 서명 key owner를 확정한다.
+2. 고정 PRoot/talloc native source와 Alpine package-level exact source mirror를 release에 연결한다.
+3. 실제 Provider 계정 E2E를 credential을 추출하지 않는 opt-in 절차로 승인·실행한다.
+4. signed AAB와 Play test track을 준비해 delivery E2E를 실행한다.
+5. Samsung reboot·Doze·process-kill 검증의 파괴적 테스트 승인 창을 확보한다.
+6. Maven/App Store 배포 위치, 서명 key owner와 최종 책임자를 확정한다.
+
+원격 CI의 최신 성공 기준선과 현재 로컬 변경의 차이는
+[`distribution/GITHUB_CI_STATUS.md`](../distribution/GITHUB_CI_STATUS.md)를 따른다.
 
 이 문서는 법률 자문이 아니며 공개 배포 전 담당 검토가 필요하다.

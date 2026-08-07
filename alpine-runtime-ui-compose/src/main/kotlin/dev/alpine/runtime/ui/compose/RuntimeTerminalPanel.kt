@@ -1,5 +1,6 @@
 package dev.alpine.runtime.ui.compose
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,10 +14,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -65,7 +68,12 @@ fun RuntimeTerminalPanel(
         scrollState.scrollTo(scrollState.maxValue)
     }
 
-    Card(modifier = modifier.fillMaxWidth()) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline),
+    ) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -90,18 +98,22 @@ fun RuntimeTerminalPanel(
                     Button(
                         onClick = onOpen,
                         enabled = state.sessionActive && state.operation == RuntimeHostOperation.IDLE,
+                        colors = ButtonDefaults.buttonColors(
+                            disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
                     ) { Text("열기") }
                 }
             }
             SelectionContainer {
                 Text(
                     text = state.terminalText.ifEmpty { "터미널 출력이 여기에 표시됩니다." },
-                    color = if (state.terminalText.isEmpty()) Color(0xFF9CA3AF) else Color(0xFFE5E7EB),
+                    color = if (state.terminalText.isEmpty()) Color(0xFFD2D6CF) else Color(0xFFF4F3ED),
                     fontFamily = FontFamily.Monospace,
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 160.dp, max = 360.dp)
-                        .background(Color(0xFF111827), MaterialTheme.shapes.small)
+                        .background(Color(0xFF10120F), MaterialTheme.shapes.medium)
                         .verticalScroll(scrollState)
                         .padding(12.dp)
                         .semantics { contentDescription = "Alpine 터미널 출력" },
@@ -115,6 +127,12 @@ fun RuntimeTerminalPanel(
                 onValueChange = { command = it },
                 label = { Text("명령 입력") },
                 enabled = state.terminalActive,
+                colors = OutlinedTextFieldDefaults.colors(
+                    disabledTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    disabledBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                    disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { submit() }),
@@ -136,19 +154,41 @@ fun RuntimeTerminalPanel(
                 Button(
                     onClick = { submit(); focusManager.moveFocus(FocusDirection.Previous) },
                     enabled = state.terminalActive && command.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
                     modifier = Modifier.weight(1f),
                 ) { Text("보내기") }
                 OutlinedButton(
                     onClick = onInterrupt,
                     enabled = state.terminalActive,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                    border = BorderStroke(
+                        1.25.dp,
+                        if (state.terminalActive) MaterialTheme.colorScheme.outline
+                        else MaterialTheme.colorScheme.outlineVariant,
+                    ),
                     modifier = Modifier.weight(1f),
                 ) { Text("중단 Ctrl+C") }
-                OutlinedButton(
-                    onClick = onClose,
-                    enabled = state.terminalActive,
-                    modifier = Modifier.weight(1f),
-                ) { Text("닫기") }
             }
+            OutlinedButton(
+                onClick = onClose,
+                enabled = state.terminalActive,
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+                border = BorderStroke(
+                    1.25.dp,
+                    if (state.terminalActive) MaterialTheme.colorScheme.outline
+                    else MaterialTheme.colorScheme.outlineVariant,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("터미널 닫기") }
         }
     }
 }

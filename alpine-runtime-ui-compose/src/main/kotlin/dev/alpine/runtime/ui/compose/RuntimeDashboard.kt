@@ -1,15 +1,17 @@
 package dev.alpine.runtime.ui.compose
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -66,10 +68,14 @@ fun RuntimeDashboard(
 ) {
     val actions = state.actionAvailability()
     val presentation = state.runtimeState.toPresentation()
-    Card(
+    val primaryEnabled = actions.install || actions.start || actions.stop || actions.health
+    Surface(
         modifier = modifier
             .fillMaxWidth()
             .semantics { stateDescription = presentation.label },
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -122,7 +128,11 @@ fun RuntimeDashboard(
                         actions.stop -> onStop
                         else -> onHealth
                     },
-                    enabled = actions.install || actions.start || actions.stop || actions.health,
+                    enabled = primaryEnabled,
+                    colors = ButtonDefaults.buttonColors(
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
                     modifier = Modifier.weight(1f),
                 ) {
                     Text(
@@ -137,6 +147,15 @@ fun RuntimeDashboard(
                 OutlinedButton(
                     onClick = onHealth,
                     enabled = actions.health,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                    border = BorderStroke(
+                        1.25.dp,
+                        if (actions.health) MaterialTheme.colorScheme.outline
+                        else MaterialTheme.colorScheme.outlineVariant,
+                    ),
                     modifier = Modifier.weight(1f),
                 ) { Text("상태 검사") }
             }
@@ -147,11 +166,29 @@ fun RuntimeDashboard(
                 OutlinedButton(
                     onClick = onRepair,
                     enabled = actions.repair,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                    border = BorderStroke(
+                        1.25.dp,
+                        if (actions.repair) MaterialTheme.colorScheme.outline
+                        else MaterialTheme.colorScheme.outlineVariant,
+                    ),
                     modifier = Modifier.weight(1f),
                 ) { Text("복구") }
                 OutlinedButton(
                     onClick = onReset,
                     enabled = actions.reset,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                    border = BorderStroke(
+                        1.25.dp,
+                        if (actions.reset) MaterialTheme.colorScheme.outline
+                        else MaterialTheme.colorScheme.outlineVariant,
+                    ),
                     modifier = Modifier.weight(1f),
                 ) { Text("초기화") }
             }

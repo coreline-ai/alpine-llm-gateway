@@ -1,5 +1,6 @@
 package dev.alpine.runtime.ui.compose
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -38,8 +39,10 @@ fun RuntimeStateBadge(
     val presentation = state.toPresentation()
     Surface(
         modifier = modifier,
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
         shape = MaterialTheme.shapes.small,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
         Text(
             text = presentation.label,

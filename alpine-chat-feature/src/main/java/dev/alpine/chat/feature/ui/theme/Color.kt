@@ -4,51 +4,77 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 
-internal val AlpineBlue = Color(0xFF2855D9)
-internal val AlpineBlueDark = Color(0xFFB8C4FF)
-internal val AlpineBlueContainer = Color(0xFFDDE2FF)
-internal val AlpineBlueContainerDark = Color(0xFF0B328F)
+object AlpineDesignTokens {
+    val Paper = Color(0xFFF4F3ED)
+    val Ink = Color(0xFF10120F)
+    val Acid = Color(0xFFB9F227)
+    val Slate = Color(0xFF31372F)
+    val Warning = Color(0xFFFFE5A3)
+    // Keep secondary copy visibly subordinate without relying on low opacity.
+    // This is intentionally darker than Material's default muted text on the paper surface.
+    val Muted = Color(0xFF4E534C)
+    val OutlineSoft = Color(0xFFA9ACA3)
+    val SurfaceRaised = Color(0xFFFFFEF8)
+}
 
 internal val AlpineLightColors = lightColorScheme(
-    primary = AlpineBlue,
-    onPrimary = Color.White,
-    primaryContainer = AlpineBlueContainer,
-    onPrimaryContainer = Color(0xFF00164D),
-    secondary = Color(0xFF53608F),
-    secondaryContainer = Color(0xFFDCE1FF),
-    onSecondaryContainer = Color(0xFF101A43),
-    tertiary = Color(0xFF745574),
-    tertiaryContainer = Color(0xFFFFD7FA),
-    background = Color(0xFFF9F9FF),
-    onBackground = Color(0xFF1A1B20),
-    surface = Color(0xFFF9F9FF),
-    surfaceContainer = Color(0xFFEEEEF6),
-    surfaceContainerHigh = Color(0xFFE8E8F0),
-    onSurface = Color(0xFF1A1B20),
-    onSurfaceVariant = Color(0xFF45464F),
+    primary = AlpineDesignTokens.Acid,
+    onPrimary = AlpineDesignTokens.Ink,
+    primaryContainer = AlpineDesignTokens.Acid,
+    onPrimaryContainer = AlpineDesignTokens.Ink,
+    secondary = AlpineDesignTokens.Slate,
+    onSecondary = AlpineDesignTokens.Paper,
+    secondaryContainer = AlpineDesignTokens.SurfaceRaised,
+    onSecondaryContainer = AlpineDesignTokens.Ink,
+    tertiary = Color(0xFF557A16),
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFE1F5BC),
+    onTertiaryContainer = AlpineDesignTokens.Ink,
+    background = AlpineDesignTokens.Paper,
+    onBackground = AlpineDesignTokens.Ink,
+    surface = AlpineDesignTokens.Paper,
+    surfaceContainer = Color(0xFFEEECE4),
+    surfaceContainerHigh = Color(0xFFE5E3DA),
+    surfaceContainerHighest = Color(0xFFDAD8CF),
+    onSurface = AlpineDesignTokens.Ink,
+    onSurfaceVariant = AlpineDesignTokens.Muted,
+    outline = AlpineDesignTokens.Ink,
+    outlineVariant = AlpineDesignTokens.OutlineSoft,
+    inverseSurface = AlpineDesignTokens.Ink,
+    inverseOnSurface = AlpineDesignTokens.Paper,
+    inversePrimary = AlpineDesignTokens.Acid,
     error = Color(0xFFBA1A1A),
     errorContainer = Color(0xFFFFDAD6),
+    onErrorContainer = Color(0xFF410002),
 )
 
 internal val AlpineDarkColors = darkColorScheme(
-    primary = AlpineBlueDark,
-    onPrimary = Color(0xFF00277A),
-    primaryContainer = AlpineBlueContainerDark,
-    onPrimaryContainer = Color(0xFFDDE2FF),
-    secondary = Color(0xFFBBC3F9),
-    secondaryContainer = Color(0xFF3B466F),
-    onSecondaryContainer = Color(0xFFDCE1FF),
-    tertiary = Color(0xFFE2BBDD),
-    tertiaryContainer = Color(0xFF5B3E5B),
-    background = Color(0xFF121318),
-    onBackground = Color(0xFFE3E2E9),
-    surface = Color(0xFF121318),
-    surfaceContainer = Color(0xFF1F2026),
-    surfaceContainerHigh = Color(0xFF292A30),
-    onSurface = Color(0xFFE3E2E9),
-    onSurfaceVariant = Color(0xFFC6C6D0),
+    primary = AlpineDesignTokens.Acid,
+    onPrimary = AlpineDesignTokens.Ink,
+    primaryContainer = Color(0xFF455E0C),
+    onPrimaryContainer = Color(0xFFE8FFAF),
+    secondary = Color(0xFFD8DBD3),
+    onSecondary = AlpineDesignTokens.Ink,
+    secondaryContainer = AlpineDesignTokens.Slate,
+    onSecondaryContainer = AlpineDesignTokens.Paper,
+    tertiary = Color(0xFFBEEA6D),
+    tertiaryContainer = Color(0xFF324D00),
+    background = AlpineDesignTokens.Ink,
+    onBackground = AlpineDesignTokens.Paper,
+    surface = AlpineDesignTokens.Ink,
+    surfaceContainer = Color(0xFF1B1E1A),
+    surfaceContainerHigh = AlpineDesignTokens.Slate,
+    surfaceContainerHighest = Color(0xFF3C423A),
+    onSurface = AlpineDesignTokens.Paper,
+    onSurfaceVariant = Color(0xFFC5C8C0),
+    outline = Color(0xFFE4E7DE),
+    outlineVariant = Color(0xFF5B6058),
+    inverseSurface = AlpineDesignTokens.Paper,
+    inverseOnSurface = AlpineDesignTokens.Ink,
+    inversePrimary = Color(0xFF557A16),
     error = Color(0xFFFFB4AB),
     errorContainer = Color(0xFF93000A),
+    onErrorContainer = Color(0xFFFFDAD6),
 )
 
 data class AlpineStatusColors(
@@ -59,15 +85,15 @@ data class AlpineStatusColors(
 )
 
 internal val LightStatusColors = AlpineStatusColors(
-    connected = Color(0xFFD2F8DC),
-    onConnected = Color(0xFF0A5C31),
-    warning = Color(0xFFFFDDB3),
-    onWarning = Color(0xFF6D3B00),
+    connected = AlpineDesignTokens.Acid,
+    onConnected = AlpineDesignTokens.Ink,
+    warning = AlpineDesignTokens.Warning,
+    onWarning = AlpineDesignTokens.Ink,
 )
 
 internal val DarkStatusColors = AlpineStatusColors(
-    connected = Color(0xFF0A5C31),
-    onConnected = Color(0xFFD2F8DC),
-    warning = Color(0xFF6D3B00),
-    onWarning = Color(0xFFFFDDB3),
+    connected = Color(0xFF455E0C),
+    onConnected = Color(0xFFE8FFAF),
+    warning = Color(0xFF5A4300),
+    onWarning = AlpineDesignTokens.Warning,
 )

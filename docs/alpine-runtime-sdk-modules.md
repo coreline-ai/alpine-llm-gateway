@@ -99,8 +99,10 @@ dependencies {
 - 기존 conversation schema는 실행 모드가 없으면 `FAST_CHAT`으로 migration하며 새 데이터는 대화별 mode를 저장한다.
 - Phase 6에서 Android-free `RuntimeHostController`, 상태·복구·터미널·패키지 Compose UI,
   Compose 없는 XML sample과 `:integrated-app`의 명시적 mode selector를 연결했다.
-- 통합 제품 Phase 2에서 `:integrated-app`의 빠른 채팅을 실제 Provider 계정 UI·모델 선택·
-  stream/Stop/retry·대화 복원에 연결했다. Alpine Gateway 채팅 결합은 Phase 3 범위다.
+- 통합 제품 Phase 2에서 `:integrated-app`의 빠른 채팅을 Provider 계정 UI·모델 선택·
+  stream/Stop/retry·대화 복원에 연결했다. Phase 3에서는 같은 공통 채팅 화면을
+  Runtime·HostBridge·Python Gateway backend와 결합하고 Gateway lifecycle·health·사용자 승인
+  fallback, 터미널·패키지 도구까지 통합했다.
 - Host lifecycle/service/notification/manifest/저장소 지침은
   [Host 통합 가이드](alpine-runtime-host-integration.md)를 따른다.
 - 현재 19개 AAR/JAR의 sources/POM/Gradle metadata/checksum, 8개 외부 release 축소 앱,

@@ -1,5 +1,6 @@
 package dev.alpine.chat.feature.ui.screens.assistant
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,9 +14,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -69,7 +72,15 @@ fun AssistantModeControl(
             )
         },
         label = { Text("${selectedSkill.title} · ${selectedPersona.title}") },
+        shape = RoundedCornerShape(16.dp),
+        colors = AssistChipDefaults.assistChipColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            labelColor = MaterialTheme.colorScheme.onSurface,
+            leadingIconContentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline),
         modifier = Modifier
+            .fillMaxWidth()
             .padding(horizontal = 4.dp, vertical = 6.dp)
             .heightIn(min = 48.dp)
             .testTag("assistant_mode_selector")
@@ -225,6 +236,11 @@ private fun SelectionRow(
             MaterialTheme.colorScheme.surface
         },
         shape = MaterialTheme.shapes.medium,
+        border = BorderStroke(
+            1.dp,
+            if (selected) MaterialTheme.colorScheme.outline
+            else MaterialTheme.colorScheme.outlineVariant,
+        ),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),

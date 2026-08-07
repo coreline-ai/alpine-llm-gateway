@@ -258,6 +258,7 @@ class IntegratedFastChatInstrumentedTest {
     private fun codexProfile(id: String): ProviderProfile =
         ProviderProfile.draft(ProviderType.CODEX, "Integrated Codex").copy(
             id = id,
+            clientId = "integration-test-public-client",
             createdAtMs = 1L,
         )
 }

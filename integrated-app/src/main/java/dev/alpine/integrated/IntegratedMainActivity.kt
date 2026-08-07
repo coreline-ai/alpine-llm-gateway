@@ -8,37 +8,53 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.alpine.chat.feature.data.AssistantDefaultsStore
@@ -47,6 +63,7 @@ import dev.alpine.chat.feature.data.ConversationStore
 import dev.alpine.chat.feature.ui.ChatViewModel
 import dev.alpine.chat.feature.ui.screens.chat.AlpineChatScreen
 import dev.alpine.chat.feature.ui.theme.AlpineChatTheme
+import dev.alpine.chat.feature.ui.theme.AlpineTheme
 import dev.alpine.chat.provider.android.activity.ProviderProfilesActivity
 import dev.alpine.chat.routing.ChatExecutionMode
 import dev.alpine.chat.feature.ui.state.ChatRecoveryAction
@@ -78,6 +95,16 @@ class IntegratedMainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.TRANSPARENT,
+            ),
+            navigationBarStyle = SystemBarStyle.light(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.TRANSPARENT,
+            ),
+        )
         val assistantDefaults = AssistantDefaultsStore(this)
         chatViewModel = ViewModelProvider(
             this,
@@ -89,7 +116,7 @@ class IntegratedMainActivity : ComponentActivity() {
         )[ChatViewModel::class.java]
         chatHost = IntegratedChatHostController(this, chatViewModel, app.alpineLlmHost)
         setContent {
-            AlpineChatTheme {
+            AlpineChatTheme(darkTheme = false, dynamicColor = false) {
                 IntegratedApp(
                     controller = app.runtimeController,
                     alpineHost = app.alpineLlmHost,
@@ -211,8 +238,9 @@ private fun IntegratedApp(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Alpine AI Workspace") })
+            AlpineBrandHeader()
         },
+        containerColor = MaterialTheme.colorScheme.background,
     ) { contentPadding ->
         Column(
             modifier = Modifier
@@ -282,6 +310,65 @@ private fun IntegratedApp(
 }
 
 @Composable
+private fun AlpineBrandHeader() {
+    Surface(
+        color = MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onBackground,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(
+                modifier = Modifier.size(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.inverseSurface,
+                contentColor = MaterialTheme.colorScheme.inversePrimary,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = ">_",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 19.sp,
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "ALPINE AI WORKSPACE",
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = "LOCAL LINUX · EXTERNAL LLM",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    letterSpacing = 0.8.sp,
+                    maxLines = 1,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline),
+                color = MaterialTheme.colorScheme.surface,
+            ) {
+                Text(
+                    text = "READY",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun ModeSelector(
     mode: ChatExecutionMode,
     onModeChanged: (ChatExecutionMode) -> Unit,
@@ -291,22 +378,59 @@ private fun ModeSelector(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        FilterChip(
+        SegmentOption(
             selected = mode == ChatExecutionMode.FAST_CHAT,
             onClick = { onModeChanged(ChatExecutionMode.FAST_CHAT) },
-            label = { Text("빠른 채팅") },
+            label = "빠른 채팅",
             modifier = Modifier
                 .weight(1f)
                 .testTag("mode_fast_chat"),
         )
-        FilterChip(
+        SegmentOption(
             selected = mode == ChatExecutionMode.ALPINE_WORKSPACE,
             onClick = { onModeChanged(ChatExecutionMode.ALPINE_WORKSPACE) },
-            label = { Text("Alpine 작업") },
+            label = "Alpine 작업",
             modifier = Modifier
                 .weight(1f)
                 .testTag("mode_alpine_workspace"),
         )
+    }
+}
+
+@Composable
+private fun SegmentOption(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier
+            .heightIn(min = 52.dp)
+            .selectable(
+                selected = selected,
+                role = Role.Tab,
+                onClick = onClick,
+            ),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline),
+        color = if (selected) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.surface
+        },
+        contentColor = if (selected) {
+            MaterialTheme.colorScheme.onPrimary
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        },
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 13.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(label, style = MaterialTheme.typography.labelLarge)
+        }
     }
 }
 
@@ -345,20 +469,22 @@ private fun AlpineWorkspace(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
             Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                FilterChip(
+                SegmentOption(
                     selected = selectedPane == AlpineWorkspacePane.CHAT,
                     onClick = { selectedPane = AlpineWorkspacePane.CHAT },
-                    label = { Text("Gateway 채팅") },
-                    modifier = Modifier.testTag("alpine_chat_pane"),
+                    label = "Gateway 채팅",
+                    modifier = Modifier.weight(1f).testTag("alpine_chat_pane"),
                 )
-                FilterChip(
+                SegmentOption(
                     selected = selectedPane == AlpineWorkspacePane.TOOLS,
                     onClick = { selectedPane = AlpineWorkspacePane.TOOLS },
-                    label = { Text("터미널·도구") },
-                    modifier = Modifier.testTag("alpine_tools_pane"),
+                    label = "터미널·도구",
+                    modifier = Modifier.weight(1f).testTag("alpine_tools_pane"),
                 )
             }
         }
@@ -419,6 +545,7 @@ private fun AlpineWorkspace(
 
 private enum class AlpineWorkspacePane { CHAT, TOOLS }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AlpineGatewayStatusCard(
     runtimeState: RuntimeHostState,
@@ -433,10 +560,21 @@ private fun AlpineGatewayStatusCard(
     val idle = bridgeState.operation == AlpineWorkspaceLlmOperation.IDLE
     val runtimeReady = runtimeState.runtimeState.lifecycle == RuntimeLifecycleState.READY
     val running = bridgeState.lifecycle == LlmBridgeLifecycleState.RUNNING
-    Card(modifier = modifier.fillMaxWidth().testTag("alpine_gateway_status")) {
+    val statusColors = AlpineTheme.statusColors
+    val containerColor = when {
+        bridgeState.healthy == true -> statusColors.connected
+        !runtimeReady || bridgeState.errorCode != null -> statusColors.warning
+        else -> MaterialTheme.colorScheme.surface
+    }
+    Surface(
+        modifier = modifier.fillMaxWidth().testTag("alpine_gateway_status"),
+        shape = RoundedCornerShape(22.dp),
+        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline),
+        color = containerColor,
+    ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -450,7 +588,17 @@ private fun AlpineGatewayStatusCard(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                Text(bridgeState.lifecycle.userLabel(), style = MaterialTheme.typography.labelMedium)
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    color = MaterialTheme.colorScheme.surface,
+                ) {
+                    Text(
+                        bridgeState.lifecycle.userLabel(),
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
             }
             if (runtimeState.runtimeState.lifecycle == RuntimeLifecycleState.NOT_INSTALLED) {
                 Text("터미널·도구에서 Alpine Runtime을 먼저 설치하세요.")
@@ -468,28 +616,63 @@ private fun AlpineGatewayStatusCard(
                 val failed = bridgeState.checks.filterValues { !it }.keys.joinToString()
                 if (failed.isNotBlank()) Text("확인 필요: $failed", style = MaterialTheme.typography.bodySmall)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                val startEnabled = idle && runtimeReady && hasProvider && !running
+                val restartEnabled = idle && hasProvider && bridgeState.lifecycle in setOf(
+                    LlmBridgeLifecycleState.RUNNING,
+                    LlmBridgeLifecycleState.FAILED,
+                )
+                val healthEnabled = idle && running
+                val stopEnabled = idle && bridgeState.lifecycle != LlmBridgeLifecycleState.STOPPED
+                val disabledContainer = MaterialTheme.colorScheme.surfaceContainerHigh
+                val disabledContent = MaterialTheme.colorScheme.onSurfaceVariant
+                val outlinedColors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    disabledContentColor = disabledContent,
+                )
                 Button(
                     onClick = onStart,
-                    enabled = idle && runtimeReady && hasProvider && !running,
+                    enabled = startEnabled,
+                    colors = ButtonDefaults.buttonColors(
+                        disabledContainerColor = disabledContainer,
+                        disabledContentColor = disabledContent,
+                    ),
                     modifier = Modifier.testTag("alpine_gateway_start"),
                 ) { Text("시작") }
                 OutlinedButton(
                     onClick = onRestart,
-                    enabled = idle && hasProvider && bridgeState.lifecycle in setOf(
-                        LlmBridgeLifecycleState.RUNNING,
-                        LlmBridgeLifecycleState.FAILED,
+                    enabled = restartEnabled,
+                    colors = outlinedColors,
+                    border = BorderStroke(
+                        1.25.dp,
+                        if (restartEnabled) MaterialTheme.colorScheme.outline
+                        else MaterialTheme.colorScheme.outlineVariant,
                     ),
                     modifier = Modifier.testTag("alpine_gateway_restart"),
                 ) { Text("재시작") }
                 OutlinedButton(
                     onClick = onHealth,
-                    enabled = idle && running,
+                    enabled = healthEnabled,
+                    colors = outlinedColors,
+                    border = BorderStroke(
+                        1.25.dp,
+                        if (healthEnabled) MaterialTheme.colorScheme.outline
+                        else MaterialTheme.colorScheme.outlineVariant,
+                    ),
                     modifier = Modifier.testTag("alpine_gateway_health"),
                 ) { Text("상태") }
                 OutlinedButton(
                     onClick = onStop,
-                    enabled = idle && bridgeState.lifecycle != LlmBridgeLifecycleState.STOPPED,
+                    enabled = stopEnabled,
+                    colors = outlinedColors,
+                    border = BorderStroke(
+                        1.25.dp,
+                        if (stopEnabled) MaterialTheme.colorScheme.outline
+                        else MaterialTheme.colorScheme.outlineVariant,
+                    ),
                     modifier = Modifier.testTag("alpine_gateway_stop"),
                 ) { Text("종료") }
             }

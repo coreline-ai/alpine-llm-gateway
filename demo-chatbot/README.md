@@ -25,10 +25,10 @@ UI는 Material 3 Compose로 구현되어 light/dark theme, Android 12+ dynamic c
 | Claude / Anthropic | OpenMinis 호환 OAuth 값, beta header, 선택형 모델 | Anthropic Messages |
 | Google Gemini | 앱 소유 OAuth client ID, Google Cloud quota project, 선택형 모델 | 고정 Gemini generateContent endpoint |
 | OpenAI-compatible | Provider의 chat completions endpoint | OpenAI chat completions |
-| Codex / ChatGPT | 미리 설정된 Codex CLI 호환 public client ID, 선택형 모델 | 고정 Codex Responses endpoint |
-| xAI / Grok | 미리 설정된 Grok CLI 호환 public client ID, 선택형 모델 | 고정 xAI Chat Completions endpoint |
+| Codex compatibility | 앱 소유·승인된 OAuth public client ID 직접 입력, reference 모델 목록 | 고정 Codex Responses endpoint |
+| xAI compatibility | 앱 소유·승인된 OAuth public client ID 직접 입력, reference 모델 목록 | 고정 xAI Chat Completions endpoint |
 
-일반 프로필은 표시명, authorization/token/LLM HTTPS endpoint, OAuth public client ID, scopes, 모델, loopback callback port를 입력한다. Claude는 OpenMinis 공개 Android 구현에서 확인한 auth/token/Messages endpoint, public client ID, scopes, `localhost:54545/callback`, 96-byte PKCE, JSON token exchange의 state echo와 `oauth-2025-04-20`을 읽기 전용으로 자동 입력한다. 기본 모델은 빠른 `claude-haiku-4-5`이고 참조 모델 목록에서 즉시 변경할 수 있다. Gemini는 Google 공식 authorization/token/generateContent endpoint, scopes, `localhost:8085/oauth2callback`과 현재 text/chat 모델 목록을 읽기 전용으로 자동 입력하고 앱 소유 OAuth client ID와 quota project만 받는다. Codex 프로필은 token 유출을 막기 위해 authorization/token/LLM endpoint, scopes와 `localhost:1455/auth/callback` 계약을 읽기 전용으로 고정한다. xAI 프로필도 OIDC discovery와 `127.0.0.1:56121/callback`, xAI inference endpoint를 읽기 전용으로 고정한다. 같은 유형을 여러 번 추가하면 `Claude 2`, `Gemini 2`처럼 다음 표시명을 제안한다.
+일반 프로필은 표시명, authorization/token/LLM HTTPS endpoint, OAuth public client ID, scopes, 모델, loopback callback port를 입력한다. Claude compatibility profile은 참조 구현에서 확인한 auth/token/Messages endpoint, scopes, `localhost:54545/callback`, 96-byte PKCE, JSON token exchange의 state echo와 `oauth-2025-04-20` 계약을 고정하지만 **client ID는 내장하지 않고** 앱 소유·승인값을 요구한다. Gemini는 Google 공식 authorization/token/generateContent endpoint, scopes, `localhost:8085/oauth2callback`과 reference 모델 목록을 고정하고 앱 소유 OAuth client ID와 quota project를 받는다. Codex·xAI compatibility profile도 endpoint·scope·callback 계약만 고정하며 public client ID는 빈 값으로 시작한다. 같은 유형을 여러 번 추가하면 `Claude 2`, `Gemini 2`처럼 다음 표시명을 제안한다. Provider별 reference 모델 목록은 운영 지원 목록이 아니며 실제 계정·정책 검증 후 사용해야 한다.
 
 Claude 호환 프로필은 로컬 데모 검증용이다. OpenMinis 공개 mirror가 의도적으로 제외한 Claude Code 식별 system prompt와 CLI fingerprint를 Alpine이 추측하거나 위장해 넣지 않으므로, 계정 로그인이 성공해도 Messages inference는 Provider 정책에 따라 거절될 수 있다. 배포 앱은 Anthropic이 해당 앱에 발급·승인한 registration과 공식 API 계약을 사용해야 한다.
 

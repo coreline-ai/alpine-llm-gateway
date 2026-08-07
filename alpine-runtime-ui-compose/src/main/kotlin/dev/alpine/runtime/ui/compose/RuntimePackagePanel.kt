@@ -1,5 +1,6 @@
 package dev.alpine.runtime.ui.compose
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,9 +8,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -53,7 +57,15 @@ fun RuntimePackagePanel(
     var pending by remember { mutableStateOf<List<String>?>(null) }
     val parsed = parseRuntimePackageInput(input, allowlistedPackages)
 
-    Card(modifier = modifier.fillMaxWidth()) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            1.5.dp,
+            MaterialTheme.colorScheme.outline,
+        ),
+    ) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -71,6 +83,12 @@ fun RuntimePackagePanel(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = state.sessionActive,
+                colors = OutlinedTextFieldDefaults.colors(
+                    disabledTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    disabledBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                    disabledSupportingTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
             )
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 Button(
@@ -78,6 +96,10 @@ fun RuntimePackagePanel(
                     enabled = parsed.valid &&
                         state.sessionActive &&
                         state.operation == RuntimeHostOperation.IDLE,
+                    colors = ButtonDefaults.buttonColors(
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
                 ) { Text("설치 요청") }
             }
             state.packageOutcome?.let { outcome ->
