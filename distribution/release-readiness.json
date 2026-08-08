@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-08-08T13:58:55Z",
+  "updated_at": "2026-08-09T00:00:00Z",
   "gates": [
     {
       "gate_id": "project_license",
@@ -83,7 +83,17 @@
         "dev-plan/implement_20260808_210833.md",
         "dev-plan/implement_20260808_223000.md",
         "dev-plan/implement_20260808_230032.md",
-        "docs/adr/0006-single-pty-dynamic-terminal-resize.md"
+        "dev-plan/implement_20260809_023406.md",
+        "dev-plan/implement_20260809_054207.md",
+        "dev-plan/implement_20260809_064200.md",
+        "dev-plan/implement_20260809_063158.md",
+        "dev-plan/implement_20260809_044019.md",
+    "dev-plan/implement_20260809_070000.md",
+    "dev-plan/implement_20260809_073000.md",
+    "dev-plan/implement_20260809_071338.md",
+    "dev-plan/goal-completion-audit-20260808.md",
+    "docs/adr/0006-single-pty-dynamic-terminal-resize.md",
+    "scripts/verify-proot-terminal-handoff.py"
       ]
     },
     {

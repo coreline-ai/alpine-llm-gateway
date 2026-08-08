@@ -1,0 +1,246 @@
+--- a/src/syscall/syscall.c
++++ b/src/syscall/syscall.c
+@@ -24,6 +24,10 @@
+ #include <limits.h>      /* PATH_MAX, */
+ #include <string.h>      /* strlen(3), */
+ #include <errno.h>       /* errno(3), E* */
++#include <fcntl.h>       /* open(), O_*, */
++#include <stdlib.h>      /* getenv(), */
++#include <termios.h>     /* TIOCGWINSZ, */
++#include <unistd.h>      /* close(), write(), */
+ 
+ #include "syscall/syscall.h"
+ #include "syscall/chain.h"
+@@ -32,7 +36,220 @@
+ #include "tracee/reg.h"
+ #include "tracee/mem.h"
+ #include "cli/note.h"
++
++/*
++ * Probe-only post-TIOCGWINSZ post-read-flow recorder.  Once the first
++ * successful guest TIOCGWINSZ is observed it records only a closed set of
++ * parent/child lifecycle and the next parent syscall category after a
++ * non-empty read. It never writes terminal content, process identifiers,
++ * file descriptors, paths, commands or arguments.
++ *
++ * Generic read coverage requires the host's explicit PROOT_NO_SECCOMP
++ * diagnostic control: PRoot seccomp acceleration may otherwise resume read
++ * with PTRACE_CONT and bypass this syscall hook.  This recorder must never
++ * become a production capability or a terminal recovery mechanism.
++ */
++enum PostWinsizePostReadFlowStage {
++	POST_WINSIZE_POST_READ_FLOW_IDLE,
++	POST_WINSIZE_POST_READ_FLOW_ACTIVE,
++	POST_WINSIZE_POST_READ_FLOW_PARENT_READ_PENDING,
++	POST_WINSIZE_POST_READ_FLOW_PARENT_POST_READ,
++	POST_WINSIZE_POST_READ_FLOW_PARENT_POST_READ_WRITE_PENDING,
++	POST_WINSIZE_POST_READ_FLOW_DONE,
++};
++
++static enum PostWinsizePostReadFlowStage post_winsize_post_read_flow_stage =
++	POST_WINSIZE_POST_READ_FLOW_IDLE;
++static Tracee *post_winsize_post_read_flow_target = NULL;
++static Tracee *post_winsize_post_read_flow_parent = NULL;
++static Tracee *post_winsize_post_read_flow_parent_read = NULL;
++static bool post_winsize_post_read_flow_target_exit_recorded = false;
++static bool post_winsize_post_read_flow_parent_wait_exit_recorded = false;
++
++static const char *post_winsize_post_read_flow_path(void)
++{
++	static bool initialized = false;
++	static const char *path = NULL;
++
++	if (!initialized) {
++		path = getenv("PROOT_TTY_POST_WINSIZE_INPUT_TRACE");
++		initialized = true;
++	}
++
++	return path != NULL && path[0] != '\0' ? path : NULL;
++}
++
++static void record_post_winsize_post_read_flow(const char *stage)
++{
++	const char *path = post_winsize_post_read_flow_path();
++	int fd;
++
++	if (path == NULL)
++		return;
++
++	fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC | O_NOFOLLOW, 0600);
++	if (fd < 0)
++		return;
++
++	(void) write(fd, "schema=1 event=POST_TIOCGWINSZ_POST_READ_FLOW stage=",
++		     sizeof("schema=1 event=POST_TIOCGWINSZ_POST_READ_FLOW stage=") - 1);
++	(void) write(fd, stage, strlen(stage));
++	(void) write(fd, "\n", 1);
++	(void) close(fd);
++}
++
++static bool is_wait_syscall(word_t sysnum)
++{
++	return sysnum == PR_wait4 || sysnum == PR_waitpid;
++}
++
++static bool is_write_syscall(word_t sysnum)
++{
++	return sysnum == PR_write || sysnum == PR_writev;
++}
++
++static const char *classify_post_read_write_destination(const Tracee *tracee)
++{
++	word_t fd = peek_reg(tracee, CURRENT, SYSARG_1);
++
++	return fd == STDOUT_FILENO ? "parent_post_read_write_stdout" :
++		fd == STDERR_FILENO ? "parent_post_read_write_stderr" :
++		"parent_post_read_write_other";
++}
++
++static const char *classify_post_read_syscall(word_t sysnum)
++{
++	switch (sysnum) {
++	case PR_read:
++		return "parent_post_read_read_enter";
++	case PR_write:
++	case PR_writev:
++		return "parent_post_read_write_enter";
++	case PR_ioctl:
++		return "parent_post_read_ioctl_enter";
++	case PR_clone:
++	case PR_fork:
++	case PR_vfork:
++		return "parent_post_read_spawn_enter";
++	case PR_execve:
++	case PR_execveat:
++		return "parent_post_read_exec_enter";
++	case PR_wait4:
++	case PR_waitpid:
++		return "parent_post_read_wait_enter";
++	case PR_exit:
++	case PR_exit_group:
++		return "parent_post_read_exit_enter";
++	default:
++		return "parent_post_read_other_enter";
++	}
++}
++
++static void trace_post_winsize_post_read_flow_enter(Tracee *tracee)
++{
++	word_t sysnum;
++
++	if (post_winsize_post_read_flow_path() == NULL ||
++	    post_winsize_post_read_flow_stage == POST_WINSIZE_POST_READ_FLOW_IDLE)
++		return;
++
++	sysnum = get_sysnum(tracee, CURRENT);
++	if (tracee == post_winsize_post_read_flow_parent &&
++	    post_winsize_post_read_flow_stage == POST_WINSIZE_POST_READ_FLOW_PARENT_POST_READ) {
++		post_winsize_post_read_flow_stage = is_write_syscall(sysnum)
++			? POST_WINSIZE_POST_READ_FLOW_PARENT_POST_READ_WRITE_PENDING
++			: POST_WINSIZE_POST_READ_FLOW_DONE;
++		record_post_winsize_post_read_flow(classify_post_read_syscall(sysnum));
++		if (is_write_syscall(sysnum))
++			record_post_winsize_post_read_flow(classify_post_read_write_destination(tracee));
++		return;
++	}
++
++	if (tracee == post_winsize_post_read_flow_target &&
++	    !post_winsize_post_read_flow_target_exit_recorded &&
++	    (sysnum == PR_exit || sysnum == PR_exit_group)) {
++		post_winsize_post_read_flow_target_exit_recorded = true;
++		post_winsize_post_read_flow_target = NULL;
++		record_post_winsize_post_read_flow("target_exit_enter");
++		return;
++	}
++
++	if (tracee != post_winsize_post_read_flow_parent ||
++	    post_winsize_post_read_flow_stage != POST_WINSIZE_POST_READ_FLOW_ACTIVE ||
++	    sysnum != PR_read)
++		return;
++
++	post_winsize_post_read_flow_stage = POST_WINSIZE_POST_READ_FLOW_PARENT_READ_PENDING;
++	post_winsize_post_read_flow_parent_read = tracee;
++	record_post_winsize_post_read_flow("parent_read_enter");
++}
++
++static void trace_post_winsize_post_read_flow_exit(Tracee *tracee)
++{
++	word_t sysnum;
++	word_t result;
++
++	if (post_winsize_post_read_flow_path() == NULL)
++		return;
++
++	if (post_winsize_post_read_flow_stage == POST_WINSIZE_POST_READ_FLOW_IDLE &&
++	    get_sysnum(tracee, ORIGINAL) == PR_ioctl &&
++	    peek_reg(tracee, ORIGINAL, SYSARG_2) == TIOCGWINSZ &&
++	    (long) peek_reg(tracee, CURRENT, SYSARG_RESULT) >= 0) {
++		post_winsize_post_read_flow_target = tracee;
++		post_winsize_post_read_flow_parent = tracee->parent;
++		post_winsize_post_read_flow_stage = POST_WINSIZE_POST_READ_FLOW_ACTIVE;
++		record_post_winsize_post_read_flow("tiocgwinsz_exit_ok");
++		if (post_winsize_post_read_flow_parent == NULL) {
++			record_post_winsize_post_read_flow("parent_unavailable");
++		} else if (is_wait_syscall(get_sysnum(post_winsize_post_read_flow_parent, ORIGINAL)) ||
++			   is_wait_syscall(get_sysnum(post_winsize_post_read_flow_parent, CURRENT))) {
++			record_post_winsize_post_read_flow("parent_wait_inflight");
++		} else {
++			record_post_winsize_post_read_flow("parent_wait_not_inflight");
++		}
++		return;
++	}
++
++	if (post_winsize_post_read_flow_stage == POST_WINSIZE_POST_READ_FLOW_IDLE ||
++	    tracee != post_winsize_post_read_flow_parent)
++		return;
++
++	sysnum = get_sysnum(tracee, ORIGINAL);
++	if (!post_winsize_post_read_flow_parent_wait_exit_recorded && is_wait_syscall(sysnum)) {
++		post_winsize_post_read_flow_parent_wait_exit_recorded = true;
++		record_post_winsize_post_read_flow("parent_wait_exit");
++		return;
++	}
++
++	if (post_winsize_post_read_flow_stage ==
++		POST_WINSIZE_POST_READ_FLOW_PARENT_POST_READ_WRITE_PENDING &&
++	    is_write_syscall(sysnum)) {
++		result = peek_reg(tracee, CURRENT, SYSARG_RESULT);
++		post_winsize_post_read_flow_stage = POST_WINSIZE_POST_READ_FLOW_DONE;
++		record_post_winsize_post_read_flow((long) result > 0
++			? "parent_post_read_write_exit_nonempty"
++			: (long) result == 0 ? "parent_post_read_write_exit_zero" :
++			"parent_post_read_write_exit_error");
++		return;
++	}
+ 
++	if (post_winsize_post_read_flow_stage != POST_WINSIZE_POST_READ_FLOW_PARENT_READ_PENDING ||
++	    post_winsize_post_read_flow_parent_read != tracee || sysnum != PR_read)
++		return;
++
++	result = peek_reg(tracee, CURRENT, SYSARG_RESULT);
++	post_winsize_post_read_flow_parent_read = NULL;
++	if ((long) result > 0) {
++		post_winsize_post_read_flow_stage = POST_WINSIZE_POST_READ_FLOW_PARENT_POST_READ;
++		record_post_winsize_post_read_flow("parent_read_exit_nonempty");
++	} else {
++		post_winsize_post_read_flow_stage = POST_WINSIZE_POST_READ_FLOW_DONE;
++		record_post_winsize_post_read_flow((long) result == 0
++			? "parent_read_exit_eof" : "parent_read_exit_error");
++	}
++}
++
+ /**
+  * Copy in @path a C string (PATH_MAX bytes max.) from the @tracee's
+  * memory address space pointed to by the @reg argument of the
+@@ -111,6 +328,11 @@
+ 	if (status < 0)
+ 		return;
+ 
++	if (is_enter_stage)
++		trace_post_winsize_post_read_flow_enter(tracee);
++	else
++		trace_post_winsize_post_read_flow_exit(tracee);
++
+ 	int suppressed_syscall_status = 0;
+ 
+ 	if (is_enter_stage) {

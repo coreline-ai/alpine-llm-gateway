@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "colors": {
     "paper": "#F4F3ED",
     "ink": "#10120F",
@@ -26,10 +26,17 @@
     "extra_large": 30
   },
   "readme_screenshot": {
-    "source_width_px": 1080,
-    "source_height_px": 2340,
+    "allowed_source_dimensions_px": [
+      [
+        1080,
+        2340
+      ],
+      [
+        1080,
+        2160
+      ]
+    ],
     "preview_width": 260,
-    "preview_height": 563,
-    "count": 10
+    "count": 17
   }
 }

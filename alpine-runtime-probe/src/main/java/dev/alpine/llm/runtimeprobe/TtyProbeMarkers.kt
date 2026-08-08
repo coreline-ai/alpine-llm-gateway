@@ -26,6 +26,8 @@ internal object TtyProbeMarkers {
 
     private val safeTag = Regex("terminal_after_(repeat_first|repeat_second|storm)")
     private val safeExpected = Regex("[1-9][0-9]{0,3}x[1-9][0-9]{0,3}")
+    private val safeHelperState = Regex("dynamic|alternate|initial|unexpected|unavailable")
+    private val helperState = Regex("tty_winsize_state=(dynamic|alternate|initial|unexpected|unavailable)")
     private val winchMarker = Regex("terminal_winch_received_([1-9][0-9]{0,2})")
 
     fun markerOutcome(output: String, tag: String, expected: String): String {
@@ -36,6 +38,23 @@ internal object TtyProbeMarkers {
             output.contains("$tag=unexpected") -> UNEXPECTED
             else -> MISSING
         }
+    }
+
+    /**
+     * Classifies only the fixed helper state emitted immediately before a
+     * fixed Probe marker. The caller never receives terminal output.
+     */
+    fun helperOutcomeBeforeMarker(output: String, tag: String, expectedState: String): String {
+        require(safeTag.matches(tag))
+        require(safeHelperState.matches(expectedState))
+        val markerIndex = output.indexOf("$tag=helper")
+        if (markerIndex < 0) return MISSING
+        val observed = helperState.findAll(output.substring(0, markerIndex))
+            .lastOrNull()
+            ?.groupValues
+            ?.getOrNull(1)
+            ?: return MISSING
+        return if (observed == expectedState) MATCHED else UNEXPECTED
     }
 
     fun receivedWinchCount(output: String): Int = winchMarker

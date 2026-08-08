@@ -1,0 +1,121 @@
+diff --git a/src/syscall/syscall.c b/src/syscall/syscall.c
+--- a/src/syscall/syscall.c
++++ b/src/syscall/syscall.c
+@@ -24,6 +24,10 @@
+ #include <limits.h>      /* PATH_MAX, */
+ #include <string.h>      /* strlen(3), */
+ #include <errno.h>       /* errno(3), E* */
++#include <fcntl.h>       /* open(), O_*, */
++#include <stdlib.h>      /* getenv(), */
++#include <termios.h>     /* TIOCGWINSZ, */
++#include <unistd.h>      /* close(), write(), */
+ 
+ #include "syscall/syscall.h"
+ #include "syscall/chain.h"
+@@ -33,6 +37,94 @@
+ #include "tracee/mem.h"
+ #include "cli/note.h"
+ 
++/*
++ * Probe-only post-TIOCGWINSZ input lifecycle recorder.  It emits a
++ * fixed, bounded enum sequence to an app-private file selected by the
++ * host.  No pid, path, command, terminal payload or syscall argument is
++ * retained.  This is intentionally inactive unless the explicit debug
++ * environment is present and must never become a production capability.
++ */
++enum PostWinsizeInputTraceStage {
++	POST_WINSIZE_INPUT_TRACE_IDLE,
++	POST_WINSIZE_INPUT_TRACE_READ_PENDING,
++	POST_WINSIZE_INPUT_TRACE_DONE,
++};
++
++static enum PostWinsizeInputTraceStage post_winsize_input_trace_stage =
++	POST_WINSIZE_INPUT_TRACE_IDLE;
++static Tracee *post_winsize_input_trace_read_tracee = NULL;
++
++static const char *post_winsize_input_trace_path(void)
++{
++	static bool initialized = false;
++	static const char *path = NULL;
++
++	if (!initialized) {
++		path = getenv("PROOT_TTY_POST_WINSIZE_INPUT_TRACE");
++		initialized = true;
++	}
++
++	return path != NULL && path[0] != '\0' ? path : NULL;
++}
++
++static void record_post_winsize_input_trace(const char *stage)
++{
++	const char *path = post_winsize_input_trace_path();
++	int fd;
++
++	if (path == NULL)
++		return;
++
++	fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC | O_NOFOLLOW, 0600);
++	if (fd < 0)
++		return;
++
++	(void) write(fd, "schema=1 event=POST_TIOCGWINSZ_INPUT stage=", 43);
++	(void) write(fd, stage, strlen(stage));
++	(void) write(fd, "\n", 1);
++	(void) close(fd);
++}
++
++static void trace_post_winsize_input_enter(Tracee *tracee)
++{
++	if (post_winsize_input_trace_path() == NULL ||
++	    post_winsize_input_trace_stage != POST_WINSIZE_INPUT_TRACE_IDLE ||
++	    get_sysnum(tracee, CURRENT) != PR_read)
++		return;
++
++	post_winsize_input_trace_stage = POST_WINSIZE_INPUT_TRACE_READ_PENDING;
++	post_winsize_input_trace_read_tracee = tracee;
++	record_post_winsize_input_trace("read_enter");
++}
++
++static void trace_post_winsize_input_exit(Tracee *tracee)
++{
++	word_t result;
++
++	if (post_winsize_input_trace_path() == NULL)
++		return;
++
++	if (post_winsize_input_trace_stage == POST_WINSIZE_INPUT_TRACE_IDLE &&
++	    get_sysnum(tracee, ORIGINAL) == PR_ioctl &&
++	    peek_reg(tracee, ORIGINAL, SYSARG_2) == TIOCGWINSZ &&
++	    (long) peek_reg(tracee, CURRENT, SYSARG_RESULT) >= 0) {
++		record_post_winsize_input_trace("tiocgwinsz_exit_ok");
++		return;
++	}
++
++	if (post_winsize_input_trace_stage != POST_WINSIZE_INPUT_TRACE_READ_PENDING ||
++	    post_winsize_input_trace_read_tracee != tracee ||
++	    get_sysnum(tracee, ORIGINAL) != PR_read)
++		return;
++
++	result = peek_reg(tracee, CURRENT, SYSARG_RESULT);
++	post_winsize_input_trace_read_tracee = NULL;
++	post_winsize_input_trace_stage = POST_WINSIZE_INPUT_TRACE_DONE;
++	record_post_winsize_input_trace((long) result > 0
++		? "read_exit_nonempty"
++		: (long) result == 0 ? "read_exit_eof" : "read_exit_error");
++}
++
+ /**
+  * Copy in @path a C string (PATH_MAX bytes max.) from the @tracee's
+  * memory address space pointed to by the @reg argument of the
+@@ -111,6 +203,11 @@
+ 	if (status < 0)
+ 		return;
+ 
++	if (is_enter_stage)
++		trace_post_winsize_input_enter(tracee);
++	else
++		trace_post_winsize_input_exit(tracee);
++
+ 	int suppressed_syscall_status = 0;
+ 
+ 	if (is_enter_stage) {

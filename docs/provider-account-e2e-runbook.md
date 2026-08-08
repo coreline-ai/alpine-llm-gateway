@@ -22,7 +22,7 @@ python3.11 -m unittest discover -s tests -v
 cd backend/mobile_agent_bff && .venv/bin/pytest -q
 ```
 
-2026-08-08 로컬 기준선은 Python 102/102, BFF 39/39, Android OAuth/Provider unit,
+2026-08-09 로컬 기준선은 Python 106/106, BFF 39/39, Android OAuth/Provider unit,
 Samsung OAuth 저장소 3/3·Provider 12/12·Integrated 10/10 통과다. 이는 실제 Provider 또는 staging
 fault proxy 실행을 대체하지 않는다.
 
@@ -32,7 +32,8 @@ fault proxy 실행을 대체하지 않는다.
 2. 앱에 등록한 공식 client ID/redirect URI/scope를 운영자와 대조한다.
 3. Samsung 실기기에서 로그인하고 token 원문이 화면·logcat·support bundle에 없는지 확인한다.
 4. 모델 목록, non-stream 1회, stream 1회, 사용자 취소 1회를 실행한다.
-5. Provider 공식 문서 또는 owner 승인 계약으로 idempotency key/header 지원 여부를 검토한다.
+5. [공식 정책 재검토](provider-official-policy-review-20260809.md)의 Provider별 endpoint 문서와
+   owner 승인 계약으로 idempotency key/header 지원 여부를 검토한다.
    계약이 확인되지 않으면 `NEVER_AUTOMATIC`으로 기록하고 앱이 429·5xx·I/O 오류를 자동 재시도하지 않는지 확인한다.
    지원이 확인된 경우에만 `IDEMPOTENT_WITH_STABLE_KEY`를 사용하고 동일 논리 요청의 모든 transport attempt가
    같은 key/header를 재사용하는지 확인한다.

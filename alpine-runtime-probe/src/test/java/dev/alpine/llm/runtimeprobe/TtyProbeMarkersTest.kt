@@ -32,6 +32,41 @@ class TtyProbeMarkersTest {
     }
 
     @Test
+    fun helperMarkerOutcomeUsesOnlyClosedStateBeforeItsFixedMarker() {
+        assertEquals(
+            TtyProbeMarkers.MATCHED,
+            TtyProbeMarkers.helperOutcomeBeforeMarker(
+                "tty_winsize_state=alternate\nterminal_after_repeat_first=helper\n",
+                "terminal_after_repeat_first",
+                "alternate",
+            ),
+        )
+        assertEquals(
+            TtyProbeMarkers.UNEXPECTED,
+            TtyProbeMarkers.helperOutcomeBeforeMarker(
+                "tty_winsize_state=initial\nterminal_after_repeat_first=helper\n",
+                "terminal_after_repeat_first",
+                "alternate",
+            ),
+        )
+        assertEquals(
+            TtyProbeMarkers.MISSING,
+            TtyProbeMarkers.helperOutcomeBeforeMarker(
+                "tty_winsize_state=alternate\n",
+                "terminal_after_repeat_first",
+                "alternate",
+            ),
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            TtyProbeMarkers.helperOutcomeBeforeMarker(
+                "",
+                "terminal_after_user_value",
+                "alternate",
+            )
+        }
+    }
+
+    @Test
     fun winchCountUsesOnlyTheHighestFixedCounterAndRejectsArbitraryTagInput() {
         assertEquals(
             3,

@@ -61,6 +61,41 @@ val ttyResizeRelayProot = layout.projectDirectory.file(
 )
 val ttyResizeRelayProotSha256 =
     "d423f4242b9213ff0daa38ea60cfa74cec37ca7b4600b0f16b4c0fa5b4c44df7"
+val ttyNoIoctlFilterProot = layout.projectDirectory.file(
+    "src/main/jniLibs/arm64-v8a/libproot_tty_no_ioctl_filter.so",
+)
+val ttyNoIoctlFilterProotSha256 =
+    "a210b3416504e25f05e8b5b9a5ec5542ef1a6e55f9b408910d0a205a3df374e7"
+val ttyPostWinsizeInputTraceProot = layout.projectDirectory.file(
+    "src/main/jniLibs/arm64-v8a/libproot_tty_post_winsize_input_trace.so",
+)
+val ttyPostWinsizeInputTraceProotSha256 =
+    "8f441a25ec423c224f68421797c099283b5cc2d0261c286bcb0125bc76f44a75"
+val ttyPostWinsizeCommandFlowTraceProot = layout.projectDirectory.file(
+    "src/main/jniLibs/arm64-v8a/libproot_tty_post_winsize_command_flow_trace.so",
+)
+val ttyPostWinsizeCommandFlowTraceProotSha256 =
+    "43819777bffd234ac0f2d98a8efa3e53362f796e121d99246f8beb3ebb84428d"
+val ttyPostWinsizePostReadFlowTraceProot = layout.projectDirectory.file(
+    "src/main/jniLibs/arm64-v8a/libproot_tty_post_winsize_post_read_flow_trace.so",
+)
+val ttyPostWinsizePostReadFlowTraceProotSha256 =
+    "408d5a740de408d758c06bc8b31cd81868c88b18d1500b43c27e9edc9a12e5a6"
+val ttySecondTiocgwinszTraceProot = layout.projectDirectory.file(
+    "src/main/jniLibs/arm64-v8a/libproot_tty_second_tiocgwinsz_trace.so",
+)
+val ttySecondTiocgwinszTraceProotSha256 =
+    "393dde8b949be2f1579215741aeeb9784dce533738dd87509c2dc8a50c8ab4b2"
+val ttySecondTiocgwinszTargetOutputTraceProot = layout.projectDirectory.file(
+    "src/main/jniLibs/arm64-v8a/libproot_tty_second_tiocgwinsz_target_output_trace.so",
+)
+val ttySecondTiocgwinszTargetOutputTraceProotSha256 =
+    "46160c628fc90b984cb4e85faf5eeaa876b8dc638b430ac1e5082f7898030912"
+val ttyVirtualWinsizeSecondTargetOutputTraceProot = layout.projectDirectory.file(
+    "src/main/jniLibs/arm64-v8a/libproot_tty_virtual_winsize_second_target_output_trace.so",
+)
+val ttyVirtualWinsizeSecondTargetOutputTraceProotSha256 =
+    "dbb3fc063d6de7abe861768e183623e6a96e8ebfe3b2c3a3c2dda13f8af8350e"
 val ttySessionRelayLauncher = layout.projectDirectory.file(
     "src/main/jniLibs/arm64-v8a/libtty_session_relay_launcher.so",
 )
@@ -75,17 +110,17 @@ val ttySessionVirtualResizeLauncher = layout.projectDirectory.file(
     "src/main/jniLibs/arm64-v8a/libtty_session_virtual_resize_launcher.so",
 )
 val ttySessionVirtualResizeLauncherSha256 =
-    "3bf5bde1192e8e07ceaf683ab282a135654572fce2f6fde286cf01a72654dde7"
+    "e9f9f2c902db00f1d2d4fa6a29c0738488c7139ccc6d4fbb07af7fdba7f68b49"
 val ttyHostPtyResizeControl = layout.projectDirectory.file(
     "src/main/jniLibs/arm64-v8a/libtty_host_resize_control.so",
 )
 val ttyHostPtyResizeControlSha256 =
-    "a02a1a4589ceb6748ceb0f45214e35f98f7ab32c4105850d96cea77a66d94624"
+    "0a09ffa0a30aa7bb80644bacea11100af9cc492be5070edb36f77fb0b2b581af"
 val ttyWinsizeHelper = layout.projectDirectory.file(
     "src/main/jniLibs/arm64-v8a/libtty_winsize_probe.so",
 )
 val ttyWinsizeHelperSha256 =
-    "d7b56fbc41a10edd19e848bab7af91c3ab7cd96dcf3aee593a4f7e6d7e4e7c24"
+    "f59c61e972d5ce75ee0fa44d41bba40400585a16d5f2f39034d25829da7212bd"
 
 val verifyTtyDiagnosticProot by tasks.registering {
     group = "verification"
@@ -131,6 +166,174 @@ val verifyTtyResizeRelayProot by tasks.registering {
         }
         check(actual == ttyResizeRelayProotSha256) {
             "Probe resize relay PRoot checksum mismatch: $actual"
+        }
+    }
+}
+
+val verifyTtyNoIoctlFilterProot by tasks.registering {
+    group = "verification"
+    description = "Verifies the Probe-only PRoot Android ioctl-filter bypass control."
+    doLast {
+        val artifact = ttyNoIoctlFilterProot.asFile
+        check(artifact.isFile) { "Missing Probe ioctl-filter control PRoot: ${artifact.path}" }
+        val digest = MessageDigest.getInstance("SHA-256")
+        artifact.inputStream().buffered().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        val actual = digest.digest().joinToString("") { byte ->
+            (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+        }
+        check(actual == ttyNoIoctlFilterProotSha256) {
+            "Probe ioctl-filter control PRoot checksum mismatch: $actual"
+        }
+    }
+}
+
+val verifyTtyPostWinsizeInputTraceProot by tasks.registering {
+    group = "verification"
+    description = "Verifies the Probe-only PRoot post-TIOCGWINSZ input lifecycle tracer."
+    doLast {
+        val artifact = ttyPostWinsizeInputTraceProot.asFile
+        check(artifact.isFile) { "Missing Probe post-winsize input PRoot: ${artifact.path}" }
+        val digest = MessageDigest.getInstance("SHA-256")
+        artifact.inputStream().buffered().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        val actual = digest.digest().joinToString("") { byte ->
+            (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+        }
+        check(actual == ttyPostWinsizeInputTraceProotSha256) {
+            "Probe post-winsize input PRoot checksum mismatch: $actual"
+        }
+    }
+}
+
+val verifyTtyPostWinsizeCommandFlowTraceProot by tasks.registering {
+    group = "verification"
+    description = "Verifies the Probe-only PRoot post-TIOCGWINSZ command-flow tracer."
+    doLast {
+        val artifact = ttyPostWinsizeCommandFlowTraceProot.asFile
+        check(artifact.isFile) { "Missing Probe post-winsize command-flow PRoot: ${artifact.path}" }
+        val digest = MessageDigest.getInstance("SHA-256")
+        artifact.inputStream().buffered().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        val actual = digest.digest().joinToString("") { byte ->
+            (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+        }
+        check(actual == ttyPostWinsizeCommandFlowTraceProotSha256) {
+            "Probe post-winsize command-flow PRoot checksum mismatch: $actual"
+        }
+    }
+}
+
+val verifyTtyPostWinsizePostReadFlowTraceProot by tasks.registering {
+    group = "verification"
+    description = "Verifies the Probe-only PRoot post-TIOCGWINSZ post-read syscall-flow tracer."
+    doLast {
+        val artifact = ttyPostWinsizePostReadFlowTraceProot.asFile
+        check(artifact.isFile) { "Missing Probe post-read flow PRoot: ${artifact.path}" }
+        val digest = MessageDigest.getInstance("SHA-256")
+        artifact.inputStream().buffered().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        val actual = digest.digest().joinToString("") { byte ->
+            (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+        }
+        check(actual == ttyPostWinsizePostReadFlowTraceProotSha256) {
+            "Probe post-read flow PRoot checksum mismatch: $actual"
+        }
+    }
+}
+
+val verifyTtySecondTiocgwinszTraceProot by tasks.registering {
+    group = "verification"
+    description = "Verifies the Probe-only PRoot second-TIOCGWINSZ lifecycle tracer."
+    doLast {
+        val artifact = ttySecondTiocgwinszTraceProot.asFile
+        check(artifact.isFile) { "Missing Probe second-get PRoot: ${artifact.path}" }
+        val digest = MessageDigest.getInstance("SHA-256")
+        artifact.inputStream().buffered().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        val actual = digest.digest().joinToString("") { byte ->
+            (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+        }
+        check(actual == ttySecondTiocgwinszTraceProotSha256) {
+            "Probe second-get PRoot checksum mismatch: $actual"
+        }
+    }
+}
+
+val verifyTtySecondTiocgwinszTargetOutputTraceProot by tasks.registering {
+    group = "verification"
+    description = "Verifies the Probe-only PRoot second-TIOCGWINSZ target-output tracer."
+    doLast {
+        val artifact = ttySecondTiocgwinszTargetOutputTraceProot.asFile
+        check(artifact.isFile) { "Missing Probe second-get target-output PRoot: ${artifact.path}" }
+        val digest = MessageDigest.getInstance("SHA-256")
+        artifact.inputStream().buffered().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        val actual = digest.digest().joinToString("") { byte ->
+            (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+        }
+        check(actual == ttySecondTiocgwinszTargetOutputTraceProotSha256) {
+            "Probe second-get target-output PRoot checksum mismatch: $actual"
+        }
+    }
+}
+
+val verifyTtyVirtualWinsizeSecondTargetOutputTraceProot by tasks.registering {
+    group = "verification"
+    description = "Verifies the Probe-only virtual-winsize second-get target-output composite."
+    doLast {
+        val artifact = ttyVirtualWinsizeSecondTargetOutputTraceProot.asFile
+        check(artifact.isFile) { "Missing Probe virtual-winsize composite PRoot: ${artifact.path}" }
+        val digest = MessageDigest.getInstance("SHA-256")
+        artifact.inputStream().buffered().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        val actual = digest.digest().joinToString("") { byte ->
+            (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+        }
+        check(actual == ttyVirtualWinsizeSecondTargetOutputTraceProotSha256) {
+            "Probe virtual-winsize composite PRoot checksum mismatch: $actual"
         }
     }
 }
@@ -258,6 +461,13 @@ val verifyTtyWinsizeHelper by tasks.registering {
 tasks.named("preBuild") {
     dependsOn(verifyTtyDiagnosticProot)
     dependsOn(verifyTtyResizeRelayProot)
+    dependsOn(verifyTtyNoIoctlFilterProot)
+    dependsOn(verifyTtyPostWinsizeInputTraceProot)
+    dependsOn(verifyTtyPostWinsizeCommandFlowTraceProot)
+    dependsOn(verifyTtyPostWinsizePostReadFlowTraceProot)
+    dependsOn(verifyTtySecondTiocgwinszTraceProot)
+    dependsOn(verifyTtySecondTiocgwinszTargetOutputTraceProot)
+    dependsOn(verifyTtyVirtualWinsizeSecondTargetOutputTraceProot)
     dependsOn(verifyTtySessionRelayLauncher)
     dependsOn(verifyTtySessionTraceeForegroundLauncher)
     dependsOn(verifyTtySessionVirtualResizeLauncher)

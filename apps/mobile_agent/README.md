@@ -4,6 +4,17 @@ Android/iOS 공통 OAuth 로그인, Provider 선택, native SSE Run Card와 Stop
 사용자는 API key를 입력하지 않습니다. MobileAgent OIDC로 로그인하고 OpenAI·Anthropic·xAI
 credential은 LLM BFF가 server-side에서만 사용합니다.
 
+## 📱 실제 Android 화면
+
+<table>
+  <tr>
+    <td align="center"><a href="../../docs/assets/screenshots/15-mobileagent-oauth-landing.png"><img src="../../docs/assets/screenshots/15-mobileagent-oauth-landing.png" width="240" alt="MobileAgent OAuth 설정 전 랜딩"></a><br><strong>OAuth · PKCE 랜딩</strong><br><sub>시스템 브라우저 로그인 전 안전한 설정 안내</sub></td>
+    <td align="center"><a href="../../docs/assets/screenshots/16-mobileagent-provider-grid.png"><img src="../../docs/assets/screenshots/16-mobileagent-provider-grid.png" width="240" alt="MobileAgent Codex Claude Grok Provider 카드"></a><br><strong>Codex · Claude · Grok</strong><br><sub>MobileAgent BFF Provider 경로</sub></td>
+  </tr>
+</table>
+
+2026-08-09 PD20 실기기에서 OAuth 설정을 주입하지 않은 debug APK로 캡처했다. 계정·token·client ID가 없는 상태만 저장소에 남긴다. 앱 소유 HTTPS issuer/BFF와 승인 계정이 필요한 인증 후 대화·Run Card는 아직 실캡처하지 않았으며, 이를 완료로 주장하지 않는다.
+
 ## 실행 설정
 
 소유 HTTPS staging issuer/BFF와 public native client를 준비한 뒤 실행합니다.

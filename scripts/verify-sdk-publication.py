@@ -29,7 +29,10 @@ ARTIFACTS = {
     "alpine-runtime-pack-bundled": ("aar", {"alpine-runtime-api"}),
     "alpine-runtime-pack-x86_64": ("aar", {"alpine-runtime-api"}),
     "alpine-runtime-host": ("jar", {"alpine-runtime-api"}),
-    "alpine-runtime-ui-compose": ("aar", {"alpine-runtime-host"}),
+    "alpine-runtime-ui-compose": (
+        "aar",
+        {"alpine-runtime-host", "alpine-workspace-api"},
+    ),
     "alpine-runtime-testkit": ("jar", {"alpine-runtime-api"}),
     "alpine-llm-bridge": ("aar", {"alpine-llm-android", "alpine-runtime-api"}),
     "alpine-llm-gateway-pack-bundled": ("aar", {"alpine-llm-bridge"}),

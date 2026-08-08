@@ -13,6 +13,8 @@
     <img alt="Version 0.3.0" src="https://img.shields.io/badge/version-0.3.0-B9F227?style=flat-square&labelColor=10120F">
     <img alt="Android API 26+" src="https://img.shields.io/badge/Android-API%2026%2B-3DDC84?style=flat-square&logo=android&logoColor=white">
     <img alt="Kotlin 2.2.21" src="https://img.shields.io/badge/Kotlin-2.2.21-7F52FF?style=flat-square&logo=kotlin&logoColor=white">
+    <a href="apps/mobile_agent/README.md"><img alt="MobileAgent Flutter Android and iOS" src="https://img.shields.io/badge/MobileAgent-Flutter%20Android%20%26%20iOS-02569B?style=flat-square&logo=flutter&logoColor=white"></a>
+    <img alt="OAuth 2.0 with PKCE" src="https://img.shields.io/badge/auth-OAuth%202.0%20%2B%20PKCE-4F46E5?style=flat-square">
     <img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white">
     <img alt="Alpine 3.21.3" src="https://img.shields.io/badge/Alpine-3.21.3-0D597F?style=flat-square&logo=alpinelinux&logoColor=white">
     <img alt="Distribution internal only" src="https://img.shields.io/badge/distribution-INTERNAL%20ONLY-F59E0B?style=flat-square">
@@ -59,35 +61,57 @@
 <a id="screens"></a>
 ## 📱 앱 화면
 
-실제 Samsung 기기에서 캡처한 `Alpine AI Workspace`입니다. 이미지에는 OAuth 계정, client ID, token 또는 기기 serial을 포함하지 않았습니다. 모든 미리보기는 같은 `260 × 563` 크기로 정렬했으며, 이미지를 누르면 `1080 × 2340` 원본을 볼 수 있습니다.
+실제 Android 실기기에서 캡처한 **공개 가능한 핵심 화면 17개**입니다. `Alpine AI Workspace` 15개와 별도 Flutter 제품인 `MobileAgent` 2개를 포함합니다. 2026-08-09에 첫 실행 안내, Provider 빈 상태, Alpine Gateway 준비 상태, Runtime 설치 대시보드, terminal 명령 패널과 MobileAgent OAuth 랜딩을 추가했습니다. OAuth 계정·client ID·token·기기 serial·실사용 terminal 출력은 포함하지 않았습니다.
+
+캡처는 각 기기의 원본 비율을 보존합니다. Samsung 기준 `1080 × 2340` 10개와 PD20 기준 `1080 × 2160` 7개이며, 이미지를 누르면 원본을 볼 수 있습니다.
 
 <details open>
-<summary><strong>전체 화면 갤러리 펼치기</strong></summary>
+<summary><strong>공개 가능한 핵심 화면 갤러리 펼치기</strong></summary>
 <br>
 <table>
   <tr>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/01-fast-chat.png"><img src="docs/assets/screenshots/01-fast-chat.png" width="260" height="563" alt="빠른 채팅 연결 전 화면"></a><br><strong>빠른 채팅</strong><br><sub>Provider 연결 전 안내와 실행 모드 전환</sub></td>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/02-conversation-history.png"><img src="docs/assets/screenshots/02-conversation-history.png" width="260" height="563" alt="대화 기록 drawer"></a><br><strong>암호화 대화 기록</strong><br><sub>기존 대화 검색·선택·관리</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/10-mode-guide.png"><img src="docs/assets/screenshots/10-mode-guide.png" width="260" alt="첫 실행 모드 안내"></a><br><strong>첫 실행 모드 안내</strong><br><sub>빠른 채팅과 Alpine 작업의 경로·제한 비교</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/14-provider-empty-state.png"><img src="docs/assets/screenshots/14-provider-empty-state.png" width="260" alt="Provider 연결 빈 상태"></a><br><strong>LLM 연결</strong><br><sub>OAuth Provider가 없을 때의 안전한 시작점</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/03-assistant-mode.png"><img src="docs/assets/screenshots/03-assistant-mode.png" width="260" height="563" alt="Assistant skill 선택"></a><br><strong>Assistant Skill</strong><br><sub>현재 대화의 응답 방식 선택</sub></td>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/04-assistant-personas.png"><img src="docs/assets/screenshots/04-assistant-personas.png" width="260" height="563" alt="Skill과 Persona 목록"></a><br><strong>Skill · Persona 카탈로그</strong><br><sub>기본 Skill과 Persona 탐색</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/01-fast-chat.png"><img src="docs/assets/screenshots/01-fast-chat.png" width="260" alt="빠른 채팅 연결 전 화면"></a><br><strong>빠른 채팅</strong><br><sub>Provider 연결 전 안내와 실행 모드 전환</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/02-conversation-history.png"><img src="docs/assets/screenshots/02-conversation-history.png" width="260" alt="대화 기록 drawer"></a><br><strong>암호화 대화 기록</strong><br><sub>기존 대화 검색·선택·관리</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/05-assistant-defaults.png"><img src="docs/assets/screenshots/05-assistant-defaults.png" width="260" height="563" alt="Persona와 기본값 설정"></a><br><strong>Persona · 기본값</strong><br><sub>대화별 선택과 기본값 저장</sub></td>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/06-provider-connections.png"><img src="docs/assets/screenshots/06-provider-connections.png" width="260" height="563" alt="LLM 연결 목록"></a><br><strong>LLM 연결 관리</strong><br><sub>OAuth Provider profile 상태</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/03-assistant-mode.png"><img src="docs/assets/screenshots/03-assistant-mode.png" width="260" alt="Assistant skill 선택"></a><br><strong>Assistant Skill</strong><br><sub>현재 대화의 응답 방식 선택</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/04-assistant-personas.png"><img src="docs/assets/screenshots/04-assistant-personas.png" width="260" alt="Skill과 Persona 목록"></a><br><strong>Skill · Persona 카탈로그</strong><br><sub>기본 Skill과 Persona 탐색</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/06a-provider-types.png"><img src="docs/assets/screenshots/06a-provider-types.png" width="260" height="563" alt="Provider 유형 선택"></a><br><strong>Provider 유형</strong><br><sub>Codex·Claude·Gemini·Grok 연결 경로</sub></td>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/07-alpine-gateway-chat.png"><img src="docs/assets/screenshots/07-alpine-gateway-chat.png" width="260" height="563" alt="Alpine Gateway 채팅 화면"></a><br><strong>Gateway 채팅</strong><br><sub>Alpine Gateway 기반 대화</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/05-assistant-defaults.png"><img src="docs/assets/screenshots/05-assistant-defaults.png" width="260" alt="Persona와 기본값 설정"></a><br><strong>Persona · 기본값</strong><br><sub>대화별 선택과 기본값 저장</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/06-provider-connections.png"><img src="docs/assets/screenshots/06-provider-connections.png" width="260" alt="LLM 연결 목록"></a><br><strong>LLM 연결 관리</strong><br><sub>OAuth Provider profile 상태</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/08-alpine-runtime-tools.png"><img src="docs/assets/screenshots/08-alpine-runtime-tools.png" width="260" height="563" alt="Runtime과 Linux 터미널"></a><br><strong>Runtime · Linux 터미널</strong><br><sub>설치·복구·PTY terminal 제어</sub></td>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/09-runtime-package-manager.png"><img src="docs/assets/screenshots/09-runtime-package-manager.png" width="260" height="563" alt="Alpine 패키지 설치 UI"></a><br><strong>패키지 allowlist UI</strong><br><sub>승인된 Alpine 패키지 설치</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/06a-provider-types.png"><img src="docs/assets/screenshots/06a-provider-types.png" width="260" alt="Provider 유형 선택"></a><br><strong>Provider 유형</strong><br><sub>Codex·Claude·Gemini·Grok 연결 경로</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/07-alpine-gateway-chat.png"><img src="docs/assets/screenshots/07-alpine-gateway-chat.png" width="260" alt="Alpine Gateway 채팅 화면"></a><br><strong>Gateway 채팅</strong><br><sub>Alpine Gateway 기반 대화</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/11-alpine-workspace-gateway.png"><img src="docs/assets/screenshots/11-alpine-workspace-gateway.png" width="260" alt="Alpine 작업 Gateway 준비 상태"></a><br><strong>Alpine 작업 준비</strong><br><sub>Runtime 설치 전 Gateway·Provider 의존성 안내</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/12-runtime-install-dashboard.png"><img src="docs/assets/screenshots/12-runtime-install-dashboard.png" width="260" alt="Runtime 설치 대시보드"></a><br><strong>Runtime 설치 대시보드</strong><br><sub>설치 필요 상태와 다음 action</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/13-runtime-terminal-command.png"><img src="docs/assets/screenshots/13-runtime-terminal-command.png" width="260" alt="Linux terminal 명령 패널"></a><br><strong>Linux terminal 명령 패널</strong><br><sub>출력 viewport·명령 입력·중단 control</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/08-alpine-runtime-tools.png"><img src="docs/assets/screenshots/08-alpine-runtime-tools.png" width="260" alt="Runtime과 Linux 터미널"></a><br><strong>Runtime · Linux terminal</strong><br><sub>설치·복구·PTY terminal 제어</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center" valign="top"><a href="docs/assets/screenshots/09-runtime-package-manager.png"><img src="docs/assets/screenshots/09-runtime-package-manager.png" width="260" alt="Alpine 패키지 설치 UI"></a><br><strong>패키지 allowlist UI</strong><br><sub>승인된 Alpine 패키지 설치</sub></td>
   </tr>
 </table>
 
-> **보안상 제외한 화면** — 실제 OAuth 브라우저, 계정 정보, public client ID 입력값, token/credential이 포함될 수 있는 상세 설정은 저장소 이미지로 남기지 않습니다.
+### MobileAgent Flutter · Android/iOS 공통 OAuth 제품
+
+<table>
+  <tr>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/15-mobileagent-oauth-landing.png"><img src="docs/assets/screenshots/15-mobileagent-oauth-landing.png" width="260" alt="MobileAgent OAuth 설정 전 랜딩"></a><br><strong>MobileAgent OAuth 랜딩</strong><br><sub>시스템 브라우저·PKCE와 설정 필요 상태</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/16-mobileagent-provider-grid.png"><img src="docs/assets/screenshots/16-mobileagent-provider-grid.png" width="260" alt="MobileAgent Codex Claude Grok Provider 카드"></a><br><strong>Codex · Claude · Grok</strong><br><sub>MobileAgent BFF를 통한 세 Provider 경로</sub></td>
+  </tr>
+</table>
+
+> **의도적으로 제외한 상태** — 실제 OAuth 브라우저·callback, 계정 정보, public client ID 입력값, token/credential, 사용자 workspace 경로·terminal 출력, 파괴적 package/Runtime 확인 dialog는 저장소 이미지로 남기지 않습니다. MobileAgent의 인증 후 대화·Run Card는 앱 소유 HTTPS issuer/BFF와 승인된 계정이 있어야 하므로 아직 문서용 실캡처를 만들지 않았습니다. 이 갤러리는 모든 사용자별·민감 상태가 아니라, 현재 검토 가능한 제품 핵심 플로우를 보여 줍니다.
 </details>
 
 ## 🧭 두 가지 실행 모드
@@ -248,10 +272,10 @@ ANDROID_SERIAL=<device-serial> ./gradlew :integrated-app:connectedDebugAndroidTe
 | 항목 | 상태 | 기준 |
 |---|---|---|
 | Python unit/compile/smoke | ✅ CI PASS | GitHub Actions `Python 3.11` |
-| 결정론 Provider fault matrix | ✅ Local PASS | Python 102/102 + MobileAgent BFF 39/39; status·timeout·malformed/oversized SSE·strict UTF-8·no-retry |
+| 결정론 Provider fault matrix | ✅ Local PASS | Python 106/106 + MobileAgent BFF 39/39; status·timeout·malformed/oversized SSE·strict UTF-8·no-retry |
 | Android modules·publication matrix | ✅ CI PASS | remote run `30807869557`, commit `3389fcb` |
-| 통합 앱 compile·unit·lint·APK | ✅ Local PASS | 2026-08-08 terminal exit summary·접근성·한글 IME 반영 |
-| Samsung Android regression | ✅ PASS | OAuth core 3/3, Provider 12/12, Runtime Compose 7/7, integrated-app 10/10 |
+| 통합 앱 compile·unit·lint·APK | ✅ Local PASS | 2026-08-09 Alpine fallback viewport·접근성·한글 IME 반영 |
+| Samsung Android regression | ✅ PASS | OAuth core 3/3, Provider 12/12, Runtime Compose 8/8, integrated-app 10/10 |
 | Samsung Demo 전체 회귀 | ✅ 35/35 PASS | Provider·Chat·lifecycle·Markdown·theme |
 | Samsung OAuth lifecycle | ✅ Local PASS | OAuth core 3건 + Provider 12건 + 복구 3건 + credential-free `am force-stop` cold start |
 | Samsung Provider 변경 회귀 | ✅ 25/25 PASS | OAuth 저장소 3건 + Provider 12건 + Integrated 10건 |
@@ -259,13 +283,15 @@ ANDROID_SERIAL=<device-serial> ./gradlew :integrated-app:connectedDebugAndroidTe
 | arm64 Runtime·PTY·Bridge·Gateway probe | ✅ PASS | Samsung actual PRoot: initial `stty size=28 96`, fail-closed `INITIAL_SIZE_ONLY`/`TERMINAL_RESIZE_UNSUPPORTED`, terminal exit event, Host lifecycle `STARTED:3`/`STOPPED:3`, restart/repair healthy |
 | ANSI terminal screen renderer·exit summary | ✅ Local PASS | colour·cursor·clear·alternate screen·CJK·raw output 없는 마지막 종료 code unit regression + integrated compile |
 | Developer tool fixed smoke workflow | ✅ Local PASS | reusable direct argv Python·Git·SSH·Node profile + API/Host regression; actual repository install은 `NOT_RUN` |
-| Runtime Compose package/tool action | ✅ Samsung PASS | 7/7 — terminal accessibility/한글 IME·exit summary·confirmed SIGTERM/SIGKILL, fixed Git smoke, package snapshot/workspace action forwarding |
+| Runtime Compose package/tool action | ✅ Samsung PASS | 8/8 — terminal accessibility/한글 IME·Enter/Tab/Esc/Ctrl+C external key regression·exit summary·confirmed SIGTERM/SIGKILL, fixed Git smoke, package snapshot/workspace action forwarding |
+| Android 12 tablet Runtime Compose | ✅ PASS | 8/8 — scroll container 안에서 package 검토와 workspace import/export/share action이 실제 터치 target으로 노출되고 terminal key regression이 통과 |
 | Foreground-service process lease | ✅ Local PASS | background 4/4 — first start/last stop, nested terminal·command, duplicate close, FGS start-rejection host-policy callback; actual notification cleanup은 `NOT_RUN` |
 | Package metadata snapshot UI | ✅ Local PASS | exact allowlist의 license·download/installed payload·network/estimate boundary; live dependency preflight는 `NOT_RUN` |
+| README UI 갤러리·design contract | ✅ Local PASS | 17개 실제 Android PNG, 원본 기기 해상도 허용 목록·경로·미리보기 너비 검사 |
 | Workspace SAF·share boundary | ✅ Samsung PASS | 5/5 — test `content://` import/export, 이름 정규화, size cap, provider 오류 축소, app-private atomic share file; DocumentsUI full manual flow는 `NOT_RUN` |
 | bounded Gateway 복구·package mutation·workspace diff | ✅ Local PASS | supervisor/package/workspace unit test + 통합 APK build |
 | Gateway process crash·package network/disk-full | ⏳ `NOT_RUN` | 실제 runtime/repository 조건과 destructive matrix 필요 |
-| tablet layout 수동 smoke | ⏳ `NOT_RUN` | 연결 기기의 Play Protect 선택은 사용자 동의 필요 |
+| Android 12 tablet integrated regression | ✅ PASS | fake Provider 기반 integrated-app 10/10 — approval/decline fallback, Korean IME·TalkBack semantics, compact 200% guide, history·mode flow; manual gesture/contrast QA는 `NOT_RUN` |
 | 실제 Provider 계정 OAuth/API E2E | ⏳ `NOT_RUN` | 앱 소유 registration·계정 승인 필요 |
 | x86_64 emulator E2E | ⛔ BLOCKED | 연결된 검증 emulator 없음 |
 | 공개 배포 | ⛔ `NO-GO` | release readiness 10개 gate 중 6개 release blocker BLOCKED |
@@ -284,6 +310,9 @@ Remote CI의 최신 성공은 원격 `main`의 기준선입니다. 현재 로컬
   Samsung에서 PRoot guest read/apply와 이후 input 재개에 실패했습니다. 같은 private request를 validate/ack만
   하는 no-write control도 input을 재개하지 못했습니다. 따라서 Android 직접 Provider/Alpine 생산 앱은 계속
   `INITIAL_SIZE_ONLY` terminal contract를 유지합니다.
+- 이어진 base-PRoot control은 `TIOCGWINSZ`를 전부 피할 때만 여러 input batch가 유지되고, `stty size` 뒤
+  별도 input batch가 재개되지 않는 현상을 보였습니다. 정확한 source-level 원인이 해결될 때까지 full-screen
+  TUI·dynamic resize·input replay/retry는 지원하지 않습니다.
 - 실제 Provider direct OAuth는 앱 소유 registration과 inference 사용 승인이 필요합니다.
 - Gemini 외 direct Provider는 승인된 model catalog를 번들하지 않으며, 앱 소유자가 입력한 model만 후보로 노출합니다.
 - MobileAgent OIDC/BFF의 실제 staging Provider E2E는 external account/secret이 없어 아직 실행하지 않았습니다.

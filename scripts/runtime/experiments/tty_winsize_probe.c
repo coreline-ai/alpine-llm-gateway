@@ -40,6 +40,7 @@ static long syscall3(long number, long arg0, long arg1, long arg2) {
 
 __attribute__((noreturn)) void _start(void) {
     static const char dynamic[] = "tty_winsize_state=dynamic\n";
+    static const char alternate[] = "tty_winsize_state=alternate\n";
     static const char initial[] = "tty_winsize_state=initial\n";
     static const char unexpected[] = "tty_winsize_state=unexpected\n";
     static const char unavailable[] = "tty_winsize_state=unavailable\n";
@@ -52,6 +53,9 @@ __attribute__((noreturn)) void _start(void) {
         if (size.rows == 40 && size.columns == 120) {
             message = dynamic;
             message_size = sizeof(dynamic) - 1;
+        } else if (size.rows == 24 && size.columns == 80) {
+            message = alternate;
+            message_size = sizeof(alternate) - 1;
         } else if (size.rows == 28 && size.columns == 96) {
             message = initial;
             message_size = sizeof(initial) - 1;

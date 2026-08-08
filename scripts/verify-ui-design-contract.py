@@ -99,19 +99,26 @@ def verify_screenshots(tokens: dict[str, object]) -> None:
     contract = tokens["readme_screenshot"]
     if not isinstance(contract, dict):
         fail("readme_screenshot must be an object")
-    expected_source = (
-        int(contract["source_width_px"]),
-        int(contract["source_height_px"]),
-    )
+    allowed_dimensions_raw = contract.get("allowed_source_dimensions_px")
+    if not isinstance(allowed_dimensions_raw, list) or not allowed_dimensions_raw:
+        fail("readme_screenshot.allowed_source_dimensions_px must be a non-empty list")
+    allowed_dimensions: set[tuple[int, int]] = set()
+    for dimensions in allowed_dimensions_raw:
+        if not isinstance(dimensions, list) or len(dimensions) != 2:
+            fail("each allowed screenshot dimension must be [width, height]")
+        width, height = (int(value) for value in dimensions)
+        if width <= 0 or height <= 0:
+            fail("allowed screenshot dimensions must be positive")
+        allowed_dimensions.add((width, height))
     screenshots = sorted(SCREENSHOT_DIR.glob("*.png"))
     if len(screenshots) != int(contract["count"]):
         fail(f"expected {contract['count']} screenshots, found {len(screenshots)}")
     for screenshot in screenshots:
         actual = png_dimensions(screenshot)
-        if actual != expected_source:
+        if actual not in allowed_dimensions:
             fail(
                 f"screenshot size mismatch: {screenshot.name} "
-                f"expected={expected_source} actual={actual}"
+                f"allowed={sorted(allowed_dimensions)} actual={actual}"
             )
 
     readme = README.read_text(encoding="utf-8")
@@ -130,12 +137,13 @@ def verify_screenshots(tokens: dict[str, object]) -> None:
     if len(set(image_tags)) != len(image_tags):
         fail("README screenshot references must be unique")
 
-    width = int(contract["preview_width"])
-    height = int(contract["preview_height"])
+    preview_width = int(contract["preview_width"])
     full_tags = re.findall(r"<img\b[^>]*docs/assets/screenshots/[^>]+>", section)
     for tag in full_tags:
-        if f'width="{width}"' not in tag or f'height="{height}"' not in tag:
-            fail(f"README preview size drift: {tag}")
+        if f'width="{preview_width}"' not in tag:
+            fail(f"README preview width drift: {tag}")
+        if "height=" in tag:
+            fail(f"README screenshots must preserve native aspect ratio: {tag}")
     for reference in image_tags:
         if not (ROOT / reference).is_file():
             fail(f"README screenshot missing: {reference}")
@@ -182,7 +190,7 @@ def verify_product_artifact_boundary() -> None:
 
 def main() -> int:
     tokens = json.loads(TOKENS_PATH.read_text(encoding="utf-8"))
-    if tokens.get("schema_version") != 1:
+    if tokens.get("schema_version") != 2:
         fail("unsupported token schema")
     verify_tokens(tokens)
     verify_screenshots(tokens)

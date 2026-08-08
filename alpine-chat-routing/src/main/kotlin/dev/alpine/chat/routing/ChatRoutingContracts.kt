@@ -13,8 +13,11 @@ enum class ChatBackendKind {
 
 /**
  * Provider idempotency is explicit. NONE means the router must never replay after dispatch.
- * The current direct and Alpine adapters intentionally declare NONE until each Provider contract
- * has a verified upstream idempotency key.
+ * A correlation ID, a batch-only identifier, or an SDK retry recommendation is not an
+ * idempotency contract. The current direct and Alpine adapters intentionally declare NONE until
+ * the exact inference endpoint/header, forwarding behavior, and physical E2E are verified.
+ * Even PROVIDER_VERIFIED_KEY does not make this router retry by itself: a host must explicitly
+ * choose and invoke a new transport attempt under its approved Provider-specific policy.
  */
 enum class ChatBackendIdempotency {
     NONE,

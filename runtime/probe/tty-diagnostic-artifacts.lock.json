@@ -22,10 +22,11 @@
     "abi": "arm64-v8a",
     "build_android_api": 26,
     "artifact_path": "alpine-runtime-probe/src/main/jniLibs/arm64-v8a/libtty_winsize_probe.so",
-    "sha256": "d7b56fbc41a10edd19e848bab7af91c3ab7cd96dcf3aee593a4f7e6d7e4e7c24",
-    "size_bytes": 856,
+    "sha256": "f59c61e972d5ce75ee0fa44d41bba40400585a16d5f2f39034d25829da7212bd",
+    "size_bytes": 912,
     "safe_output_values": [
       "dynamic",
+      "alternate",
       "initial",
       "unexpected",
       "unavailable"
@@ -58,6 +59,148 @@
         "post-launch host or guest signal injection",
         "terminal payload logging",
         "production terminal use"
+      ]
+    }
+  },
+  "ioctl_filter_bypass_proot": {
+    "repository": "https://github.com/OpenMinis/proot.git",
+    "commit": "8cf13e997cdc9472997aae19df8050c073c9a86c",
+    "build_android_api": 26,
+    "artifact_path": "alpine-runtime-probe/src/main/jniLibs/arm64-v8a/libproot_tty_no_ioctl_filter.so",
+    "sha256": "a210b3416504e25f05e8b5b9a5ec5542ef1a6e55f9b408910d0a205a3df374e7",
+    "size_bytes": 279064,
+    "patch": {
+      "path": "scripts/runtime/experiments/proot-tty-relay25-no-ioctl-filter.patch",
+      "sha256": "7aa22f663a0e23bfcc083189aed230a408d3109eb2e514ef666805b5712c755d"
+    },
+    "license_declared": "GPL-2.0-or-later",
+    "production_packaging": false,
+    "contract": {
+      "purpose": "Tests whether bypassing PRoot Android ioctl seccomp filtering changes post-TIOCGWINSZ input recovery",
+      "forbidden": [
+        "production terminal use",
+        "dynamic resize promotion",
+        "terminal payload logging",
+        "user command replay"
+      ]
+    }
+  },
+  "post_winsize_input_trace_proot": {
+    "repository": "https://github.com/OpenMinis/proot.git",
+    "commit": "8cf13e997cdc9472997aae19df8050c073c9a86c",
+    "build_android_api": 26,
+    "artifact_path": "alpine-runtime-probe/src/main/jniLibs/arm64-v8a/libproot_tty_post_winsize_input_trace.so",
+    "sha256": "8f441a25ec423c224f68421797c099283b5cc2d0261c286bcb0125bc76f44a75",
+    "size_bytes": 280040,
+    "patch": {
+      "path": "scripts/runtime/experiments/proot-tty-relay26-post-tiocgwinsz-input-trace.patch",
+      "sha256": "31a0dc2521e17e8853e81db25f88c93c349572ca4ce01d83921ed580ca6bebbf"
+    },
+    "license_declared": "GPL-2.0-or-later",
+    "production_packaging": false,
+    "contract": {
+      "purpose": "Classifies only fixed post-TIOCGWINSZ lifecycle stages. Generic read coverage requires the Probe seccomp-off control because PRoot seccomp acceleration can bypass this recorder for read syscalls",
+      "fixed_stages": [
+        "tiocgwinsz_exit_ok",
+        "read_enter",
+        "read_exit_nonempty",
+        "read_exit_eof",
+        "read_exit_error"
+      ],
+      "forbidden": [
+        "production terminal use",
+        "dynamic resize promotion",
+        "terminal payload logging",
+        "pid or command logging",
+        "user command replay"
+      ]
+    }
+  },
+  "post_winsize_command_flow_trace_proot": {
+    "repository": "https://github.com/OpenMinis/proot.git",
+    "commit": "8cf13e997cdc9472997aae19df8050c073c9a86c",
+    "build_android_api": 26,
+    "artifact_path": "alpine-runtime-probe/src/main/jniLibs/arm64-v8a/libproot_tty_post_winsize_command_flow_trace.so",
+    "sha256": "43819777bffd234ac0f2d98a8efa3e53362f796e121d99246f8beb3ebb84428d",
+    "size_bytes": 280296,
+    "patch": {
+      "path": "scripts/runtime/experiments/proot-tty-relay27-post-tiocgwinsz-command-flow-trace.patch",
+      "sha256": "e0f3bcfbe4dd2c34c72135e83bc2be5e6543e1829a7bc3003e63ef2fb0a35830"
+    },
+    "license_declared": "GPL-2.0-or-later",
+    "production_packaging": false,
+    "contract": {
+      "purpose": "Under the explicit Probe seccomp-off control, classifies the fixed parent/child flow after the first successful guest TIOCGWINSZ without recording a process identifier, file descriptor, terminal data, path, command or argument",
+      "fixed_stages": [
+        "tiocgwinsz_exit_ok",
+        "parent_unavailable",
+        "parent_wait_inflight",
+        "parent_wait_not_inflight",
+        "target_exit_enter",
+        "parent_wait_exit",
+        "parent_read_enter",
+        "parent_read_exit_nonempty",
+        "parent_read_exit_eof",
+        "parent_read_exit_error"
+      ],
+      "forbidden": [
+        "production terminal use",
+        "dynamic resize promotion",
+        "terminal payload logging",
+        "pid, fd, path, command or argument logging",
+        "user command replay",
+        "automatic signal injection"
+      ]
+    }
+  },
+  "post_winsize_post_read_flow_trace_proot": {
+    "repository": "https://github.com/OpenMinis/proot.git",
+    "commit": "8cf13e997cdc9472997aae19df8050c073c9a86c",
+    "build_android_api": 26,
+    "artifact_path": "alpine-runtime-probe/src/main/jniLibs/arm64-v8a/libproot_tty_post_winsize_post_read_flow_trace.so",
+    "sha256": "408d5a740de408d758c06bc8b31cd81868c88b18d1500b43c27e9edc9a12e5a6",
+    "size_bytes": 281176,
+    "patch": {
+      "path": "scripts/runtime/experiments/proot-tty-relay28-post-read-syscall-flow-trace.patch",
+      "sha256": "9f0a187272a7abac23346d6b4b71fb4c51b41b718b5b5f168229eee1784a360d"
+    },
+    "license_declared": "GPL-2.0-or-later",
+    "production_packaging": false,
+    "contract": {
+      "purpose": "Under the explicit Probe seccomp-off control, classifies only the first parent syscall category after a successful guest TIOCGWINSZ and non-empty post-winsize read. No command, terminal bytes, identifier or syscall arguments are recorded.",
+      "fixed_stages": [
+        "tiocgwinsz_exit_ok",
+        "parent_unavailable",
+        "parent_wait_inflight",
+        "parent_wait_not_inflight",
+        "target_exit_enter",
+        "parent_wait_exit",
+        "parent_read_enter",
+        "parent_read_exit_nonempty",
+        "parent_read_exit_eof",
+        "parent_read_exit_error",
+        "parent_post_read_read_enter",
+        "parent_post_read_write_enter",
+        "parent_post_read_write_stdout",
+        "parent_post_read_write_stderr",
+        "parent_post_read_write_other",
+        "parent_post_read_write_exit_nonempty",
+        "parent_post_read_write_exit_zero",
+        "parent_post_read_write_exit_error",
+        "parent_post_read_ioctl_enter",
+        "parent_post_read_spawn_enter",
+        "parent_post_read_exec_enter",
+        "parent_post_read_wait_enter",
+        "parent_post_read_exit_enter",
+        "parent_post_read_other_enter"
+      ],
+      "forbidden": [
+        "production terminal use",
+        "dynamic resize promotion",
+        "terminal payload logging",
+        "pid, fd, path, command or argument logging",
+        "user command replay",
+        "automatic signal injection"
       ]
     }
   },
@@ -114,14 +257,15 @@
     "abi": "arm64-v8a",
     "build_android_api": 26,
     "artifact_path": "alpine-runtime-probe/src/main/jniLibs/arm64-v8a/libtty_host_resize_control.so",
-    "sha256": "a02a1a4589ceb6748ceb0f45214e35f98f7ab32c4105850d96cea77a66d94624",
-    "size_bytes": 7648,
+    "sha256": "0a09ffa0a30aa7bb80644bacea11100af9cc492be5070edb36f77fb0b2b581af",
+    "size_bytes": 7984,
     "production_packaging": false,
     "contract": {
       "creates_pty": true,
       "creates_session": true,
       "sets_controlling_tty": true,
       "checks_host_sigwinch_and_later_input": true,
+      "checks_host_tiocgwinsz_and_later_input": true,
       "accepted_output": "host_resize_control=PASS",
       "forbidden": [
         "app terminal payload",
@@ -137,8 +281,8 @@
     "abi": "arm64-v8a",
     "build_android_api": 26,
     "artifact_path": "alpine-runtime-probe/src/main/jniLibs/arm64-v8a/libtty_session_virtual_resize_launcher.so",
-    "sha256": "3bf5bde1192e8e07ceaf683ab282a135654572fce2f6fde286cf01a72654dde7",
-    "size_bytes": 9232,
+    "sha256": "e9f9f2c902db00f1d2d4fa6a29c0738488c7139ccc6d4fbb07af7fdba7f68b49",
+    "size_bytes": 9384,
     "production_packaging": false,
     "contract": {
       "creates_session": true,
@@ -160,6 +304,120 @@
         "post-launch host or guest signal injection"
       ],
       "has_no_write_negative_control": true
+    }
+  },
+  "second_tiocgwinsz_trace_proot": {
+    "repository": "https://github.com/OpenMinis/proot.git",
+    "commit": "8cf13e997cdc9472997aae19df8050c073c9a86c",
+    "build_android_api": 26,
+    "artifact_path": "alpine-runtime-probe/src/main/jniLibs/arm64-v8a/libproot_tty_second_tiocgwinsz_trace.so",
+    "sha256": "393dde8b949be2f1579215741aeeb9784dce533738dd87509c2dc8a50c8ab4b2",
+    "size_bytes": 279880,
+    "patch": {
+      "path": "scripts/runtime/experiments/proot-tty-relay29-second-tiocgwinsz-trace.patch",
+      "sha256": "160b5d285d716785d6b9111570859f3ae865f178f36b699c0fce223b2d312f77"
+    },
+    "license_declared": "GPL-2.0-or-later",
+    "production_packaging": false,
+    "contract": {
+      "purpose": "Under the explicit Probe seccomp-off control, classifies only whether the next guest TIOCGWINSZ after the first successful get enters and returns success or error. No terminal bytes, command, identifier, syscall arguments, or errno value are recorded.",
+      "fixed_stages": [
+        "first_tiocgwinsz_exit_ok",
+        "second_tiocgwinsz_enter",
+        "second_tiocgwinsz_exit_ok",
+        "second_tiocgwinsz_exit_error"
+      ],
+      "forbidden": [
+        "production terminal use",
+        "dynamic resize promotion",
+        "terminal payload logging",
+        "pid, fd, path, command, argument or errno logging",
+        "user command replay",
+        "automatic signal injection"
+      ]
+    }
+  },
+  "second_tiocgwinsz_target_output_trace_proot": {
+    "repository": "https://github.com/OpenMinis/proot.git",
+    "commit": "8cf13e997cdc9472997aae19df8050c073c9a86c",
+    "build_android_api": 26,
+    "artifact_path": "alpine-runtime-probe/src/main/jniLibs/arm64-v8a/libproot_tty_second_tiocgwinsz_target_output_trace.so",
+    "sha256": "46160c628fc90b984cb4e85faf5eeaa876b8dc638b430ac1e5082f7898030912",
+    "size_bytes": 280520,
+    "patch": {
+      "path": "scripts/runtime/experiments/proot-tty-relay30-second-tiocgwinsz-target-output-trace.patch",
+      "sha256": "eac28ea1f188fbfa8246b7da17ebe492c941921041a5cc967f70478165abfbfb"
+    },
+    "license_declared": "GPL-2.0-or-later",
+    "production_packaging": false,
+    "contract": {
+      "purpose": "Under the explicit Probe seccomp-off control, classifies only the second successful TIOCGWINSZ target first write destination/result class and target exit. No terminal bytes, command, identifier, syscall arguments, or errno value are recorded.",
+      "fixed_stages": [
+        "first_tiocgwinsz_exit_ok",
+        "second_tiocgwinsz_enter",
+        "second_tiocgwinsz_exit_ok",
+        "second_tiocgwinsz_exit_error",
+        "second_target_write_enter",
+        "second_target_write_stdout",
+        "second_target_write_stderr",
+        "second_target_write_other",
+        "second_target_write_exit_nonempty",
+        "second_target_write_exit_zero",
+        "second_target_write_exit_error",
+        "second_target_exit_enter"
+      ],
+      "forbidden": [
+        "production terminal use",
+        "dynamic resize promotion",
+        "terminal payload logging",
+        "pid, fd, path, command, argument or errno logging",
+        "user command replay",
+        "automatic signal injection"
+      ]
+    }
+  },
+  "virtual_winsize_second_target_output_trace_proot": {
+    "repository": "https://github.com/OpenMinis/proot.git",
+    "commit": "8cf13e997cdc9472997aae19df8050c073c9a86c",
+    "build_android_api": 26,
+    "artifact_path": "alpine-runtime-probe/src/main/jniLibs/arm64-v8a/libproot_tty_virtual_winsize_second_target_output_trace.so",
+    "sha256": "dbb3fc063d6de7abe861768e183623e6a96e8ebfe3b2c3a3c2dda13f8af8350e",
+    "size_bytes": 285912,
+    "patch": {
+      "path": "scripts/runtime/experiments/proot-tty-relay31-virtual-winsize-second-target-output-composite.patch",
+      "sha256": "e2e24b7fe3f9d87d36a726624355a2fc816bd74caddeaaa8b8066c749d89781e"
+    },
+    "license_declared": "GPL-2.0-or-later",
+    "production_packaging": false,
+    "contract": {
+      "purpose": "Probe-only composite that applies the Relay24 private four-byte virtual winsize value on successful guest TIOCGWINSZ exits and records only Relay30 fixed second-get target-output lifecycle stages. It never carries terminal bytes or user identifiers.",
+      "fixed_stages": [
+        "virtual_winsize_supervisor_stored",
+        "virtual_winsize_fd_ready",
+        "virtual_winsize_read_applied",
+        "first_tiocgwinsz_exit_ok",
+        "second_tiocgwinsz_enter",
+        "second_tiocgwinsz_exit_ok",
+        "second_tiocgwinsz_exit_error",
+        "second_target_write_enter",
+        "second_target_write_stdout",
+        "second_target_write_stderr",
+        "second_target_write_other",
+        "second_target_write_exit_nonempty",
+        "second_target_write_exit_zero",
+        "second_target_write_exit_error",
+        "second_target_exit_enter"
+      ],
+      "forbidden": [
+        "production terminal use",
+        "dynamic resize promotion",
+        "terminal payload logging",
+        "pid, fd, path, command, argument or errno logging",
+        "user command replay",
+        "automatic signal injection",
+        "guest FIFO or polling",
+        "host master TIOCSWINSZ after terminal launch"
+      ]
     }
   }
 }

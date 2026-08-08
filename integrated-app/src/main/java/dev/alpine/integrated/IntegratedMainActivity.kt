@@ -516,10 +516,16 @@ private fun AlpineWorkspace(
     modifier: Modifier = Modifier,
 ) {
     var selectedPane by remember { mutableStateOf(AlpineWorkspacePane.CHAT) }
-    val compactForChatIme =
-        selectedPane == AlpineWorkspacePane.CHAT && WindowInsets.isImeVisible
+    val chatPaneSelected = selectedPane == AlpineWorkspacePane.CHAT
+    val compactForChatIme = chatPaneSelected && WindowInsets.isImeVisible
+    // The Gateway card is intentionally expansive while a user is preparing Alpine. Once a
+    // conversation exists, retaining that card can collapse the nested chat viewport on shorter
+    // devices after an approval dialog dismisses the IME. Keep the pane switcher available, but
+    // move the detailed Gateway controls to the terminal/tools pane until the conversation is
+    // cleared so the newest result and recovery state remain reachable.
+    val showGatewayStatus = !chatPaneSelected || (!compactForChatIme && chatState.messages.isEmpty())
     Column(modifier = modifier.fillMaxSize()) {
-        if (!compactForChatIme) {
+        if (showGatewayStatus) {
             AlpineGatewayStatusCard(
                 runtimeState = runtimeState,
                 bridgeState = bridgeState,

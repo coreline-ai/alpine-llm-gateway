@@ -27,6 +27,59 @@ PTY는 resize뿐 아니라 foreground process group과 `SIGWINCH` 소유권도 �
 - 장래 `DYNAMIC` 지원은 PRoot upstream/maintained source-level terminal hook 또는 PRoot 없이
   controlling terminal을 유지하는 아키텍처에서 해결한다. Host polling, `/proc/<pid>/fd` 재개방, FIFO ack는
   capability 승격 근거가 될 수 없다.
+- 현재 로컬 OpenMinis PRoot의 `origin/master`는 pinned `8cf13e9`와 동일하다. 포함된 `--native-offload`은
+  선택한 guest `execve`를 abstract socket host handler로 보내는 opt-in extension이므로 interactive terminal
+  session/resize backend가 아니며 product candidate로 사용하지 않는다.
+
+### Relay28 보정 (2026-08-09)
+
+Probe-only Relay28 seccomp-off control은 첫 guest `TIOCGWINSZ` 뒤 child exit, parent wait, non-empty parent
+read와 write 반환을 확인했고, 이어진 단순 fixed `printf`가 Samsung에서 응답했다. 따라서 첫 ioctl만으로
+terminal input/output이 영구 중단된다고 해석하지 않는다. Relay29 seccomp-off control은 same marker의 second
+`TIOCGWINSZ` enter와 success exit을, Relay30 direct-helper control은 target stdout write/exit와 terminal response를
+확인했다. 기존 marker의 `stty` stdout은 command-substitution pipe로 향할 수 있으므로 그 marker의 completion 실패는
+일반 PTY/input failure 증거가 아니다. actual virtual/physical size update와 `SIGWINCH`·repeat/storm·TUI·orphan
+matrix는 아직 미검증이므로 이 결과도 DYNAMIC 승격 근거가 아니며 `INITIAL_SIZE_ONLY` 계약은 유지한다. 상세는
+`dev-plan/implement_20260809_064200.md`를 따른다.
+
+### Relay31 virtual query-level proof (2026-08-09)
+
+Relay31은 Relay24의 private four-byte memfd source patch와 Relay30의 fixed second-get lifecycle recorder를
+Probe-only artifact로 결합했다. Samsung arm64 seccomp-off control에서 bounded virtual request의 store `1`, PRoot
+fd-ready `1`, successful guest get 뒤 apply `3`, second get success `1`, helper stdout non-empty exit `1`을
+확인했고 fixed helper가 `dynamic`을 반환했다. 즉 **guest `TIOCGWINSZ` 결과를 source-level virtual state로
+대체하는 query-level 경로**는 이 단일 request에서 동작한다.
+
+이 artifact는 physical host PTY size 변경이나 guest `SIGWINCH`를 보내지 않으며, repeat/storm·rotation·alternate
+screen TUI·orphan matrix도 수행하지 않았다. Probe의 `DYNAMIC` 결과는 disposable diagnostic contract일 뿐 product
+capability가 아니다. production은 계속 `INITIAL_SIZE_ONLY`/`TERMINAL_RESIZE_UNSUPPORTED`를 유지한다. 상세 증거는
+`dev-plan/implement_20260809_070000.md`를 따른다.
+
+### Relay32 virtual repeat/storm proof (2026-08-09)
+
+같은 Probe-only source path에서 small/large repeat와 bounded 8-step storm을 수행했다. helper는 raw dimensions
+대신 `dynamic`/`alternate` 등 closed enum만 반환하며, repeat small marker와 repeat large marker, storm final marker가
+각각 일치했다. virtual request store는 총 `11`회였고 final helper state도 requested large state였다. 따라서 private
+virtual state의 **query-level repeat/storm transition**은 이 matrix에서 통과했다.
+
+이 검증은 host PTY의 physical size나 foreground guest `SIGWINCH`를 갱신하지 않는다. 회전, alternate-screen
+TUI, orphan process까지도 아직 범위 밖이다. 그러므로 product `DYNAMIC` 승격 조건은 충족하지 않았고 production
+contract는 계속 `INITIAL_SIZE_ONLY`다. 상세는 `dev-plan/implement_20260809_073000.md`를 따른다.
+
+### Phase 1j pinned PRoot static handoff audit (2026-08-09)
+
+`scripts/verify-proot-terminal-handoff.py`는 runtime lock의 pinned OpenMinis PRoot revision을 대상으로,
+raw terminal data·command·PID/fd를 읽거나 기록하지 않는 source-level audit을 수행한다. 현재 pinned source는
+Android `PR_ioctl`을 syscall-exit trace 대상으로 두고, tracee signal stop을 syscall chain이 아닐 때 generic
+`ptrace(..., signal)` restart로 전달할 수 있다. 반면 stock entry/exit source에는 `TIOCGWINSZ`/`TIOCSWINSZ`
+rewrite나 guest `SIGWINCH` 생성·relay hook이 없다.
+
+이는 host kernel이 이 Android PRoot topology에 실제 `SIGWINCH`를 delivery했다는 증거가 아니며, static
+handoff 자체도 physical resize acceptance를 대체하지 않는다. audit 결과는 pinned stock source에 안전하게
+승격할 local terminal hook이 없다는 경계만 확정한다. 따라서 새로운 signal/FIFO/PID/fd workaround나
+Probe artifact 확장은 중단하고, upstream-maintained hook 또는 대체 controlling-terminal architecture가
+별도 acceptance matrix를 통과할 때까지 product contract와 blocker를 유지한다. 상세 실행 결과는
+`dev-plan/implement_20260809_071338.md`에 기록한다.
 
 ## 안전 조건
 
@@ -127,9 +180,32 @@ PTY는 resize뿐 아니라 foreground process group과 `SIGWINCH` 소유권도 �
   수행하지 않았고, skip-resize control은 `resize()` 호출까지 생략했다. 두 control도 same session topology에서
   dynamic marker·helper·follow-up input이 미응답이었다. 즉 해당 session의 input lifecycle은 resize request
   이전부터 불안정하며, `SIGWINCH`, memfd write 또는 private socket을 단독 root cause로 취급할 수 없다.
-- primary tracee를 foreground group으로 옮기지 않는 control은 Samsung에서 bounded Probe result를 쓰기 전에
-  hang했다. 이 결과는 direct tracee foreground assignment를 제거하는 것만으로는 terminal architecture를
-  복구하지 못함을 뜻한다. supervisor/PRoot job-control topology 전체가 blocker이며, product는 계속
+- primary tracee를 foreground group으로 옮기지 않는 control도 같은 marker/helper/follow-up failure를 보였다.
+  이 결과는 direct tracee foreground assignment를 제거하는 것만으로 terminal architecture를 복구하지 못함을
+  뜻한다.
+- 추가 Samsung 분리 control은 **기본(unpatched) PRoot**에서도 terminal의 `TIOCGWINSZ`를 전부 생략하면
+  여러 개의 독립 input batch와 fixed follow-up이 통과하지만, initial `stty size`로 한 번이라도
+  `TIOCGWINSZ`를 수행하면 그 뒤 별도 input batch가 재개되지 않음을 보였다. patched virtual session도
+  read를 피한 pre-buffered helper 흐름은 통과했다. `PROOT_NO_SECCOMP=1` control과 Android ioctl seccomp
+  filter를 source-level로 완전히 제거한 relay25 control 모두 실패를 바꾸지 못했다.
+  같은 Samsung에서 PRoot 없이 native host PTY control은 `TIOCSWINSZ → SIGWINCH → later input`뿐 아니라
+  `TIOCGWINSZ → 별도 later input`도 통과했다. 따라서 Android PTY 일반 동작만으로는 failure를 설명할 수 없다.
+- ProcessBuilder가 별도로 연 stdin/stdout/stderr slave descriptor를 native host처럼 `dup2`로 하나로 합치는
+  Probe-only control은 PRoot prompt 자체를 만들지 못했다. 이 topology도 production 후보가 아니며, fd sharing을
+  제품 workaround로 적용하지 않는다.
+- Relay26은 PRoot `syscall.c`에서 successful guest `TIOCGWINSZ` exit 뒤 read lifecycle을 고정 enum으로만
+  기록했다. 기본 seccomp run의 `TIOCGWINSZ` exit 6회와 `read(2)` enter 0회는, PRoot source상 일반 `read`가
+  seccomp acceleration에서 `PTRACE_CONT`로 통과해 recorder가 호출되지 않을 수 있으므로 "read가 실행되지
+  않았다"는 증거가 아니다. 같은 Samsung의 seccomp-off control은 `TIOCGWINSZ` exit 3회 뒤
+  `read_enter`/`read_exit_nonempty`를 각 1회 관찰했지만, fixed marker·helper·follow-up input은 계속
+  미응답이었다. 따라서 Relay26은 PRoot terminal의 post-`TIOCGWINSZ` input lifecycle failure는 확인하되,
+  정확한 event-loop/read 부재나 kernel·ptrace·job-control 내부 지점을 확정하지 않는다. Relay26은
+  production artifact/API가 아니며 어느 variant도 product에 승격하지 않는다. 입력 replay/retry는 금지한다.
+- Relay27은 같은 seccomp-off 조건에서 첫 `TIOCGWINSZ` child와 parent 관계만 fixed enum으로 추적했다.
+  child exit → parent wait exit → parent `read(2)` non-empty exit가 모두 관찰됐지만, 그 뒤 fixed
+  acknowledgement·marker·helper/follow-up output은 없었다. 따라서 PRoot가 post-ioctl input read에 전혀
+  도달하지 않는다는 가설은 제거한다. 반면 Relay27은 terminal bytes, PID, fd, command 또는 이후 shell parser/write
+  상태를 기록하지 않으므로 정확한 internal blocker는 계속 미확정이다. `DYNAMIC` 승격의 증거가 아니며
   `INITIAL_SIZE_ONLY`를 유지한다.
 - 상세 증거는 `dev-plan/alpine-runtime-remaining-verification-20260802.md`와
   `dev-plan/implement_20260808_113133.md`, `dev-plan/implement_20260808_141500.md`,

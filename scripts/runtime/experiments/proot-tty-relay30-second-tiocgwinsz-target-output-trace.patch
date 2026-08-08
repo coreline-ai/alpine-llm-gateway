@@ -1,0 +1,168 @@
+--- a/src/syscall/syscall.c
++++ b/src/syscall/syscall.c
+@@ -24,6 +24,10 @@
+ #include <limits.h>      /* PATH_MAX, */
+ #include <string.h>      /* strlen(3), */
+ #include <errno.h>       /* errno(3), E* */
++#include <fcntl.h>       /* open(), O_*, */
++#include <stdlib.h>      /* getenv(), */
++#include <termios.h>     /* TIOCGWINSZ, */
++#include <unistd.h>      /* close(), write(), */
+ 
+ #include "syscall/syscall.h"
+ #include "syscall/chain.h"
+@@ -32,7 +36,142 @@
+ #include "tracee/reg.h"
+ #include "tracee/mem.h"
+ #include "cli/note.h"
++
++
++/*
++ * Probe-only second-TIOCGWINSZ target-output recorder.  After the first
++ * successful guest get-size it records whether the next get-size succeeds,
++ * then only the second-get tracee's first write destination/result class and
++ * exit.  It never stores terminal bytes, command, argument, path, PID, fd
++ * number, or errno value.  It is never a production resize implementation.
++ */
++static bool second_output_first_exit_seen = false;
++static bool second_output_enter_seen = false;
++static bool second_output_get_exit_seen = false;
++static bool second_output_write_seen = false;
++static bool second_output_write_pending = false;
++static bool second_output_target_exit_seen = false;
++static Tracee *second_output_target = NULL;
++
++static const char *second_output_trace_path(void)
++{
++	static bool initialized = false;
++	static const char *path = NULL;
++
++	if (!initialized) {
++		path = getenv("PROOT_TTY_POST_WINSIZE_INPUT_TRACE");
++		initialized = true;
++	}
++
++	return path != NULL && path[0] != '\0' ? path : NULL;
++}
++
++static void record_second_output_stage(const char *stage)
++{
++	const char *path = second_output_trace_path();
++	int fd;
++
++	if (path == NULL)
++		return;
++
++	fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC | O_NOFOLLOW, 0600);
++	if (fd < 0)
++		return;
++
++	(void) write(fd, "schema=1 event=POST_TIOCGWINSZ_SECOND_TARGET_OUTPUT stage=",
++		     sizeof("schema=1 event=POST_TIOCGWINSZ_SECOND_TARGET_OUTPUT stage=") - 1);
++	(void) write(fd, stage, strlen(stage));
++	(void) write(fd, "\n", 1);
++	(void) close(fd);
++}
++
++static bool is_second_output_write(word_t sysnum)
++{
++	return sysnum == PR_write || sysnum == PR_writev;
++}
++
++static const char *classify_second_output_destination(const Tracee *tracee)
++{
++	word_t fd = peek_reg(tracee, CURRENT, SYSARG_1);
++
++	return fd == STDOUT_FILENO ? "second_target_write_stdout" :
++		fd == STDERR_FILENO ? "second_target_write_stderr" :
++		"second_target_write_other";
++}
++
++static void trace_second_output_enter(Tracee *tracee)
++{
++	word_t sysnum;
++
++	if (second_output_trace_path() == NULL)
++		return;
+ 
++	sysnum = get_sysnum(tracee, CURRENT);
++	if (!second_output_first_exit_seen) return;
++
++	if (!second_output_enter_seen && sysnum == PR_ioctl &&
++	    peek_reg(tracee, CURRENT, SYSARG_2) == TIOCGWINSZ) {
++		second_output_enter_seen = true;
++		second_output_target = tracee;
++		record_second_output_stage("second_tiocgwinsz_enter");
++		return;
++	}
++
++	if (tracee != second_output_target)
++		return;
++
++	if (!second_output_write_seen && is_second_output_write(sysnum)) {
++		second_output_write_seen = true;
++		second_output_write_pending = true;
++		record_second_output_stage("second_target_write_enter");
++		record_second_output_stage(classify_second_output_destination(tracee));
++		return;
++	}
++
++	if (!second_output_target_exit_seen && (sysnum == PR_exit || sysnum == PR_exit_group)) {
++		second_output_target_exit_seen = true;
++		record_second_output_stage("second_target_exit_enter");
++	}
++}
++
++static void trace_second_output_exit(Tracee *tracee)
++{
++	word_t sysnum;
++	word_t result;
++
++	if (second_output_trace_path() == NULL)
++		return;
++
++	sysnum = get_sysnum(tracee, ORIGINAL);
++	if (sysnum == PR_ioctl && peek_reg(tracee, ORIGINAL, SYSARG_2) == TIOCGWINSZ) {
++		result = peek_reg(tracee, CURRENT, SYSARG_RESULT);
++		if (!second_output_first_exit_seen) {
++			if ((long) result >= 0) {
++				second_output_first_exit_seen = true;
++				record_second_output_stage("first_tiocgwinsz_exit_ok");
++			}
++			return;
++		}
++		if (tracee == second_output_target && !second_output_get_exit_seen) {
++			second_output_get_exit_seen = true;
++			record_second_output_stage((long) result >= 0
++				? "second_tiocgwinsz_exit_ok" : "second_tiocgwinsz_exit_error");
++		}
++		return;
++	}
++
++	if (tracee != second_output_target || !second_output_write_pending ||
++	    !is_second_output_write(sysnum))
++		return;
++
++	second_output_write_pending = false;
++	result = peek_reg(tracee, CURRENT, SYSARG_RESULT);
++	record_second_output_stage((long) result > 0
++		? "second_target_write_exit_nonempty" :
++		(long) result == 0 ? "second_target_write_exit_zero" :
++		"second_target_write_exit_error");
++}
++
+ /**
+  * Copy in @path a C string (PATH_MAX bytes max.) from the @tracee's
+  * memory address space pointed to by the @reg argument of the
+@@ -111,6 +250,11 @@
+ 	if (status < 0)
+ 		return;
+ 
++	if (is_enter_stage)
++		trace_second_output_enter(tracee);
++	else
++		trace_second_output_exit(tracee);
++
+ 	int suppressed_syscall_status = 0;
+ 
+ 	if (is_enter_stage) {

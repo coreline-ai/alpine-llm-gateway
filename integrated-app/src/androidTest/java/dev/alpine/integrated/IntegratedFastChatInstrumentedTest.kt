@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasStateDescription
 import androidx.compose.ui.test.hasTestTag
@@ -204,6 +205,8 @@ class IntegratedFastChatInstrumentedTest {
         assertEquals(0, scenario.requestCount.get())
         compose.onNodeWithTag("fallback_approve").performClick()
 
+        compose.waitUntil(5_000) { scenario.requestCount.get() == 1 }
+        waitForAssistantTextExists("Integrated recovered answer")
         waitForDisplayedAssistantText("Integrated recovered answer")
         compose.onNode(
             hasContentDescription("AI 답변") and hasText("Integrated recovered answer"),
@@ -430,7 +433,7 @@ class IntegratedFastChatInstrumentedTest {
         )
         currentActivity = activity
         instrumentation.waitForIdleSync()
-        compose.waitForIdle()
+        waitForChatScreen()
     }
 
     private fun closeCurrentActivity() {
@@ -451,7 +454,16 @@ class IntegratedFastChatInstrumentedTest {
                 .single()
         }
         instrumentation.waitForIdleSync()
-        compose.waitForIdle()
+        waitForChatScreen()
+    }
+
+    private fun waitForChatScreen() {
+        compose.waitUntil(10_000) {
+            runCatching {
+                compose.onNodeWithTag("chat_screen").assertExists()
+                true
+            }.getOrDefault(false)
+        }
     }
 
     private fun waitForDisplayedText(text: String) {
@@ -464,13 +476,24 @@ class IntegratedFastChatInstrumentedTest {
     }
 
     private fun waitForDisplayedAssistantText(text: String) {
+        val matcher =
+            hasContentDescription("AI 답변") and
+                hasText(text) and
+                hasAnyAncestor(hasTestTag("messages_list"))
         compose.waitUntil(5_000) {
-            runCatching {
-                compose.onNode(
-                    hasContentDescription("AI 답변") and hasText(text),
-                ).assertIsDisplayed()
-                true
-            }.getOrDefault(false)
+            compose.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("messages_list")
+            .assertIsDisplayed()
+            .performScrollToNode(matcher)
+        compose.onNode(matcher).assertIsDisplayed()
+    }
+
+    private fun waitForAssistantTextExists(text: String) {
+        compose.waitUntil(5_000) {
+            compose.onAllNodes(
+                hasContentDescription("AI 답변") and hasText(text),
+            ).fetchSemanticsNodes().isNotEmpty()
         }
     }
 

@@ -45,6 +45,8 @@ internal class ProotProcessLauncher(
     private val ttyDiagnosticVirtualResizeNoWrite: Boolean = false,
     private val ttyDiagnosticVirtualResizeNoRequest: Boolean = false,
     private val ttyDiagnosticDisablePrimaryTraceeForeground: Boolean = false,
+    private val ttyDiagnosticPostWinsizeInputTrace: Boolean = false,
+    private val ttyDiagnosticCanonicalizeStdio: Boolean = false,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val processes = ConcurrentHashMap<Long, ProcessRecord>()
@@ -371,6 +373,14 @@ internal class ProotProcessLauncher(
                             environment()["PROOT_TTY_DIAGNOSTIC_FILE"] = diagnosticFile.absolutePath
                             environment()["PROOT_TTY_DIAGNOSTIC_EXPECTED_RDEV"] =
                                 pty.slaveDeviceId.toULong().toString()
+                            if (ttyDiagnosticPostWinsizeInputTrace) {
+                                // The Relay26/Relay27/Relay28 artifacts write only fixed
+                                // enum sequences to this pre-created app-private file.
+                                // It never records a terminal payload or enables
+                                // a product resize behavior.
+                                environment()["PROOT_TTY_POST_WINSIZE_INPUT_TRACE"] =
+                                    diagnosticFile.absolutePath
+                            }
                             diagnosticRelaySocket?.let { socket ->
                                 environment()["ALPINE_TTY_RELAY_SOCKET"] = socket.absolutePath
                             }
@@ -378,6 +388,9 @@ internal class ProotProcessLauncher(
                             // its recorder. It never signals a guest and proves that a zero
                             // resize signal count is not a disabled recorder false negative.
                             environment()["PROOT_TTY_DIAGNOSTIC_WINCH_SELF_TEST"] = "1"
+                            if (diagnosticDynamicResize && ttyDiagnosticCanonicalizeStdio) {
+                                environment()["ALPINE_TTY_CANONICALIZE_STDIO"] = "1"
+                            }
                             // Probe-only source-level topology. The diagnostic PRoot
                             // moves only its known primary tracee into the physical
                             // foreground group before exec; production never sets it.
@@ -844,6 +857,7 @@ internal class ProotProcessLauncher(
             "LD_LIBRARY_PATH",
             "PROOT_TTY_DIAGNOSTIC_FILE",
             "PROOT_TTY_DIAGNOSTIC_EXPECTED_RDEV",
+            "PROOT_TTY_POST_WINSIZE_INPUT_TRACE",
         )
     }
 }

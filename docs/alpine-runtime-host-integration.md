@@ -171,9 +171,55 @@ host-only control은 `TIOCSWINSZ → SIGWINCH → 이후 input`을 통과했다.
 `relay24` Probe-only private-memfd control은 host-master resize와 post-launch signal을 모두 생략했지만, Samsung에서
 store/fd-ready 뒤 guest read/apply와 input 재개에 실패했다. memfd write 없이 동일 socket request를 validate/ack만
 하는 negative control도 input을 재개하지 못했으므로 production dynamic resize 근거가 아니다.
-따라서 현재 blocker는 Android PTY
-일반 기능이나 guest foreground-pgrp 설정이 아니라 **PRoot가 있는 host-master resize 경로**로 한정한다. 이
-Probe artifact는 product pack에 포함되지 않으며 production contract는 계속 `INITIAL_SIZE_ONLY`다.
+후속 base-PRoot control은 `TIOCGWINSZ`를 전부 피하면 여러 독립 input batch가 통과하지만, initial `stty size`
+뒤 별도 input batch가 재개되지 않음을 보였다. 이 현상은 patched/unpatched 및 seccomp-off control에서도
+남았고 Android ioctl seccomp filter를 완전히 제거한 Probe-only control도 실패했으므로, 현재 blocker는 host-master
+resize만이 아니라 **PRoot terminal의 post-`TIOCGWINSZ` input lifecycle**이다.
+동일 기기의 PRoot 없는 native host control은 `TIOCGWINSZ` 후 별도 input도 통과했으므로 Android PTY 일반
+동작이나 host control 자체를 원인으로 간주하지 않는다.
+Relay26 Probe-only PRoot source trace의 기본 seccomp run은 successful guest `TIOCGWINSZ` exit 6회 뒤
+`read(2)` enter 0회를 기록했지만, PRoot source상 일반 `read`는 seccomp acceleration에서 recorder를
+통과하지 않을 수 있다. 따라서 이 0회 값은 read 부재의 증거로 사용하지 않는다. 같은 Samsung의 seccomp-off
+control은 `TIOCGWINSZ` exit 3회 뒤 `read_enter` 및 `read_exit_nonempty`를 각 1회 관찰했으나, fixed
+marker/helper/follow-up input은 계속 미응답이었다. 현재 차단 범위는 PRoot terminal의
+post-`TIOCGWINSZ` input lifecycle이며 이 trace는 raw terminal text, PID, command, fd value를 기록하지 않는다.
+kernel·ptrace·job-control의 정확한 내부 원인은 아직 미확정이므로 Relay26 또는 session supervisor를 product
+구현으로 승격하지 않는다.
+Relay27 seccomp-off command-flow trace는 첫 `TIOCGWINSZ` child exit, parent wait exit, parent non-empty
+read를 모두 한 번씩 기록했지만 fixed acknowledgement·marker·helper/follow-up output은 계속 없었다. 따라서
+post-ioctl input이 `read`까지 도달하지 않는다는 강한 해석은 적용하지 않는다. 이 trace도 terminal bytes, PID,
+fd, command 및 이후 parser/write 상태를 기록하지 않으므로 exact root cause나 production resize 증거가 아니다.
+Probe artifact는 product pack에 포함되지 않으며 production contract는 계속 `INITIAL_SIZE_ONLY`다. user command의
+자동 replay/retry로 우회하지 않는다.
+
+Relay28 seccomp-off control은 첫 `TIOCGWINSZ` 뒤 parent read와 non-empty write lifecycle을 확인했으며,
+second ioctl을 요청하지 않는 single fixed `printf`가 Samsung에서 응답했다. 따라서 첫 get 자체가 terminal input/output을
+영구 중단한다는 해석은 철회한다. Relay29는 same marker의 second `TIOCGWINSZ` enter와 success exit을, Relay30은 direct
+helper target의 stdout/exit와 terminal response를 확인했다. 기존 command-substitution marker의 output pipe는 terminal
+delivery와 다르므로 그 marker의 무응답을 일반 terminal failure로 사용하지 않는다. Relay28~30은 fixed lifecycle class만
+기록하며 terminal bytes·PID·fd value·command·errno를 저장하지 않는다. source-level root cause가 확정되고 full acceptance
+matrix가 통과하기 전에는 product를
+`DYNAMIC`으로 올리지 않는다.
+
+Relay31은 Relay24 virtual-winsize memfd patch와 Relay30의 fixed second-get target-output recorder를 Probe-only
+artifact로 결합했다. Samsung arm64 seccomp-off single-request control에서 private virtual state store와 PRoot apply,
+direct helper의 `dynamic` 결과, second get success 및 target stdout non-empty exit를 확인했다. 이는 guest
+`TIOCGWINSZ` query 결과를 virtual state로 대체하는 source-level evidence일 뿐이다. physical PTY update,
+foreground `SIGWINCH`, repeat/storm, rotation, alternate-screen TUI, orphan matrix는 수행하지 않았고 Probe artifact는
+product pack에 포함되지 않는다. 따라서 production resize contract는 계속 `INITIAL_SIZE_ONLY`다. 자세한 제한과
+증거는 `dev-plan/implement_20260809_070000.md` 및 ADR 0006을 따른다.
+
+후속 Relay32 Probe-only stress control은 같은 virtual query path에서 small/large repeat와 8-step storm을 실행했다.
+closed helper state marker는 repeat 두 단계와 storm final state에 일치했고, bounded virtual request store는 총 11회로
+확인됐다. 이는 query-level state transition의 evidence이지만 physical terminal size, foreground `SIGWINCH`, rotation,
+TUI, orphan cleanup은 검증하지 않는다. production은 여전히 `INITIAL_SIZE_ONLY`이며 Relay32 artifact/flag를 SDK 또는
+integrated product에 노출하지 않는다. 세부 증거는 `dev-plan/implement_20260809_073000.md`를 따른다.
+
+pinned PRoot static handoff audit은 Android `PR_ioctl` sysexit trace와 generic tracee signal→`ptrace` restart를
+확인했지만, stock source에 winsize rewrite 또는 guest `SIGWINCH` relay hook이 없음을 확인했다. 이는 physical
+resize 통과 증거가 아니라 local workaround 후보가 없다는 source boundary다. audit script와 결과는
+`scripts/verify-proot-terminal-handoff.py`, `dev-plan/implement_20260809_071338.md`에 남기며 runtime은
+계속 `INITIAL_SIZE_ONLY`를 유지한다.
 
 터미널 출력은 SDK controller에서 기본 256 KiB까지만 보존한다. 장기 log는 사용자가 명시한
 workspace 파일로 저장하고 화면 메모리에 무제한 누적하지 않는다.
@@ -231,4 +277,5 @@ version/license/download/disk size와 Samsung network matrix는 `NOT_RUN`이다.
 - 부분 설치: 원자적 activation/rollback 후 `READY` 또는 `REPAIR_REQUIRED`가 된다.
 - reset: runtime 설치는 제거하지만 사용자 workspace는 보존한다.
 - 접근성: 상태는 live region/state description으로 읽히고, 고정 높이 본문 대신 scroll을 사용한다.
-- 입력: IME Send, 한글 UTF-8, 외부 키보드 Enter, Ctrl+C 흐름을 확인한다.
+- 입력: IME Send, 한글 UTF-8, Compose 외부 키 이벤트의 Enter·Tab·Esc·Ctrl+C 흐름을 확인한다.
+  이는 physical external keyboard hardware/TUI 실사용 검증을 대체하지 않는다.

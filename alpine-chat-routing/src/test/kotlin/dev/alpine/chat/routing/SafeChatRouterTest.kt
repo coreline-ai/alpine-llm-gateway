@@ -105,6 +105,34 @@ class SafeChatRouterTest {
     }
 
     @Test
+    fun `verified provider key capability does not enable router automatic replay`() = runTest {
+        val direct = FakeBackend(
+            ChatBackendKind.ANDROID_DIRECT,
+            capabilities = ChatBackendCapabilities(ChatBackendIdempotency.PROVIDER_VERIFIED_KEY),
+        ) {
+            ChatBackendResult.Failed(
+                ChatBackendFailure(
+                    ChatBackendFailureCode.RATE_LIMITED,
+                    ChatFailureStage.DISPATCH,
+                    retryable = true,
+                ),
+            )
+        }
+        val request = request("verified-key").copy(
+            idempotencyKey = "provider-key-verified-123456",
+        )
+
+        val result = SafeChatRouter(
+            direct,
+            FakeBackend(ChatBackendKind.ALPINE_GATEWAY),
+        ).route(routing(ChatExecutionMode.FAST_CHAT, request))
+
+        assertEquals(ChatRoutingOutcome.FAILED, result.outcome)
+        assertEquals(ChatBackendFailureCode.RATE_LIMITED, result.failure?.code)
+        assertEquals(1, direct.streamCalls)
+    }
+
+    @Test
     fun `same request cannot run concurrently or replay after completion`() = runTest {
         val entered = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
@@ -173,6 +201,7 @@ class SafeChatRouterTest {
     private class FakeBackend(
         override val kind: ChatBackendKind,
         private val preparation: ChatBackendPreparation = ChatBackendPreparation.Ready,
+        override val capabilities: ChatBackendCapabilities = ChatBackendCapabilities(),
         private val streamBlock: suspend (ChatStreamEmitter) -> ChatBackendResult = { emitter ->
             emitter.emit(ChatStreamEvent(ChatStreamEventType.STARTED))
             emitter.emit(ChatStreamEvent(ChatStreamEventType.DELTA, text = "ok"))
@@ -184,7 +213,6 @@ class SafeChatRouterTest {
             ChatBackendKind.ANDROID_DIRECT -> "android-direct"
             ChatBackendKind.ALPINE_GATEWAY -> "alpine-gateway"
         }
-        override val capabilities = ChatBackendCapabilities()
         var prepareCalls = 0
         var streamCalls = 0
 

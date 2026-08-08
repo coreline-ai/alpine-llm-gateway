@@ -1,5 +1,8 @@
 # Provider runtime contract review — 2026-08-08
 
+최종 재검토: `2026-08-09`. 최신 공식 문서 근거와 승격 조건은
+[Provider 공식 정책 재검토](provider-official-policy-review-20260809.md)를 따른다.
+
 이 문서는 Provider별 실계정 E2E 전까지 적용할 안전한 retry·model·request correlation
 기준이다. 구현이 검증하지 않은 Provider-side deduplication을 가정하지 않는다.
 
@@ -49,7 +52,7 @@
 
 ## 상태
 
-- 문서 조사: `PASS` (2026-08-08 확인)
+- 문서 조사: `PASS` (2026-08-09 재확인)
 - 실계정 model/OAuth/API/SSE/429/5xx E2E: `NOT_RUN`
 - Provider별 inference idempotency 계약: 위 표 외 `NOT_CONFIRMED`
 - 공개 배포 승인: `BLOCKED`

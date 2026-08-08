@@ -5,6 +5,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 VERSION="$(sed -n 's/^VERSION_NAME=//p' "$PROJECT_DIR/gradle.properties")"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
+# The release task graph compiles a large number of Android/Kotlin modules. Keep
+# the default worker count conservative so a clean local verification does not
+# exhaust JVM metaspace on developer machines. CI or high-memory hosts can opt
+# in to more parallelism with RELEASE_GRADLE_MAX_WORKERS.
+RELEASE_GRADLE_MAX_WORKERS="${RELEASE_GRADLE_MAX_WORKERS:-2}"
 
 # The published-consumer fixture is an intentionally isolated Gradle build and
 # therefore cannot inherit the root project's local.properties. Export the
@@ -25,6 +30,11 @@ fi
 if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
   echo "Python executable not found: $PYTHON_BIN" >&2
   exit 1
+fi
+
+if ! [[ "$RELEASE_GRADLE_MAX_WORKERS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "RELEASE_GRADLE_MAX_WORKERS must be a positive integer" >&2
+  exit 2
 fi
 
 cd "$PROJECT_DIR"
@@ -140,6 +150,7 @@ GRADLE_TASKS=(
 
 ./gradlew "${GRADLE_TASKS[@]}" \
   -Pkotlin.compiler.execution.strategy=in-process \
+  --max-workers="$RELEASE_GRADLE_MAX_WORKERS" \
   --no-daemon
 "$PYTHON_BIN" scripts/verify-sdk-publication.py
 
@@ -147,6 +158,7 @@ GRADLE_TASKS=(
   assembleRelease \
   lintRelease \
   -Pkotlin.compiler.execution.strategy=in-process \
+  --max-workers="$RELEASE_GRADLE_MAX_WORKERS" \
   --no-daemon
 "$PYTHON_BIN" scripts/verify-published-consumer.py
 "$PYTHON_BIN" scripts/verify-provider-e2e-report.py \

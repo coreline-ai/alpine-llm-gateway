@@ -125,6 +125,16 @@ static int publish_virtual_winsize_fd(int fd) {
     return 0;
 }
 
+/* Probe-only topology control: ProcessBuilder normally opens the same slave
+ * path independently for stdin/stdout/stderr. Native PTY hosts commonly dup a
+ * single slave descriptor instead. This switch isolates that distinction
+ * without touching the product launcher or replaying terminal input. */
+static int canonicalize_stdio_if_requested(void) {
+    if (getenv("ALPINE_TTY_CANONICALIZE_STDIO") == NULL) return 0;
+    return dup2(STDIN_FILENO, STDOUT_FILENO) >= 0 &&
+        dup2(STDIN_FILENO, STDERR_FILENO) >= 0 ? 0 : -1;
+}
+
 static void configure_child_group(int parent_to_child_read, int child_to_parent_write,
                                   int virtual_winsize_fd) {
     uint8_t go = 0;
@@ -226,7 +236,8 @@ int main(int argc, char *argv[]) {
     int exit_status = 125;
 
     if (argc < 2 || socket_path == NULL) return 127;
-    if (setsid() < 0 || ioctl(STDIN_FILENO, TIOCSCTTY, 0) < 0) return 126;
+    if (setsid() < 0 || ioctl(STDIN_FILENO, TIOCSCTTY, 0) < 0 ||
+        canonicalize_stdio_if_requested() != 0) return 126;
     server_fd = open_control_socket(socket_path);
     virtual_winsize_fd = create_virtual_winsize_memfd();
     if (server_fd < 0 || virtual_winsize_fd < 0 || ftruncate(virtual_winsize_fd, 4) != 0 ||

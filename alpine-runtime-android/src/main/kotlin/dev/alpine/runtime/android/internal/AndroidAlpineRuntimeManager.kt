@@ -85,6 +85,10 @@ internal class AndroidAlpineRuntimeManager(
             configuration.ttyDiagnosticVirtualResizeNoRequest && ttyDiagnosticFile != null,
         ttyDiagnosticDisablePrimaryTraceeForeground =
             configuration.ttyDiagnosticDisablePrimaryTraceeForeground && ttyDiagnosticFile != null,
+        ttyDiagnosticPostWinsizeInputTrace =
+            configuration.ttyDiagnosticPostWinsizeInputTrace && ttyDiagnosticFile != null,
+        ttyDiagnosticCanonicalizeStdio =
+            configuration.ttyDiagnosticCanonicalizeStdio && ttyDiagnosticFile != null,
         clock = clock,
     )
     private val dnsConfigurator = AndroidDnsConfigurator(appContext)

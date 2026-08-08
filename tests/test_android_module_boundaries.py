@@ -143,6 +143,218 @@ class AndroidModuleBoundaryTests(unittest.TestCase):
         self.assertFalse(
             (ROOT / "alpine-runtime-pack-bundled/src/main/jniLibs/arm64-v8a/libproot_tty_resize_relay.so").exists()
         )
+        ioctl_bypass = lock["ioctl_filter_bypass_proot"]
+        self.assertFalse(ioctl_bypass["production_packaging"])
+        ioctl_bypass_artifact = ROOT / ioctl_bypass["artifact_path"]
+        self.assertTrue(ioctl_bypass_artifact.is_file(), ioctl_bypass_artifact)
+        self.assertEqual(
+            ioctl_bypass["sha256"], hashlib.sha256(ioctl_bypass_artifact.read_bytes()).hexdigest()
+        )
+        self.assertEqual(ioctl_bypass["size_bytes"], ioctl_bypass_artifact.stat().st_size)
+        ioctl_bypass_patch = ROOT / ioctl_bypass["patch"]["path"]
+        self.assertTrue(ioctl_bypass_patch.is_file(), ioctl_bypass_patch)
+        self.assertEqual(
+            ioctl_bypass["patch"]["sha256"], hashlib.sha256(ioctl_bypass_patch.read_bytes()).hexdigest()
+        )
+        self.assertIn("PR_ioctl", ioctl_bypass_patch.read_text(encoding="utf-8"))
+        post_winsize_input = lock["post_winsize_input_trace_proot"]
+        self.assertFalse(post_winsize_input["production_packaging"])
+        post_winsize_input_artifact = ROOT / post_winsize_input["artifact_path"]
+        self.assertTrue(post_winsize_input_artifact.is_file(), post_winsize_input_artifact)
+        self.assertEqual(
+            post_winsize_input["sha256"],
+            hashlib.sha256(post_winsize_input_artifact.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(
+            post_winsize_input["size_bytes"], post_winsize_input_artifact.stat().st_size
+        )
+        post_winsize_input_patch = ROOT / post_winsize_input["patch"]["path"]
+        self.assertTrue(post_winsize_input_patch.is_file(), post_winsize_input_patch)
+        self.assertEqual(
+            post_winsize_input["patch"]["sha256"],
+            hashlib.sha256(post_winsize_input_patch.read_bytes()).hexdigest(),
+        )
+        self.assertIn("POST_TIOCGWINSZ_INPUT", post_winsize_input_patch.read_text(encoding="utf-8"))
+        self.assertIn("read_enter", post_winsize_input_patch.read_text(encoding="utf-8"))
+        self.assertIn("production terminal use", post_winsize_input["contract"]["forbidden"])
+        self.assertIn("terminal payload logging", post_winsize_input["contract"]["forbidden"])
+        self.assertFalse(
+            (
+                ROOT
+                / "alpine-runtime-pack-bundled/src/main/jniLibs/arm64-v8a/"
+                "libproot_tty_post_winsize_input_trace.so"
+            ).exists()
+        )
+        post_winsize_command_flow = lock["post_winsize_command_flow_trace_proot"]
+        self.assertFalse(post_winsize_command_flow["production_packaging"])
+        post_winsize_command_flow_artifact = ROOT / post_winsize_command_flow["artifact_path"]
+        self.assertTrue(post_winsize_command_flow_artifact.is_file(), post_winsize_command_flow_artifact)
+        self.assertEqual(
+            post_winsize_command_flow["sha256"],
+            hashlib.sha256(post_winsize_command_flow_artifact.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(
+            post_winsize_command_flow["size_bytes"],
+            post_winsize_command_flow_artifact.stat().st_size,
+        )
+        post_winsize_command_flow_patch = ROOT / post_winsize_command_flow["patch"]["path"]
+        self.assertTrue(post_winsize_command_flow_patch.is_file(), post_winsize_command_flow_patch)
+        self.assertEqual(
+            post_winsize_command_flow["patch"]["sha256"],
+            hashlib.sha256(post_winsize_command_flow_patch.read_bytes()).hexdigest(),
+        )
+        command_flow_patch_text = post_winsize_command_flow_patch.read_text(encoding="utf-8")
+        self.assertIn("POST_TIOCGWINSZ_COMMAND_FLOW", command_flow_patch_text)
+        self.assertIn("parent_wait_inflight", command_flow_patch_text)
+        self.assertIn("parent_read_exit_nonempty", command_flow_patch_text)
+        self.assertIn("production terminal use", post_winsize_command_flow["contract"]["forbidden"])
+        self.assertIn("terminal payload logging", post_winsize_command_flow["contract"]["forbidden"])
+        self.assertFalse(
+            (
+                ROOT
+                / "alpine-runtime-pack-bundled/src/main/jniLibs/arm64-v8a/"
+                "libproot_tty_post_winsize_command_flow_trace.so"
+            ).exists()
+        )
+        post_read_flow = lock["post_winsize_post_read_flow_trace_proot"]
+        self.assertFalse(post_read_flow["production_packaging"])
+        post_read_flow_artifact = ROOT / post_read_flow["artifact_path"]
+        self.assertTrue(post_read_flow_artifact.is_file(), post_read_flow_artifact)
+        self.assertEqual(
+            post_read_flow["sha256"],
+            hashlib.sha256(post_read_flow_artifact.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(post_read_flow["size_bytes"], post_read_flow_artifact.stat().st_size)
+        post_read_flow_patch = ROOT / post_read_flow["patch"]["path"]
+        self.assertTrue(post_read_flow_patch.is_file(), post_read_flow_patch)
+        self.assertEqual(
+            post_read_flow["patch"]["sha256"],
+            hashlib.sha256(post_read_flow_patch.read_bytes()).hexdigest(),
+        )
+        post_read_flow_patch_text = post_read_flow_patch.read_text(encoding="utf-8")
+        self.assertIn("POST_TIOCGWINSZ_POST_READ_FLOW", post_read_flow_patch_text)
+        self.assertIn("parent_post_read_write_enter", post_read_flow_patch_text)
+        self.assertIn("parent_post_read_write_exit_nonempty", post_read_flow_patch_text)
+        self.assertIn("parent_post_read_write_stdout", post_read_flow_patch_text)
+        self.assertIn("parent_post_read_read_enter", post_read_flow_patch_text)
+        self.assertIn("production terminal use", post_read_flow["contract"]["forbidden"])
+        self.assertIn("terminal payload logging", post_read_flow["contract"]["forbidden"])
+        self.assertFalse(
+            (
+                ROOT
+                / "alpine-runtime-pack-bundled/src/main/jniLibs/arm64-v8a/"
+                "libproot_tty_post_winsize_post_read_flow_trace.so"
+            ).exists()
+        )
+        second_get = lock["second_tiocgwinsz_trace_proot"]
+        self.assertFalse(second_get["production_packaging"])
+        second_get_artifact = ROOT / second_get["artifact_path"]
+        self.assertTrue(second_get_artifact.is_file(), second_get_artifact)
+        self.assertEqual(
+            second_get["sha256"],
+            hashlib.sha256(second_get_artifact.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(second_get["size_bytes"], second_get_artifact.stat().st_size)
+        second_get_patch = ROOT / second_get["patch"]["path"]
+        self.assertTrue(second_get_patch.is_file(), second_get_patch)
+        self.assertEqual(
+            second_get["patch"]["sha256"],
+            hashlib.sha256(second_get_patch.read_bytes()).hexdigest(),
+        )
+        second_get_patch_text = second_get_patch.read_text(encoding="utf-8")
+        self.assertIn("POST_TIOCGWINSZ_SECOND_GET", second_get_patch_text)
+        self.assertIn("second_tiocgwinsz_enter", second_get_patch_text)
+        self.assertIn("second_tiocgwinsz_exit_error", second_get_patch_text)
+        self.assertNotIn("SYSARG_1", second_get_patch_text)
+        self.assertIn("terminal payload logging", second_get["contract"]["forbidden"])
+        self.assertTrue(
+            any("errno logging" in forbidden for forbidden in second_get["contract"]["forbidden"])
+        )
+        self.assertFalse(
+            (
+                ROOT
+                / "alpine-runtime-pack-bundled/src/main/jniLibs/arm64-v8a/"
+                "libproot_tty_second_tiocgwinsz_trace.so"
+            ).exists()
+        )
+        second_target_output = lock["second_tiocgwinsz_target_output_trace_proot"]
+        self.assertFalse(second_target_output["production_packaging"])
+        second_target_output_artifact = ROOT / second_target_output["artifact_path"]
+        self.assertTrue(second_target_output_artifact.is_file(), second_target_output_artifact)
+        self.assertEqual(
+            second_target_output["sha256"],
+            hashlib.sha256(second_target_output_artifact.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(
+            second_target_output["size_bytes"], second_target_output_artifact.stat().st_size
+        )
+        second_target_output_patch = ROOT / second_target_output["patch"]["path"]
+        self.assertTrue(second_target_output_patch.is_file(), second_target_output_patch)
+        self.assertEqual(
+            second_target_output["patch"]["sha256"],
+            hashlib.sha256(second_target_output_patch.read_bytes()).hexdigest(),
+        )
+        second_target_output_patch_text = second_target_output_patch.read_text(encoding="utf-8")
+        self.assertIn("POST_TIOCGWINSZ_SECOND_TARGET_OUTPUT", second_target_output_patch_text)
+        self.assertIn("second_target_write_stdout", second_target_output_patch_text)
+        self.assertIn("second_target_write_exit_nonempty", second_target_output_patch_text)
+        self.assertIn("second_target_exit_enter", second_target_output_patch_text)
+        self.assertIn("terminal payload logging", second_target_output["contract"]["forbidden"])
+        self.assertTrue(
+            any(
+                "errno logging" in forbidden
+                for forbidden in second_target_output["contract"]["forbidden"]
+            )
+        )
+        self.assertFalse(
+            (
+                ROOT
+                / "alpine-runtime-pack-bundled/src/main/jniLibs/arm64-v8a/"
+                "libproot_tty_second_tiocgwinsz_target_output_trace.so"
+            ).exists()
+        )
+        virtual_second_target_output = lock[
+            "virtual_winsize_second_target_output_trace_proot"
+        ]
+        self.assertFalse(virtual_second_target_output["production_packaging"])
+        virtual_second_target_output_artifact = ROOT / virtual_second_target_output["artifact_path"]
+        self.assertTrue(virtual_second_target_output_artifact.is_file(), virtual_second_target_output_artifact)
+        self.assertEqual(
+            virtual_second_target_output["sha256"],
+            hashlib.sha256(virtual_second_target_output_artifact.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(
+            virtual_second_target_output["size_bytes"],
+            virtual_second_target_output_artifact.stat().st_size,
+        )
+        virtual_second_target_output_patch = ROOT / virtual_second_target_output["patch"]["path"]
+        self.assertTrue(virtual_second_target_output_patch.is_file(), virtual_second_target_output_patch)
+        self.assertEqual(
+            virtual_second_target_output["patch"]["sha256"],
+            hashlib.sha256(virtual_second_target_output_patch.read_bytes()).hexdigest(),
+        )
+        virtual_second_target_output_patch_text = virtual_second_target_output_patch.read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("proot_tty_virtual_winsize", virtual_second_target_output_patch_text)
+        self.assertIn("PROOT_TTY_VIRTUAL_WINSIZE_FD", virtual_second_target_output_patch_text)
+        self.assertIn("POST_TIOCGWINSZ_SECOND_TARGET_OUTPUT", virtual_second_target_output_patch_text)
+        self.assertIn("second_target_write_exit_nonempty", virtual_second_target_output_patch_text)
+        self.assertIn(
+            "host master TIOCSWINSZ after terminal launch",
+            virtual_second_target_output["contract"]["forbidden"],
+        )
+        self.assertIn(
+            "terminal payload logging",
+            virtual_second_target_output["contract"]["forbidden"],
+        )
+        self.assertFalse(
+            (
+                ROOT
+                / "alpine-runtime-pack-bundled/src/main/jniLibs/arm64-v8a/"
+                "libproot_tty_virtual_winsize_second_target_output_trace.so"
+            ).exists()
+        )
         session_launcher = lock["session_relay_launcher"]
         self.assertFalse(session_launcher["production_packaging"])
         session_artifact = ROOT / session_launcher["artifact_path"]

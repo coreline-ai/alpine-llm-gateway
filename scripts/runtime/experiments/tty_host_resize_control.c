@@ -68,7 +68,12 @@ int main(void) {
         "IFS= read -r ignored || true; "
         "printf 'host_resize_after_signal\\n'; "
         "IFS= read -r ignored || true; "
-        "printf 'host_resize_after_input\\n'";
+        "printf 'host_resize_after_input\\n'; "
+        "IFS= read -r ignored || true; "
+        "stty size >/dev/null; "
+        "printf 'host_tiocgwinsz_complete\\n'; "
+        "IFS= read -r ignored || true; "
+        "printf 'host_tiocgwinsz_after_input\\n'";
     char *const argv[] = {(char *)shell, "-c", (char *)script, NULL};
     char slave_path[128];
     char output[CONTROL_OUTPUT_MAX] = {0};
@@ -118,7 +123,11 @@ int main(void) {
         wait_for_marker(master, output, sizeof(output), "host_resize_winch", 2000) != 0 ||
         wait_for_marker(master, output, sizeof(output), "host_resize_after_signal", 2000) != 0 ||
         write(master, "x\n", 2) != 2 ||
-        wait_for_marker(master, output, sizeof(output), "host_resize_after_input", 2000) != 0) {
+        wait_for_marker(master, output, sizeof(output), "host_resize_after_input", 2000) != 0 ||
+        write(master, "g\n", 2) != 2 ||
+        wait_for_marker(master, output, sizeof(output), "host_tiocgwinsz_complete", 2000) != 0 ||
+        write(master, "i\n", 2) != 2 ||
+        wait_for_marker(master, output, sizeof(output), "host_tiocgwinsz_after_input", 2000) != 0) {
         goto done;
     }
     result = 0;

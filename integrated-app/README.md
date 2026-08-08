@@ -10,22 +10,26 @@
 > [!IMPORTANT]
 > 이 앱은 `apps/mobile_agent` Flutter 앱과 `demo-chatbot` compatibility 앱과 별도 package·저장소·token 경계를 가진다. 자동으로 profile이나 OAuth token을 공유하지 않는다.
 
-## 화면
+## 📱 실제 화면
+
+공개 가능한 실제 Android 화면 중 제품 흐름을 대표하는 8개입니다. 이미지의 원래 기기 비율을 유지하며, 전체 15개 갤러리는 [루트 README](../README.md#screens)에서 확인할 수 있습니다.
 
 <table>
   <tr>
-    <td align="center"><a href="../docs/assets/screenshots/01-fast-chat.png"><img src="../docs/assets/screenshots/01-fast-chat.png" width="250" alt="빠른 채팅"></a><br><strong>빠른 채팅</strong></td>
-    <td align="center"><a href="../docs/assets/screenshots/07-alpine-gateway-chat.png"><img src="../docs/assets/screenshots/07-alpine-gateway-chat.png" width="250" alt="Alpine Gateway"></a><br><strong>Gateway 채팅</strong></td>
-    <td align="center"><a href="../docs/assets/screenshots/08-alpine-runtime-tools.png"><img src="../docs/assets/screenshots/08-alpine-runtime-tools.png" width="250" alt="Runtime 도구"></a><br><strong>Runtime · 터미널</strong></td>
+    <td align="center"><a href="../docs/assets/screenshots/10-mode-guide.png"><img src="../docs/assets/screenshots/10-mode-guide.png" width="180" alt="첫 실행 모드 안내"></a><br><strong>첫 실행 모드 안내</strong></td>
+    <td align="center"><a href="../docs/assets/screenshots/01-fast-chat.png"><img src="../docs/assets/screenshots/01-fast-chat.png" width="180" alt="빠른 채팅"></a><br><strong>빠른 채팅</strong></td>
+    <td align="center"><a href="../docs/assets/screenshots/14-provider-empty-state.png"><img src="../docs/assets/screenshots/14-provider-empty-state.png" width="180" alt="LLM 연결 빈 상태"></a><br><strong>LLM 연결</strong></td>
+    <td align="center"><a href="../docs/assets/screenshots/02-conversation-history.png"><img src="../docs/assets/screenshots/02-conversation-history.png" width="180" alt="대화 기록"></a><br><strong>대화 기록</strong></td>
   </tr>
   <tr>
-    <td align="center"><a href="../docs/assets/screenshots/02-conversation-history.png"><img src="../docs/assets/screenshots/02-conversation-history.png" width="250" alt="대화 기록"></a><br>대화 기록</td>
-    <td align="center"><a href="../docs/assets/screenshots/03-assistant-mode.png"><img src="../docs/assets/screenshots/03-assistant-mode.png" width="250" alt="Assistant 설정"></a><br>Skill · Persona</td>
-    <td align="center"><a href="../docs/assets/screenshots/09-runtime-package-manager.png"><img src="../docs/assets/screenshots/09-runtime-package-manager.png" width="250" alt="패키지 설치"></a><br>패키지 allowlist</td>
+    <td align="center"><a href="../docs/assets/screenshots/11-alpine-workspace-gateway.png"><img src="../docs/assets/screenshots/11-alpine-workspace-gateway.png" width="180" alt="Alpine 작업 준비"></a><br><strong>Alpine 작업 준비</strong></td>
+    <td align="center"><a href="../docs/assets/screenshots/12-runtime-install-dashboard.png"><img src="../docs/assets/screenshots/12-runtime-install-dashboard.png" width="180" alt="Runtime 설치 대시보드"></a><br><strong>Runtime 설치</strong></td>
+    <td align="center"><a href="../docs/assets/screenshots/13-runtime-terminal-command.png"><img src="../docs/assets/screenshots/13-runtime-terminal-command.png" width="180" alt="Linux terminal 명령 패널"></a><br><strong>Linux terminal</strong></td>
+    <td align="center"><a href="../docs/assets/screenshots/09-runtime-package-manager.png"><img src="../docs/assets/screenshots/09-runtime-package-manager.png" width="180" alt="패키지 설치"></a><br><strong>패키지 allowlist</strong></td>
   </tr>
 </table>
 
-전체 10개 화면은 [루트 README 앱 갤러리](../README.md#screens)에서 확인한다. OAuth 계정·client ID·token이 포함될 수 있는 상세 입력 화면은 저장소 이미지에서 제외한다.
+OAuth 계정·client ID·token, 실제 terminal 출력·workspace 경로, 파괴적 확인 dialog는 의도적으로 제외한다. 이는 제품 핵심 화면의 안전한 문서화이며 모든 사용자별 상태의 전체 덤프가 아니다.
 
 ## 현재 모드
 

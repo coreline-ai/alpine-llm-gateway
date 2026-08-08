@@ -253,7 +253,10 @@ fun RuntimeTerminalPanel(
                     .fillMaxWidth()
                     .testTag("runtime_terminal_input")
                     .onPreviewKeyEvent { event ->
-                        if (event.type != KeyEventType.KeyUp) return@onPreviewKeyEvent false
+                        // Tab changes Compose focus during key-down. Capture controls before the
+                        // field's default handler so a hardware keyboard cannot lose the terminal
+                        // focus before its escape sequence reaches the active session.
+                        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                         when {
                             event.key == Key.Enter -> {
                                 submit()

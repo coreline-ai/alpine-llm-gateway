@@ -1,10 +1,16 @@
 package dev.alpine.runtime.ui.compose
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasStateDescription
@@ -14,6 +20,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.unit.Density
@@ -86,6 +93,47 @@ class RuntimeAccessibilityInstrumentedTest {
         compose.runOnIdle { assertEquals(listOf("한글 확인", "external-keyboard"), sent) }
     }
 
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun externalTabEscapeAndCtrlCForwardOnlyTerminalControlSequences() {
+        val rawInput = mutableListOf<String>()
+        var interrupts = 0
+        val state = RuntimeHostState(
+            runtimeState = RuntimeState(RuntimeLifecycleState.RUNNING),
+            sessionActive = true,
+            terminalActive = true,
+        )
+        compose.setContent {
+            MaterialTheme {
+                RuntimeTerminalPanel(
+                    state = state,
+                    onOpen = {},
+                    onSend = {},
+                    onInterrupt = { interrupts += 1 },
+                    onClose = {},
+                    onSendRaw = { rawInput += it },
+                )
+            }
+        }
+        val input = compose.onNode(hasSetTextAction())
+        input.performTextInput("keyboard-focus")
+        input.performKeyInput {
+            keyDown(Key.Tab)
+            keyUp(Key.Tab)
+            keyDown(Key.Escape)
+            keyUp(Key.Escape)
+            keyDown(Key.CtrlLeft)
+            keyDown(Key.C)
+            keyUp(Key.C)
+            keyUp(Key.CtrlLeft)
+        }
+
+        compose.runOnIdle {
+            assertEquals(listOf("\t", "\u001b"), rawInput)
+            assertEquals(1, interrupts)
+        }
+    }
+
     @Test
     fun developerToolSmokeActionExposesOnlyTheSelectedFixedProfile() {
         var executedProfile: RuntimeToolProfile? = null
@@ -135,19 +183,27 @@ class RuntimeAccessibilityInstrumentedTest {
         )
         compose.setContent {
             MaterialTheme {
-                RuntimePackagePanel(
-                    state = state,
-                    allowlistedPackages = setOf("git"),
-                    onApprovedInstall = {},
-                    packageCatalog = catalog,
-                )
+                ScrollableRuntimeTestContent {
+                    RuntimePackagePanel(
+                        state = state,
+                        allowlistedPackages = setOf("git"),
+                        onApprovedInstall = {},
+                        packageCatalog = catalog,
+                    )
+                }
             }
         }
 
-        compose.onNode(hasTestTag("runtime_package_selection")).performTextInput("git")
+        compose.onNode(hasTestTag("runtime_package_selection"))
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performTextInput("git")
         compose.onNode(hasText("GPL-2.0-only", substring = true)).assertExists()
         compose.onNode(hasText("의존성, index, cache", substring = true)).assertExists()
-        compose.onNode(hasTestTag("runtime_package_review")).performClick()
+        compose.onNode(hasTestTag("runtime_package_review"))
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
         // The modal intentionally repeats the snapshot shown in the background selection summary.
         compose.onAllNodes(hasText("Alpine v3.21 aarch64 APKINDEX", substring = true)).assertCountEquals(2)
     }
@@ -160,33 +216,35 @@ class RuntimeAccessibilityInstrumentedTest {
         var shareRequested: WorkspacePath? = null
         compose.setContent {
             MaterialTheme {
-                RuntimeWorkspacePanel(
-                    state = WorkspaceHostState(
-                        entries = listOf(
-                            WorkspaceEntry(selected, WorkspaceEntryType.FILE, 12, 1),
+                ScrollableRuntimeTestContent {
+                    RuntimeWorkspacePanel(
+                        state = WorkspaceHostState(
+                            entries = listOf(
+                                WorkspaceEntry(selected, WorkspaceEntryType.FILE, 12, 1),
+                            ),
+                            selectedFile = selected,
+                            editorText = "workspace text",
                         ),
-                        selectedFile = selected,
-                        editorText = "workspace text",
-                    ),
-                    onRefresh = {},
-                    onNavigate = {},
-                    onOpen = {},
-                    onSave = {},
-                    onCreateFile = {},
-                    onCreateDirectory = {},
-                    onRenameSelected = {},
-                    onDeleteSelected = {},
-                    onSearch = {},
-                    onRequestImport = { importRequested = true },
-                    onRequestExport = { exportRequested = it },
-                    onRequestShare = { shareRequested = it },
-                )
+                        onRefresh = {},
+                        onNavigate = {},
+                        onOpen = {},
+                        onSave = {},
+                        onCreateFile = {},
+                        onCreateDirectory = {},
+                        onRenameSelected = {},
+                        onDeleteSelected = {},
+                        onSearch = {},
+                        onRequestImport = { importRequested = true },
+                        onRequestExport = { exportRequested = it },
+                        onRequestShare = { shareRequested = it },
+                    )
+                }
             }
         }
 
-        compose.onNode(hasTestTag("workspace_import")).performClick()
-        compose.onNode(hasTestTag("workspace_export")).performClick()
-        compose.onNode(hasTestTag("workspace_share")).performClick()
+        compose.onNode(hasTestTag("workspace_import")).performScrollTo().assertIsDisplayed().performClick()
+        compose.onNode(hasTestTag("workspace_export")).performScrollTo().assertIsDisplayed().performClick()
+        compose.onNode(hasTestTag("workspace_share")).performScrollTo().assertIsDisplayed().performClick()
         compose.runOnIdle {
             assertEquals(true, importRequested)
             assertEquals(selected, exportRequested)
@@ -251,4 +309,9 @@ class RuntimeAccessibilityInstrumentedTest {
         compose.onNode(hasTestTag("runtime_terminal_kill_confirm")).performClick()
         compose.runOnIdle { assertEquals(1, killCount) }
     }
+}
+
+@Composable
+private fun ScrollableRuntimeTestContent(content: @Composable () -> Unit) {
+    Column(modifier = Modifier.verticalScroll(rememberScrollState())) { content() }
 }

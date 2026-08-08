@@ -10,7 +10,7 @@
 
 | 구분 | 결과 | 근거 |
 |---|---|---|
-| Python Gateway·Android boundary | PASS | `python3.11 -m unittest discover -s tests -v` — 104 passed, 4 local-socket skip |
+| Python Gateway·Android boundary | PASS | `python3.11 -m unittest discover -s tests -v` — 106 passed, no skip |
 | MobileAgent BFF | PASS | `backend/mobile_agent_bff/.venv/bin/pytest -q` — 39/39 |
 | Android unit·lint·APK | PASS | Runtime API public-surface dump, 관련 module unit test, `:integrated-app:lintDebug`, `assembleDebug`, `assembleDebugAndroidTest` |
 | ANSI terminal renderer·exit summary | PASS | SGR/OSC redaction, cursor, erase, alternate screen, CJK width, dimension cap, raw output 없는 terminal close exit summary unit regression |
@@ -19,7 +19,8 @@
 | Workspace SAF·share boundary | PASS | Samsung `:alpine-workspace-android:connectedDebugAndroidTest` — 5/5: `content://` import/export, filename sanitize, size cap, provider I/O redaction, app-private atomic share publish |
 | Android OAuth·Provider instrumentation | PASS | Samsung `:android:connectedDebugAndroidTest` 3/3 + `:alpine-chat-provider-android:connectedDebugAndroidTest` 12/12 |
 | Integrated OAuth/app boundary | PASS | `verify-mobile-oauth-release.py --integrated-product` 및 scanner regression 7/7 — consumer/CLI fingerprint, probable key/private key, demo/probe/sample package 차단 |
-| Runtime Compose instrumentation | PASS | Samsung `:alpine-runtime-ui-compose:connectedDebugAndroidTest` — 7/7, Korean IME·terminal semantics·exit accessibility·confirmed SIGTERM/SIGKILL·fixed Git smoke·package/workspace boundary |
+| Runtime Compose instrumentation | PASS | Samsung `:alpine-runtime-ui-compose:connectedDebugAndroidTest` — 8/8, Korean IME·Enter/Tab/Esc/Ctrl+C Compose key regression·terminal semantics·exit accessibility·confirmed SIGTERM/SIGKILL·fixed Git smoke·package/workspace boundary |
+| Android 12 tablet Runtime Compose | PASS | `:alpine-runtime-ui-compose:connectedDebugAndroidTest` — 8/8, scroll container에서 package review 및 workspace import/export/share action과 terminal key regression 통과 |
 | Runtime Probe actual terminal lifecycle | PASS | Samsung arm64 actual PRoot: initial `stty size=28 96`, `INITIAL_SIZE_ONLY`, `TERMINAL_RESIZE_UNSUPPORTED`, safe terminal exit event, Host process `STARTED:3`/`STOPPED:3`, restart/repair `READY`·healthy |
 | Probe-only winsize root-cause diagnostic | PASS (diagnostic only) | Samsung: same slave PTY trace + independent helper + BusyBox `stty size=40 120` after removing stale `COLUMNS`/`LINES`; tracee-fork `SIGWINCH=SIG_DFL` and recorder self-test PASS, but `TIOCSWINSZ` creates no guest signal-stop; production capability is unchanged |
 | Probe-only SIGWINCH relay repeat/storm | **FAIL (diagnostic evidence)** | relay16 initial shell trap/primary-tracee ptrace relay is PASS. relay21은 active same-PTY tracee physical foreground와 host-only PTY `SIGWINCH → 이후 input` PASS를 추가 확인했지만, PRoot host-master resize 뒤 guest trap/stop-restart는 `0/0`이고 fixed marker·helper·follow-up input은 미응답이었다. relay24 private-memfd control도 Samsung에서 store/fd-ready까지만 확인되고 guest read/apply와 input 재개는 실패했다. 같은 private socket request를 validate/ack만 하는 no-write control도 input 미응답이어서, memfd write/read나 guest signal만을 원인으로 좁힐 수 없다. repeat/storm도 제품 승격 근거가 아니다. production stays `INITIAL_SIZE_ONLY` |
@@ -28,7 +29,10 @@
 | OSS/compliance verifier | PASS (internal-only) | native boundary 검사 통과; project license·rootfs corresponding source mirror는 계속 `BLOCKED` |
 | Samsung 통합 instrumentation | PASS | `:integrated-app:connectedDebugAndroidTest` — workspace action forwarding·package snapshot 반영본에서 10/10 |
 | PRoot unpatched source-to-binary | PASS | arm64/x86_64 pinned OpenMinis source 재빌드, ELF 16 KiB alignment, packaged payload/lock/SPDX/source-offer 및 OSS native source bundle 일치 |
-| 2026-08-08 Samsung 재실행 | PASS | OAuth core 3/3, Provider 12/12, Workspace 5/5, Runtime Compose 7/7, integrated 10/10. Provider test host에는 `testOptions.targetSdk=36`을 명시해 Samsung legacy compatibility dialog가 Compose hierarchy를 가리지 않도록 정정 |
+| 2026-08-09 Runtime Compose 재실행 | PASS | Runtime Compose 8/8 — Tab key-down이 Compose 기본 focus 이동으로 소비되던 결함을 수정하고 Enter/Tab/Esc/Ctrl+C key regression을 추가했다. test APK 제거 뒤 integrated product cold start를 확인했다. |
+| 2026-08-09 tablet Runtime Compose 재실행 | PASS | 첫 실행에서 standalone panel fixture가 viewport 밖 action을 실제 click하지 못한 것을 재현했다. `RuntimeWorkspaceScreen`과 같은 scroll container + `performScrollTo()`로 fixture를 보정한 뒤 8/8 통과했고 test APK를 제거했다. |
+| 2026-08-09 current integrated APK install | PASS | Samsung에 최신 debug APK replace install 후 cold start 성공. credential-free first-run mode guide 시각 점검과 product-only package 검사를 수행했고 Demo/Probe/test package는 없었다. |
+| 2026-08-09 mandatory Samsung instrumentation rerun | PASS | OAuth core 3/3, Provider 12/12, integrated fast chat 10/10이 모두 failure/error/skip 없이 통과했다. 계측 뒤 latest integrated debug APK를 재설치·cold start했고 최종 package는 통합 제품만 확인했다. |
 
 ## Samsung smoke
 

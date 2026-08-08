@@ -100,6 +100,22 @@ class RuntimeProbeActivity : Activity() {
                 ttyDisablePrimaryTraceeForeground = intent.getBooleanExtra(EXTRA_TTY_DISABLE_PRIMARY_TRACEE_FOREGROUND, false),
                 ttyUsePatchedProot = intent.getBooleanExtra(EXTRA_TTY_USE_PATCHED_PROOT, true),
                 ttySkipTerminalWinsizeReads = intent.getBooleanExtra(EXTRA_TTY_SKIP_TERMINAL_WINSIZE_READS, false),
+                ttyBypassIoctlFilter = intent.getBooleanExtra(EXTRA_TTY_BYPASS_IOCTL_FILTER, false),
+                ttyTracePostWinsizeInput = intent.getBooleanExtra(EXTRA_TTY_TRACE_POST_WINSIZE_INPUT, false),
+                ttyTracePostWinsizeCommandFlow =
+                    intent.getBooleanExtra(EXTRA_TTY_TRACE_POST_WINSIZE_COMMAND_FLOW, false),
+                ttyTracePostWinsizePostReadFlow =
+                    intent.getBooleanExtra(EXTRA_TTY_TRACE_POST_WINSIZE_POST_READ_FLOW, false),
+                ttyTraceSecondTiocgwinsz =
+                    intent.getBooleanExtra(EXTRA_TTY_TRACE_SECOND_TIOCGWINSZ, false),
+                ttyTraceSecondTiocgwinszTargetOutput =
+                    intent.getBooleanExtra(EXTRA_TTY_TRACE_SECOND_TIOCGWINSZ_TARGET_OUTPUT, false),
+                ttyTraceVirtualWinsizeSecondTargetOutput =
+                    intent.getBooleanExtra(
+                        EXTRA_TTY_TRACE_VIRTUAL_WINSIZE_SECOND_TARGET_OUTPUT,
+                        false,
+                    ),
+                ttyCanonicalizeStdio = intent.getBooleanExtra(EXTRA_TTY_CANONICALIZE_STDIO, false),
             )
             RESULT_FILE.writeText(result.toString(2))
             runOnUiThread {
@@ -120,10 +136,32 @@ class RuntimeProbeActivity : Activity() {
         ttyDisablePrimaryTraceeForeground: Boolean,
         ttyUsePatchedProot: Boolean,
         ttySkipTerminalWinsizeReads: Boolean,
+        ttyBypassIoctlFilter: Boolean,
+        ttyTracePostWinsizeInput: Boolean,
+        ttyTracePostWinsizeCommandFlow: Boolean,
+        ttyTracePostWinsizePostReadFlow: Boolean,
+        ttyTraceSecondTiocgwinsz: Boolean,
+        ttyTraceSecondTiocgwinszTargetOutput: Boolean,
+        ttyTraceVirtualWinsizeSecondTargetOutput: Boolean,
+        ttyCanonicalizeStdio: Boolean,
     ): JSONObject {
         val nativeProot = File(
             applicationInfo.nativeLibraryDir,
-            if (ttyDiagnostic && ttyUsePatchedProot) {
+            if (ttyDiagnostic && ttyTraceVirtualWinsizeSecondTargetOutput) {
+                TtyVirtualWinsizeSecondTargetOutputTraceRuntimePack.LAUNCHER_LIBRARY_NAME
+            } else if (ttyDiagnostic && ttyTraceSecondTiocgwinszTargetOutput) {
+                TtySecondTiocgwinszTargetOutputTraceRuntimePack.LAUNCHER_LIBRARY_NAME
+            } else if (ttyDiagnostic && ttyTraceSecondTiocgwinsz) {
+                TtySecondTiocgwinszTraceRuntimePack.LAUNCHER_LIBRARY_NAME
+            } else if (ttyDiagnostic && ttyTracePostWinsizePostReadFlow) {
+                TtyPostWinsizePostReadFlowTraceRuntimePack.LAUNCHER_LIBRARY_NAME
+            } else if (ttyDiagnostic && ttyTracePostWinsizeCommandFlow) {
+                TtyPostWinsizeCommandFlowTraceRuntimePack.LAUNCHER_LIBRARY_NAME
+            } else if (ttyDiagnostic && ttyTracePostWinsizeInput) {
+                TtyPostWinsizeInputTraceRuntimePack.LAUNCHER_LIBRARY_NAME
+            } else if (ttyDiagnostic && ttyBypassIoctlFilter) {
+                TtyNoIoctlFilterRuntimePack.LAUNCHER_LIBRARY_NAME
+            } else if (ttyDiagnostic && ttyUsePatchedProot) {
                 TtyDiagnosticRuntimePack.LAUNCHER_LIBRARY_NAME
             } else {
                 "libproot.so"
@@ -164,6 +202,29 @@ class RuntimeProbeActivity : Activity() {
             .put("tty_primary_tracee_foreground_disabled_requested", ttyDiagnostic && ttyDisablePrimaryTraceeForeground)
             .put("tty_patched_proot_requested", ttyDiagnostic && ttyUsePatchedProot)
             .put("tty_terminal_winsize_reads_skipped_requested", ttySkipTerminalWinsizeReads)
+            .put("tty_ioctl_filter_bypass_requested", ttyDiagnostic && ttyBypassIoctlFilter)
+            .put("tty_post_tiocgwinsz_input_trace_requested", ttyDiagnostic && ttyTracePostWinsizeInput)
+            .put(
+                "tty_post_tiocgwinsz_command_flow_trace_requested",
+                ttyDiagnostic && ttyTracePostWinsizeCommandFlow,
+            )
+            .put(
+                "tty_post_tiocgwinsz_post_read_flow_trace_requested",
+                ttyDiagnostic && ttyTracePostWinsizePostReadFlow,
+            )
+            .put(
+                "tty_post_tiocgwinsz_second_get_trace_requested",
+                ttyDiagnostic && ttyTraceSecondTiocgwinsz,
+            )
+            .put(
+                "tty_post_tiocgwinsz_second_target_output_trace_requested",
+                ttyDiagnostic && ttyTraceSecondTiocgwinszTargetOutput,
+            )
+            .put(
+                "tty_virtual_winsize_second_target_output_trace_requested",
+                ttyDiagnostic && ttyTraceVirtualWinsizeSecondTargetOutput,
+            )
+            .put("tty_canonicalize_stdio_requested", ttyDiagnostic && ttyCanonicalizeStdio)
             .put("tty_winsize_helper_packaged", ttyWinsizeHelperPackaged)
             .put(
                 "tty_session_launcher_packaged",
@@ -184,7 +245,21 @@ class RuntimeProbeActivity : Activity() {
             val artifactProvider: RuntimeArtifactProvider = when (primaryAbi) {
                 "arm64-v8a" -> BundledRuntimeArtifactProvider(
                     this,
-                    if (ttyDiagnostic && ttyUsePatchedProot) {
+                    if (ttyDiagnostic && ttyTraceVirtualWinsizeSecondTargetOutput) {
+                        TtyVirtualWinsizeSecondTargetOutputTraceRuntimePack.create()
+                    } else if (ttyDiagnostic && ttyTraceSecondTiocgwinszTargetOutput) {
+                        TtySecondTiocgwinszTargetOutputTraceRuntimePack.create()
+                    } else if (ttyDiagnostic && ttyTraceSecondTiocgwinsz) {
+                        TtySecondTiocgwinszTraceRuntimePack.create()
+                    } else if (ttyDiagnostic && ttyTracePostWinsizePostReadFlow) {
+                        TtyPostWinsizePostReadFlowTraceRuntimePack.create()
+                    } else if (ttyDiagnostic && ttyTracePostWinsizeCommandFlow) {
+                        TtyPostWinsizeCommandFlowTraceRuntimePack.create()
+                    } else if (ttyDiagnostic && ttyTracePostWinsizeInput) {
+                        TtyPostWinsizeInputTraceRuntimePack.create()
+                    } else if (ttyDiagnostic && ttyBypassIoctlFilter) {
+                        TtyNoIoctlFilterRuntimePack.create()
+                    } else if (ttyDiagnostic && ttyUsePatchedProot) {
                         TtyDiagnosticRuntimePack.create()
                     } else {
                         Alpine321Arm64Pack.create()
@@ -236,10 +311,27 @@ class RuntimeProbeActivity : Activity() {
                         ttyDiagnostic && ttyVirtualWinsizeNoWrite &&
                             ttySessionLauncher.isFile && ttySessionLauncher.canExecute(),
                     ttyDiagnosticVirtualResizeNoRequest =
-                        ttyDiagnostic && ttyVirtualWinsizeNoRequest &&
+                        ttyDiagnostic && (
+                            ttyVirtualWinsizeNoRequest ||
+                                ttyTracePostWinsizeInput ||
+                                ttyTracePostWinsizeCommandFlow ||
+                                ttyTracePostWinsizePostReadFlow ||
+                                ttyTraceSecondTiocgwinsz ||
+                                ttyTraceSecondTiocgwinszTargetOutput
+                        ) &&
                             ttySessionLauncher.isFile && ttySessionLauncher.canExecute(),
                     ttyDiagnosticDisablePrimaryTraceeForeground =
                         ttyDiagnostic && ttyDisablePrimaryTraceeForeground,
+                    ttyDiagnosticPostWinsizeInputTrace =
+                        ttyDiagnostic && (
+                            ttyTracePostWinsizeInput ||
+                                ttyTracePostWinsizeCommandFlow ||
+                                ttyTracePostWinsizePostReadFlow ||
+                                ttyTraceSecondTiocgwinsz ||
+                                ttyTraceSecondTiocgwinszTargetOutput ||
+                                ttyTraceVirtualWinsizeSecondTargetOutput
+                        ),
+                    ttyDiagnosticCanonicalizeStdio = ttyDiagnostic && ttyCanonicalizeStdio,
                 ),
             )
             try {
@@ -313,6 +405,7 @@ class RuntimeProbeActivity : Activity() {
                             current.contains("terminal_after_resize=40x120") ||
                             current.contains("terminal_after_resize=28x96") ||
                             current.contains("terminal_after_resize=skipped") ||
+                            current.contains("terminal_after_resize=helper") ||
                             current.contains("terminal_after_resize=unexpected")
                         ) {
                             terminalResizeReady.countDown()
@@ -434,7 +527,15 @@ class RuntimeProbeActivity : Activity() {
                         tag = "terminal_after_resize",
                         rows = if (ttyDiagnostic) 40 else 28,
                         columns = if (ttyDiagnostic) 120 else 96,
-                        skipWinsizeRead = ttySkipTerminalWinsizeReads,
+                        // Relay28 intentionally sends only one fixed printf after
+                        // the already-observed initial TIOCGWINSZ. This separates
+                        // shell parser/output delivery from a second TIOCGWINSZ;
+                        // it cannot prove a dynamic terminal resize.
+                        skipWinsizeRead =
+                            ttySkipTerminalWinsizeReads || ttyTracePostWinsizePostReadFlow,
+                        useDirectWinsizeHelper =
+                            ttyTraceSecondTiocgwinszTargetOutput ||
+                                ttyTraceVirtualWinsizeSecondTargetOutput,
                     ).toByteArray(Charsets.UTF_8),
                 ).toCompletableFuture().join()
                 val terminalResizeResponded = terminalResizeReady.await(15, TimeUnit.SECONDS)
@@ -473,7 +574,12 @@ class RuntimeProbeActivity : Activity() {
                 }
                 if (ttyDiagnostic && ttyResizeStress) {
                     terminal.write(
-                        terminalSizeMarkerCommand("terminal_after_repeat_first", rows = 24, columns = 80)
+                        terminalSizeMarkerCommand(
+                            "terminal_after_repeat_first",
+                            rows = 24,
+                            columns = 80,
+                            useDirectWinsizeHelper = ttyTraceVirtualWinsizeSecondTargetOutput,
+                        )
                             .toByteArray(Charsets.UTF_8),
                     ).toCompletableFuture().join()
                 }
@@ -496,7 +602,12 @@ class RuntimeProbeActivity : Activity() {
                 }
                 if (ttyDiagnostic && ttyResizeStress) {
                     terminal.write(
-                        terminalSizeMarkerCommand("terminal_after_repeat_second", rows = 40, columns = 120)
+                        terminalSizeMarkerCommand(
+                            "terminal_after_repeat_second",
+                            rows = 40,
+                            columns = 120,
+                            useDirectWinsizeHelper = ttyTraceVirtualWinsizeSecondTargetOutput,
+                        )
                             .toByteArray(Charsets.UTF_8),
                     ).toCompletableFuture().join()
                 }
@@ -530,7 +641,12 @@ class RuntimeProbeActivity : Activity() {
                 }
                 if (ttyDiagnostic && ttyResizeStress) {
                     terminal.write(
-                        terminalSizeMarkerCommand("terminal_after_storm", rows = 40, columns = 120)
+                        terminalSizeMarkerCommand(
+                            "terminal_after_storm",
+                            rows = 40,
+                            columns = 120,
+                            useDirectWinsizeHelper = ttyTraceVirtualWinsizeSecondTargetOutput,
+                        )
                             .toByteArray(Charsets.UTF_8),
                     ).toCompletableFuture().join()
                 }
@@ -570,7 +686,10 @@ class RuntimeProbeActivity : Activity() {
                     (ttyWinsizeHelperBound && ttyWinsizeHelperExecutionReady.await(5, TimeUnit.SECONDS))
                 val terminalAfterHelperResponded = !ttyDiagnostic ||
                     (ttyWinsizeHelperBound && terminalAfterHelperReady.await(5, TimeUnit.SECONDS))
-                val terminalSafeFollowUpResponded = !ttySkipTerminalWinsizeReads ||
+                // This fixed, non-user marker is deliberately sent after the
+                // first post-TIOCGWINSZ write. It tells the Probe whether the
+                // terminal lost exactly one input batch or stayed unavailable.
+                val terminalSafeFollowUpResponded =
                     terminalSafeFollowUpReady.await(5, TimeUnit.SECONDS)
                 val terminalStdout = synchronized(terminalOutput) {
                     terminalOutput.toString(Charsets.UTF_8.name())
@@ -587,38 +706,84 @@ class RuntimeProbeActivity : Activity() {
                     "unsupported"
                 }
                 val dynamicResizeCallSucceeded = terminalResizeAttempted && resizeErrorCode == null
-                val dynamicSizeAfterResizeMatches =
+                val directHelperResizeControl =
+                    ttyTraceSecondTiocgwinszTargetOutput ||
+                        ttyTraceVirtualWinsizeSecondTargetOutput
+                val dynamicSizeAfterResizeMatches = if (directHelperResizeControl) {
+                    terminalStdout.contains("terminal_after_resize=helper") &&
+                        terminalStdout.contains("tty_winsize_state=dynamic")
+                } else {
                     terminalStdout.contains("terminal_after_resize=40x120")
-                val initialSizeAfterResizeMatches =
+                }
+                val initialSizeAfterResizeMatches = if (directHelperResizeControl) {
+                    terminalStdout.contains("terminal_after_resize=helper") &&
+                        terminalStdout.contains("tty_winsize_state=initial")
+                } else {
                     terminalStdout.contains("terminal_after_resize=28x96")
+                }
                 val dynamicSizeAfterHelperMatches =
                     terminalStdout.contains("terminal_after_helper=40x120")
                 val initialSizeAfterHelperMatches =
                     terminalStdout.contains("terminal_after_helper=28x96")
+                val virtualSequenceExpectedRequestCount = if (
+                    ttyDiagnostic && ttyResizeStress && ttyTraceVirtualWinsizeSecondTargetOutput
+                ) {
+                    11
+                } else {
+                    0
+                }
+                val virtualSequenceRequestCountMatches =
+                    virtualSequenceExpectedRequestCount == 0 ||
+                        diagnosticAtResize?.virtualWinsizeStoreCount ==
+                            virtualSequenceExpectedRequestCount
                 val repeatFirstMarkerOutcome = if (ttyDiagnostic && ttyResizeStress) {
-                    TtyProbeMarkers.markerOutcome(
-                        terminalStdout,
-                        tag = "terminal_after_repeat_first",
-                        expected = "24x80",
-                    )
+                    if (ttyTraceVirtualWinsizeSecondTargetOutput) {
+                        TtyProbeMarkers.helperOutcomeBeforeMarker(
+                            terminalStdout,
+                            tag = "terminal_after_repeat_first",
+                            expectedState = "alternate",
+                        )
+                    } else {
+                        TtyProbeMarkers.markerOutcome(
+                            terminalStdout,
+                            tag = "terminal_after_repeat_first",
+                            expected = "24x80",
+                        )
+                    }
                 } else {
                     TtyProbeMarkers.MISSING
                 }
                 val repeatSecondMarkerOutcome = if (ttyDiagnostic && ttyResizeStress) {
-                    TtyProbeMarkers.markerOutcome(
-                        terminalStdout,
-                        tag = "terminal_after_repeat_second",
-                        expected = "40x120",
-                    )
+                    if (ttyTraceVirtualWinsizeSecondTargetOutput) {
+                        TtyProbeMarkers.helperOutcomeBeforeMarker(
+                            terminalStdout,
+                            tag = "terminal_after_repeat_second",
+                            expectedState = "dynamic",
+                        )
+                    } else {
+                        TtyProbeMarkers.markerOutcome(
+                            terminalStdout,
+                            tag = "terminal_after_repeat_second",
+                            expected = "40x120",
+                        )
+                    }
                 } else {
                     TtyProbeMarkers.MISSING
                 }
                 val stormMarkerOutcome = if (ttyDiagnostic && ttyResizeStress) {
-                    TtyProbeMarkers.markerOutcome(
-                        terminalStdout,
-                        tag = "terminal_after_storm",
-                        expected = "40x120",
-                    )
+                    if (ttyTraceVirtualWinsizeSecondTargetOutput) {
+                        TtyProbeMarkers.helperOutcomeBeforeMarker(
+                            terminalStdout,
+                            tag = "terminal_after_storm",
+                            expectedState = "dynamic",
+                        )
+                    } else {
+                        TtyProbeMarkers.markerOutcome(
+                            terminalStdout,
+                            tag = "terminal_after_storm",
+                            expected = "40x120",
+                        )
+                    }
                 } else {
                     TtyProbeMarkers.MISSING
                 }
@@ -707,6 +872,7 @@ class RuntimeProbeActivity : Activity() {
                 )
                 val resizeStormContractPassed = !(ttyDiagnostic && ttyResizeStress) || (
                     stormResizeErrorCodes.all { it == null } &&
+                        virtualSequenceRequestCountMatches &&
                         stormSignalContractPassed &&
                         terminalStormResponded &&
                         stormMarkerOutcome == TtyProbeMarkers.MATCHED &&
@@ -816,11 +982,48 @@ class RuntimeProbeActivity : Activity() {
                         if (ttyDiagnostic && ttyDisableProotSeccomp) "disabled_probe" else "default",
                     )
                     .put("tty_virtual_winsize_no_write_active", ttyDiagnostic && ttyVirtualWinsizeNoWrite)
-                    .put("tty_virtual_winsize_no_request_active", ttyDiagnostic && ttyVirtualWinsizeNoRequest)
+                    .put(
+                        "tty_virtual_winsize_no_request_active",
+                        ttyDiagnostic && (
+                            ttyVirtualWinsizeNoRequest ||
+                                ttyTracePostWinsizeInput ||
+                                ttyTracePostWinsizeCommandFlow ||
+                                ttyTracePostWinsizePostReadFlow ||
+                                ttyTraceSecondTiocgwinsz ||
+                                ttyTraceSecondTiocgwinszTargetOutput
+                        ),
+                    )
                     .put("tty_virtual_winsize_skip_resize_active", ttyDiagnostic && ttyVirtualWinsizeSkipResize)
                     .put("tty_primary_tracee_foreground_disabled_active", ttyDiagnostic && ttyDisablePrimaryTraceeForeground)
                     .put("tty_patched_proot_active", ttyDiagnostic && ttyUsePatchedProot)
                     .put("tty_terminal_winsize_reads_skipped_active", ttySkipTerminalWinsizeReads)
+                    .put("tty_ioctl_filter_bypass_active", ttyDiagnostic && ttyBypassIoctlFilter)
+                    .put("tty_post_tiocgwinsz_input_trace_active", ttyDiagnostic && ttyTracePostWinsizeInput)
+                    .put(
+                        "tty_post_tiocgwinsz_command_flow_trace_active",
+                        ttyDiagnostic && ttyTracePostWinsizeCommandFlow,
+                    )
+                    .put(
+                        "tty_post_tiocgwinsz_post_read_flow_trace_active",
+                        ttyDiagnostic && ttyTracePostWinsizePostReadFlow,
+                    )
+                    .put(
+                        "tty_post_tiocgwinsz_post_read_flow_simple_marker_active",
+                        ttyDiagnostic && ttyTracePostWinsizePostReadFlow,
+                    )
+                    .put(
+                        "tty_post_tiocgwinsz_second_get_trace_active",
+                        ttyDiagnostic && ttyTraceSecondTiocgwinsz,
+                    )
+                    .put(
+                        "tty_post_tiocgwinsz_second_target_output_trace_active",
+                        ttyDiagnostic && ttyTraceSecondTiocgwinszTargetOutput,
+                    )
+                    .put(
+                        "tty_virtual_winsize_second_target_output_trace_active",
+                        ttyDiagnostic && ttyTraceVirtualWinsizeSecondTargetOutput,
+                    )
+                    .put("tty_canonicalize_stdio_active", ttyDiagnostic && ttyCanonicalizeStdio)
                     .put("terminal_winch_relay_mode", terminalWinchRelayMode)
                     .put("terminal_winch_expected", terminalWinchExpected)
                     .put("terminal_resize_command_after_winch", terminalResizeCommandAfterWinch)
@@ -843,6 +1046,14 @@ class RuntimeProbeActivity : Activity() {
                     .put("terminal_resize_storm_responded", terminalStormResponded)
                     .put("terminal_resize_storm_winch_received", terminalStormWinchReceived)
                     .put("terminal_resize_storm_marker", stormMarkerOutcome)
+                    .put(
+                        "terminal_virtual_winsize_sequence_expected_request_count",
+                        virtualSequenceExpectedRequestCount,
+                    )
+                    .put(
+                        "terminal_virtual_winsize_sequence_request_count_matches",
+                        virtualSequenceRequestCountMatches,
+                    )
                     .put("terminal_winch_signal_count", terminalWinchSignalCount)
                     .put("terminal_virtual_winsize_probe", terminalVirtualWinsize)
                     .put(
@@ -964,6 +1175,7 @@ class RuntimeProbeActivity : Activity() {
         rows: Int,
         columns: Int,
         skipWinsizeRead: Boolean = false,
+        useDirectWinsizeHelper: Boolean = false,
     ): String {
         require(tag.matches(Regex("terminal_after_[a-z_]+")))
         require(rows in 1..1_000 && columns in 1..1_000)
@@ -973,6 +1185,10 @@ class RuntimeProbeActivity : Activity() {
             ""
         }
         if (skipWinsizeRead) return commandAcknowledgement + "printf '$tag=skipped\\n'\n"
+        if (useDirectWinsizeHelper) {
+            return commandAcknowledgement + "/workspace/$TTY_WINSIZE_HELPER_FILE_NAME; " +
+                "printf '$tag=helper\\n'\n"
+        }
         return commandAcknowledgement + "size=\"\$(stty size)\"; " +
             "if [ \"\$size\" = '$rows $columns' ]; then " +
             "printf '$tag=${rows}x${columns}\\n'; " +
@@ -998,6 +1214,36 @@ class RuntimeProbeActivity : Activity() {
             val winchStages = diagnosticText
                 .lineSequence()
                 .mapNotNull { line -> TTY_SIGNAL_DIAGNOSTIC_RECORD.matchEntire(line)?.groupValues?.get(1) }
+                .toList()
+            val postWinsizeInputStages = diagnosticText
+                .lineSequence()
+                .mapNotNull { line ->
+                    TTY_POST_WINSIZE_INPUT_RECORD.matchEntire(line)?.groupValues?.get(1)
+                }
+                .toList()
+            val postWinsizeCommandFlowStages = diagnosticText
+                .lineSequence()
+                .mapNotNull { line ->
+                    TTY_POST_WINSIZE_COMMAND_FLOW_RECORD.matchEntire(line)?.groupValues?.get(1)
+                }
+                .toList()
+            val postWinsizePostReadFlowStages = diagnosticText
+                .lineSequence()
+                .mapNotNull { line ->
+                    TTY_POST_WINSIZE_POST_READ_FLOW_RECORD.matchEntire(line)?.groupValues?.get(1)
+                }
+                .toList()
+            val secondTiocgwinszStages = diagnosticText
+                .lineSequence()
+                .mapNotNull { line ->
+                    TTY_POST_WINSIZE_SECOND_GET_RECORD.matchEntire(line)?.groupValues?.get(1)
+                }
+                .toList()
+            val secondTargetOutputStages = diagnosticText
+                .lineSequence()
+                .mapNotNull { line ->
+                    TTY_POST_WINSIZE_SECOND_TARGET_OUTPUT_RECORD.matchEntire(line)?.groupValues?.get(1)
+                }
                 .toList()
             val records = diagnosticText
                 .lineSequence()
@@ -1027,8 +1273,24 @@ class RuntimeProbeActivity : Activity() {
             // traced ioctl. Retain only its fixed signal/topology stages so
             // the Probe reports that failure instead of collapsing it into an
             // indistinguishable missing diagnostic file.
-            if (records.isEmpty() && winchStages.isEmpty()) return null
-            TtyDiagnosticSummary(records, winchStages)
+            if (
+                records.isEmpty() &&
+                    winchStages.isEmpty() &&
+                    postWinsizeInputStages.isEmpty() &&
+                    postWinsizeCommandFlowStages.isEmpty() &&
+                    postWinsizePostReadFlowStages.isEmpty() &&
+                    secondTiocgwinszStages.isEmpty() &&
+                    secondTargetOutputStages.isEmpty()
+            ) return null
+            TtyDiagnosticSummary(
+                records,
+                winchStages,
+                postWinsizeInputStages,
+                postWinsizeCommandFlowStages,
+                postWinsizePostReadFlowStages,
+                secondTiocgwinszStages,
+                secondTargetOutputStages,
+            )
         } finally {
             file.delete()
         }
@@ -1060,6 +1322,16 @@ class RuntimeProbeActivity : Activity() {
         val records: List<TtyDiagnosticRecord>,
         /** Closed Probe-local enum; never a PID, path, command, or terminal payload. */
         val winchStages: List<String>,
+        /** Fixed source-level lifecycle stages; never terminal bytes or identifiers. */
+        val postWinsizeInputStages: List<String>,
+        /** Fixed parent/child lifecycle classes; never terminal bytes or identifiers. */
+        val postWinsizeCommandFlowStages: List<String>,
+        /** Fixed parent post-read syscall classes; never terminal bytes or identifiers. */
+        val postWinsizePostReadFlowStages: List<String>,
+        /** Fixed second get-size lifecycle classes; never payload or identifiers. */
+        val secondTiocgwinszStages: List<String>,
+        /** Fixed second get-size target output classes; never payload or identifiers. */
+        val secondTargetOutputStages: List<String>,
     ) {
         private val matchingPtyPairs = records.zipWithNext()
             .mapIndexedNotNull { index, (before, after) ->
@@ -1100,6 +1372,16 @@ class RuntimeProbeActivity : Activity() {
             "${pair.after.traceeKind}:${sizeClass(pair)}"
         }
         private fun countWinchStage(stage: String): Int = winchStages.count { it == stage }
+        private fun countPostWinsizeInputStage(stage: String): Int =
+            postWinsizeInputStages.count { it == stage }
+        private fun countPostWinsizeCommandFlowStage(stage: String): Int =
+            postWinsizeCommandFlowStages.count { it == stage }
+        private fun countPostWinsizePostReadFlowStage(stage: String): Int =
+            postWinsizePostReadFlowStages.count { it == stage }
+        private fun countSecondTiocgwinszStage(stage: String): Int =
+            secondTiocgwinszStages.count { it == stage }
+        private fun countSecondTargetOutputStage(stage: String): Int =
+            secondTargetOutputStages.count { it == stage }
 
         val topologyVerified: Boolean
             get() = matchingPtyPairs.isNotEmpty()
@@ -1171,6 +1453,10 @@ class RuntimeProbeActivity : Activity() {
                 countWinchStage("tracee_stopped") == 0 &&
                 countWinchStage("tracee_restarted") == 0
 
+        /** Fixed request count only; it never identifies a terminal session or payload. */
+        val virtualWinsizeStoreCount: Int
+            get() = countWinchStage("virtual_winsize_supervisor_stored")
+
         private val requestedResizePostExtensionMatches: Boolean
             get() = requestedResizePair?.after?.let { it.rows == 40 && it.columns == 120 } == true
         private val requestedResizePostExtensionReverted: Boolean
@@ -1188,7 +1474,14 @@ class RuntimeProbeActivity : Activity() {
             } == true
 
         fun toJson(): JSONObject = JSONObject()
-            .put("record_present", records.isNotEmpty() || winchStages.isNotEmpty())
+            .put(
+                "record_present",
+                records.isNotEmpty() ||
+                    winchStages.isNotEmpty() ||
+                    postWinsizeInputStages.isNotEmpty() ||
+                    postWinsizeCommandFlowStages.isNotEmpty() ||
+                    postWinsizePostReadFlowStages.isNotEmpty(),
+            )
             .put("event_count", records.size)
             .put("matching_pty_ioctl_pair_count", matchingPtyPairs.size)
             .put("busybox_initial_pty_ioctl_pair_count", countPairs("busybox", 28, 96))
@@ -1288,6 +1581,226 @@ class RuntimeProbeActivity : Activity() {
             .put("winch_relay_withheld_verified", relayWithheldVerified)
             .put("winch_tracee_foreground_verified", traceeForegroundVerified)
             .put("winch_virtual_winsize_verified", virtualWinsizeVerified)
+            .put(
+                "post_tiocgwinsz_input_tiocgwinsz_exit_ok_count",
+                countPostWinsizeInputStage("tiocgwinsz_exit_ok"),
+            )
+            .put(
+                "post_tiocgwinsz_input_read_enter_count",
+                countPostWinsizeInputStage("read_enter"),
+            )
+            .put(
+                "post_tiocgwinsz_input_read_exit_nonempty_count",
+                countPostWinsizeInputStage("read_exit_nonempty"),
+            )
+            .put(
+                "post_tiocgwinsz_input_read_exit_eof_count",
+                countPostWinsizeInputStage("read_exit_eof"),
+            )
+            .put(
+                "post_tiocgwinsz_input_read_exit_error_count",
+                countPostWinsizeInputStage("read_exit_error"),
+            )
+            .put(
+                "post_tiocgwinsz_command_flow_tiocgwinsz_exit_ok_count",
+                countPostWinsizeCommandFlowStage("tiocgwinsz_exit_ok"),
+            )
+            .put(
+                "post_tiocgwinsz_command_flow_parent_unavailable_count",
+                countPostWinsizeCommandFlowStage("parent_unavailable"),
+            )
+            .put(
+                "post_tiocgwinsz_command_flow_parent_wait_inflight_count",
+                countPostWinsizeCommandFlowStage("parent_wait_inflight"),
+            )
+            .put(
+                "post_tiocgwinsz_command_flow_parent_wait_not_inflight_count",
+                countPostWinsizeCommandFlowStage("parent_wait_not_inflight"),
+            )
+            .put(
+                "post_tiocgwinsz_command_flow_target_exit_enter_count",
+                countPostWinsizeCommandFlowStage("target_exit_enter"),
+            )
+            .put(
+                "post_tiocgwinsz_command_flow_parent_wait_exit_count",
+                countPostWinsizeCommandFlowStage("parent_wait_exit"),
+            )
+            .put(
+                "post_tiocgwinsz_command_flow_parent_read_enter_count",
+                countPostWinsizeCommandFlowStage("parent_read_enter"),
+            )
+            .put(
+                "post_tiocgwinsz_command_flow_parent_read_exit_nonempty_count",
+                countPostWinsizeCommandFlowStage("parent_read_exit_nonempty"),
+            )
+            .put(
+                "post_tiocgwinsz_command_flow_parent_read_exit_eof_count",
+                countPostWinsizeCommandFlowStage("parent_read_exit_eof"),
+            )
+            .put(
+                "post_tiocgwinsz_command_flow_parent_read_exit_error_count",
+                countPostWinsizeCommandFlowStage("parent_read_exit_error"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_tiocgwinsz_exit_ok_count",
+                countPostWinsizePostReadFlowStage("tiocgwinsz_exit_ok"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_unavailable_count",
+                countPostWinsizePostReadFlowStage("parent_unavailable"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_wait_inflight_count",
+                countPostWinsizePostReadFlowStage("parent_wait_inflight"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_wait_not_inflight_count",
+                countPostWinsizePostReadFlowStage("parent_wait_not_inflight"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_target_exit_enter_count",
+                countPostWinsizePostReadFlowStage("target_exit_enter"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_wait_exit_count",
+                countPostWinsizePostReadFlowStage("parent_wait_exit"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_read_enter_count",
+                countPostWinsizePostReadFlowStage("parent_read_enter"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_read_exit_nonempty_count",
+                countPostWinsizePostReadFlowStage("parent_read_exit_nonempty"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_read_exit_eof_count",
+                countPostWinsizePostReadFlowStage("parent_read_exit_eof"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_read_exit_error_count",
+                countPostWinsizePostReadFlowStage("parent_read_exit_error"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_post_read_read_enter_count",
+                countPostWinsizePostReadFlowStage("parent_post_read_read_enter"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_post_read_write_enter_count",
+                countPostWinsizePostReadFlowStage("parent_post_read_write_enter"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_post_read_write_stdout_count",
+                countPostWinsizePostReadFlowStage("parent_post_read_write_stdout"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_post_read_write_stderr_count",
+                countPostWinsizePostReadFlowStage("parent_post_read_write_stderr"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_post_read_write_other_count",
+                countPostWinsizePostReadFlowStage("parent_post_read_write_other"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_post_read_write_exit_nonempty_count",
+                countPostWinsizePostReadFlowStage("parent_post_read_write_exit_nonempty"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_post_read_write_exit_zero_count",
+                countPostWinsizePostReadFlowStage("parent_post_read_write_exit_zero"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_post_read_write_exit_error_count",
+                countPostWinsizePostReadFlowStage("parent_post_read_write_exit_error"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_post_read_ioctl_enter_count",
+                countPostWinsizePostReadFlowStage("parent_post_read_ioctl_enter"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_post_read_spawn_enter_count",
+                countPostWinsizePostReadFlowStage("parent_post_read_spawn_enter"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_post_read_exec_enter_count",
+                countPostWinsizePostReadFlowStage("parent_post_read_exec_enter"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_post_read_wait_enter_count",
+                countPostWinsizePostReadFlowStage("parent_post_read_wait_enter"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_post_read_exit_enter_count",
+                countPostWinsizePostReadFlowStage("parent_post_read_exit_enter"),
+            )
+            .put(
+                "post_tiocgwinsz_post_read_flow_parent_post_read_other_enter_count",
+                countPostWinsizePostReadFlowStage("parent_post_read_other_enter"),
+            )
+            .put(
+                "post_tiocgwinsz_second_get_first_exit_ok_count",
+                countSecondTiocgwinszStage("first_tiocgwinsz_exit_ok"),
+            )
+            .put(
+                "post_tiocgwinsz_second_get_enter_count",
+                countSecondTiocgwinszStage("second_tiocgwinsz_enter"),
+            )
+            .put(
+                "post_tiocgwinsz_second_get_exit_ok_count",
+                countSecondTiocgwinszStage("second_tiocgwinsz_exit_ok"),
+            )
+            .put(
+                "post_tiocgwinsz_second_get_exit_error_count",
+                countSecondTiocgwinszStage("second_tiocgwinsz_exit_error"),
+            )
+            .put(
+                "post_tiocgwinsz_second_target_output_first_exit_ok_count",
+                countSecondTargetOutputStage("first_tiocgwinsz_exit_ok"),
+            )
+            .put(
+                "post_tiocgwinsz_second_target_output_get_enter_count",
+                countSecondTargetOutputStage("second_tiocgwinsz_enter"),
+            )
+            .put(
+                "post_tiocgwinsz_second_target_output_get_exit_ok_count",
+                countSecondTargetOutputStage("second_tiocgwinsz_exit_ok"),
+            )
+            .put(
+                "post_tiocgwinsz_second_target_output_get_exit_error_count",
+                countSecondTargetOutputStage("second_tiocgwinsz_exit_error"),
+            )
+            .put(
+                "post_tiocgwinsz_second_target_output_write_enter_count",
+                countSecondTargetOutputStage("second_target_write_enter"),
+            )
+            .put(
+                "post_tiocgwinsz_second_target_output_write_stdout_count",
+                countSecondTargetOutputStage("second_target_write_stdout"),
+            )
+            .put(
+                "post_tiocgwinsz_second_target_output_write_stderr_count",
+                countSecondTargetOutputStage("second_target_write_stderr"),
+            )
+            .put(
+                "post_tiocgwinsz_second_target_output_write_other_count",
+                countSecondTargetOutputStage("second_target_write_other"),
+            )
+            .put(
+                "post_tiocgwinsz_second_target_output_write_exit_nonempty_count",
+                countSecondTargetOutputStage("second_target_write_exit_nonempty"),
+            )
+            .put(
+                "post_tiocgwinsz_second_target_output_write_exit_zero_count",
+                countSecondTargetOutputStage("second_target_write_exit_zero"),
+            )
+            .put(
+                "post_tiocgwinsz_second_target_output_write_exit_error_count",
+                countSecondTargetOutputStage("second_target_write_exit_error"),
+            )
+            .put(
+                "post_tiocgwinsz_second_target_output_target_exit_count",
+                countSecondTargetOutputStage("second_target_exit_enter"),
+            )
     }
 
     private data class TtyDiagnosticPair(
@@ -1318,6 +1831,47 @@ class RuntimeProbeActivity : Activity() {
                 "virtual_winsize_fd_ready|virtual_winsize_read_applied|" +
                 "tracee_stopped|tracee_restarted)",
         )
+        private val TTY_POST_WINSIZE_INPUT_RECORD = Regex(
+            "schema=1 event=POST_TIOCGWINSZ_INPUT stage=" +
+                "(tiocgwinsz_exit_ok|read_enter|read_exit_nonempty|" +
+                "read_exit_eof|read_exit_error)",
+        )
+        private val TTY_POST_WINSIZE_COMMAND_FLOW_RECORD = Regex(
+            "schema=1 event=POST_TIOCGWINSZ_COMMAND_FLOW stage=" +
+                "(tiocgwinsz_exit_ok|parent_unavailable|parent_wait_inflight|" +
+                "parent_wait_not_inflight|target_exit_enter|parent_wait_exit|" +
+                "parent_read_enter|parent_read_exit_nonempty|parent_read_exit_eof|" +
+                "parent_read_exit_error)",
+        )
+        private val TTY_POST_WINSIZE_POST_READ_FLOW_RECORD = Regex(
+            "schema=1 event=POST_TIOCGWINSZ_POST_READ_FLOW stage=" +
+                "(tiocgwinsz_exit_ok|parent_unavailable|parent_wait_inflight|" +
+                "parent_wait_not_inflight|target_exit_enter|parent_wait_exit|" +
+                "parent_read_enter|parent_read_exit_nonempty|parent_read_exit_eof|" +
+                "parent_read_exit_error|parent_post_read_read_enter|" +
+                "parent_post_read_write_enter|parent_post_read_write_stdout|" +
+                "parent_post_read_write_stderr|parent_post_read_write_other|" +
+                "parent_post_read_write_exit_nonempty|" +
+                "parent_post_read_write_exit_zero|parent_post_read_write_exit_error|" +
+                "parent_post_read_ioctl_enter|" +
+                "parent_post_read_spawn_enter|parent_post_read_exec_enter|" +
+                "parent_post_read_wait_enter|parent_post_read_exit_enter|" +
+                "parent_post_read_other_enter)",
+        )
+        private val TTY_POST_WINSIZE_SECOND_GET_RECORD = Regex(
+            "schema=1 event=POST_TIOCGWINSZ_SECOND_GET stage=" +
+                "(first_tiocgwinsz_exit_ok|second_tiocgwinsz_enter|" +
+                "second_tiocgwinsz_exit_ok|second_tiocgwinsz_exit_error)",
+        )
+        private val TTY_POST_WINSIZE_SECOND_TARGET_OUTPUT_RECORD = Regex(
+            "schema=1 event=POST_TIOCGWINSZ_SECOND_TARGET_OUTPUT stage=" +
+                "(first_tiocgwinsz_exit_ok|second_tiocgwinsz_enter|" +
+                "second_tiocgwinsz_exit_ok|second_tiocgwinsz_exit_error|" +
+                "second_target_write_enter|second_target_write_stdout|" +
+                "second_target_write_stderr|second_target_write_other|" +
+                "second_target_write_exit_nonempty|second_target_write_exit_zero|" +
+                "second_target_write_exit_error|second_target_exit_enter)",
+        )
         private const val TTY_DIAGNOSTIC_FILE_NAME = "proot-tty-diagnostic.log"
         private const val MAX_TTY_DIAGNOSTIC_BYTES = 16 * 1024
         private const val TTY_WINSIZE_HELPER_FILE_NAME = "tty-winsize-probe"
@@ -1325,7 +1879,7 @@ class RuntimeProbeActivity : Activity() {
         private const val MAX_HOST_PTY_RESIZE_CONTROL_BYTES = 128 * 1024
         private const val MAX_HOST_PTY_RESIZE_CONTROL_OUTPUT_BYTES = 256
         private val TTY_WINSIZE_STATE = Regex(
-            "tty_winsize_state=(dynamic|initial|unexpected|unavailable)",
+            "tty_winsize_state=(dynamic|alternate|initial|unexpected|unavailable)",
         )
         private val TTY_WINSIZE_HELPER_AVAILABLE = Regex("tty_winsize_helper_available=([01])")
         private val TTY_WINSIZE_HELPER_EXECUTED = Regex("tty_winsize_helper_executed=([01])")
@@ -1341,5 +1895,17 @@ class RuntimeProbeActivity : Activity() {
         const val EXTRA_TTY_DISABLE_PRIMARY_TRACEE_FOREGROUND = "tty_disable_primary_tracee_foreground"
         const val EXTRA_TTY_USE_PATCHED_PROOT = "tty_use_patched_proot"
         const val EXTRA_TTY_SKIP_TERMINAL_WINSIZE_READS = "tty_skip_terminal_winsize_reads"
+        const val EXTRA_TTY_BYPASS_IOCTL_FILTER = "tty_bypass_ioctl_filter"
+        const val EXTRA_TTY_TRACE_POST_WINSIZE_INPUT = "tty_trace_post_winsize_input"
+        const val EXTRA_TTY_TRACE_POST_WINSIZE_COMMAND_FLOW =
+            "tty_trace_post_winsize_command_flow"
+        const val EXTRA_TTY_TRACE_POST_WINSIZE_POST_READ_FLOW =
+            "tty_trace_post_winsize_post_read_flow"
+        const val EXTRA_TTY_TRACE_SECOND_TIOCGWINSZ = "tty_trace_second_tiocgwinsz"
+        const val EXTRA_TTY_TRACE_SECOND_TIOCGWINSZ_TARGET_OUTPUT =
+            "tty_trace_second_tiocgwinsz_target_output"
+        const val EXTRA_TTY_TRACE_VIRTUAL_WINSIZE_SECOND_TARGET_OUTPUT =
+            "tty_trace_virtual_winsize_second_target_output"
+        const val EXTRA_TTY_CANONICALIZE_STDIO = "tty_canonicalize_stdio"
     }
 }

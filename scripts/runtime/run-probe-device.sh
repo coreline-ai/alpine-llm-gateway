@@ -14,6 +14,14 @@ TTY_VIRTUAL_WINSIZE_SKIP_RESIZE="${8:-false}"
 TTY_DISABLE_PRIMARY_TRACEE_FOREGROUND="${9:-false}"
 TTY_USE_PATCHED_PROOT="${10:-true}"
 TTY_SKIP_TERMINAL_WINSIZE_READS="${11:-false}"
+TTY_BYPASS_IOCTL_FILTER="${12:-false}"
+TTY_CANONICALIZE_STDIO="${13:-false}"
+TTY_TRACE_POST_WINSIZE_INPUT="${14:-false}"
+TTY_TRACE_POST_WINSIZE_COMMAND_FLOW="${15:-false}"
+TTY_TRACE_POST_WINSIZE_POST_READ_FLOW="${16:-false}"
+TTY_TRACE_SECOND_TIOCGWINSZ="${17:-false}"
+TTY_TRACE_SECOND_TIOCGWINSZ_TARGET_OUTPUT="${18:-false}"
+TTY_TRACE_VIRTUAL_WINSIZE_SECOND_TARGET_OUTPUT="${19:-false}"
 APK="$ROOT/alpine-runtime-probe/build/outputs/apk/debug/alpine-runtime-probe-debug.apk"
 
 [[ -x "$ADB" ]] || { echo "adb not found: $ADB" >&2; exit 2; }
@@ -39,7 +47,16 @@ ACTIVITY="$PACKAGE/.RuntimeProbeActivity"
     --ez tty_virtual_winsize_skip_resize "$TTY_VIRTUAL_WINSIZE_SKIP_RESIZE" \
     --ez tty_disable_primary_tracee_foreground "$TTY_DISABLE_PRIMARY_TRACEE_FOREGROUND" \
     --ez tty_use_patched_proot "$TTY_USE_PATCHED_PROOT" \
-    --ez tty_skip_terminal_winsize_reads "$TTY_SKIP_TERMINAL_WINSIZE_READS" >/dev/null
+    --ez tty_skip_terminal_winsize_reads "$TTY_SKIP_TERMINAL_WINSIZE_READS" \
+    --ez tty_bypass_ioctl_filter "$TTY_BYPASS_IOCTL_FILTER" \
+    --ez tty_canonicalize_stdio "$TTY_CANONICALIZE_STDIO" \
+    --ez tty_trace_post_winsize_input "$TTY_TRACE_POST_WINSIZE_INPUT" \
+    --ez tty_trace_post_winsize_command_flow "$TTY_TRACE_POST_WINSIZE_COMMAND_FLOW" \
+    --ez tty_trace_post_winsize_post_read_flow "$TTY_TRACE_POST_WINSIZE_POST_READ_FLOW" \
+    --ez tty_trace_second_tiocgwinsz "$TTY_TRACE_SECOND_TIOCGWINSZ" \
+    --ez tty_trace_second_tiocgwinsz_target_output "$TTY_TRACE_SECOND_TIOCGWINSZ_TARGET_OUTPUT" \
+    --ez tty_trace_virtual_winsize_second_target_output \
+        "$TTY_TRACE_VIRTUAL_WINSIZE_SECOND_TARGET_OUTPUT" >/dev/null
 
 for _ in $(seq 1 45); do
     RESULT="$($ADB -s "$SERIAL" shell run-as "$PACKAGE" \

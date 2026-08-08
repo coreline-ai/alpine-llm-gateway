@@ -83,6 +83,13 @@ data class AndroidRuntimeConfiguration @JvmOverloads constructor(
      * traced guest into a separate foreground group. Never a product setting.
      */
     val ttyDiagnosticDisablePrimaryTraceeForeground: Boolean = false,
+    /**
+     * Probe-only PRoot post-TIOCGWINSZ source recorder. It records only fixed
+     * lifecycle categories, never terminal data, and must only be enabled by
+     * the debug-gated diagnostic host.
+     */
+    val ttyDiagnosticPostWinsizeInputTrace: Boolean = false,
+    val ttyDiagnosticCanonicalizeStdio: Boolean = false,
 ) {
     init {
         requireDirectoryName(runtimeDirectoryName, "runtimeDirectoryName")
@@ -106,6 +113,12 @@ data class AndroidRuntimeConfiguration @JvmOverloads constructor(
         }
         require(!ttyDiagnosticDisablePrimaryTraceeForeground || enableTtyIoctlDiagnostics) {
             "ttyDiagnosticDisablePrimaryTraceeForeground requires enableTtyIoctlDiagnostics"
+        }
+        require(!ttyDiagnosticPostWinsizeInputTrace || enableTtyIoctlDiagnostics) {
+            "ttyDiagnosticPostWinsizeInputTrace requires enableTtyIoctlDiagnostics"
+        }
+        require(!ttyDiagnosticCanonicalizeStdio || enableTtyIoctlDiagnostics) {
+            "ttyDiagnosticCanonicalizeStdio requires enableTtyIoctlDiagnostics"
         }
         ttyDiagnosticGuestHelperFileName?.let { fileName ->
             require(fileName.matches(SAFE_NATIVE_LIBRARY_FILE_NAME)) {
