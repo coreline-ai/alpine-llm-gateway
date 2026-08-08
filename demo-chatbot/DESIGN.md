@@ -138,7 +138,7 @@ Android 12 이상은 시스템 Dynamic Color를 기본 허용하되, 브랜드 �
 | 개별 프로필 | `profile_card_{id}` |
 | Provider 편집 루트 | `provider_edit_screen` |
 
-폼 태그는 `provider_type`, `profile_label`, `authorization_endpoint`, `token_endpoint`, `inference_endpoint`, `client_id`, `scopes`, `model`, `callback_port`, `anthropic_beta`, `google_project`, `save_profile`을 사용한다. 동적 Provider 필드는 화면에 없을 때 태그도 렌더링하지 않는다.
+폼 태그는 `provider_type`, `profile_label`, `authorization_endpoint`, `token_endpoint`, `inference_endpoint`, `client_id`, `scopes`, `model`, `callback_port`, `anthropic_beta`, `google_project`, `save_and_login`, `save_for_later`를 사용한다. 동적 Provider 필드는 화면에 없을 때 태그도 렌더링하지 않는다.
 
 ## 검증 기준
 

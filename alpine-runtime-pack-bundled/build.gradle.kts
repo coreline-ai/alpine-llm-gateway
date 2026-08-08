@@ -45,11 +45,11 @@ val lockedArtifacts = mapOf(
     "src/main/assets/alpine-minirootfs.tar.gz.asset" to
         "ead8a4b37867bd19e7417dd078748e2312c0aea364403d96758d63ea8ff261ea",
     "src/main/jniLibs/arm64-v8a/libproot.so" to
-        "336627708766ac2065485c4759048412761ea749787ca3111889f225585cfa4c",
+        "5d2959c3a58f82609c8b95a92496835099a96faa8efc12f68e171a3597b5bc29",
     "src/main/jniLibs/arm64-v8a/libproot-loader.so" to
         "12d2b63e897fd91a334fce23edea5d2419cae4d5fd2a369f05d03ab75682add0",
     "src/main/resources/META-INF/alpine-runtime/sbom.spdx.json" to
-        "2bc527c3aa878765bab4393437886d11caa6f3dca86ba345e59b5c29f7d58b2e",
+        "678ed604a09a22d5e63c3f2289225de0a85b7c868f05e78817f7a54e4d1d42bc",
 )
 
 fun sha256(file: File): String {

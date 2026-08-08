@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "purpose": "Probe-only PRoot TIOCGWINSZ topology and SIGWINCH relay diagnostics; never production runtime artifacts",
+  "abi": "arm64-v8a",
+  "proot": {
+    "repository": "https://github.com/OpenMinis/proot.git",
+    "commit": "8cf13e997cdc9472997aae19df8050c073c9a86c",
+    "build_android_api": 26,
+    "artifact_path": "alpine-runtime-probe/src/main/jniLibs/arm64-v8a/libproot_tty_trace.so",
+    "sha256": "1e71d3bfb02e9a1b408dd64334548cc54f32b561b9619d4431989a1e6db12aba",
+    "size_bytes": 281736,
+    "patch": {
+      "path": "scripts/runtime/experiments/proot-tty-diagnostic.patch",
+      "sha256": "eea44cbdf9e52d3729a118ee1ea6e06dba91fc9699086ad19b0f36deca22462d"
+    },
+    "license_declared": "GPL-2.0-or-later",
+    "production_packaging": false
+  },
+  "guest_winsize_helper": {
+    "source_path": "scripts/runtime/experiments/tty_winsize_probe.c",
+    "build_script": "scripts/runtime/build-tty-winsize-probe.sh",
+    "abi": "arm64-v8a",
+    "build_android_api": 26,
+    "artifact_path": "alpine-runtime-probe/src/main/jniLibs/arm64-v8a/libtty_winsize_probe.so",
+    "sha256": "d7b56fbc41a10edd19e848bab7af91c3ab7cd96dcf3aee593a4f7e6d7e4e7c24",
+    "size_bytes": 856,
+    "safe_output_values": [
+      "dynamic",
+      "initial",
+      "unexpected",
+      "unavailable"
+    ],
+    "production_packaging": false
+  },
+  "resize_relay_proot": {
+    "repository": "https://github.com/OpenMinis/proot.git",
+    "commit": "8cf13e997cdc9472997aae19df8050c073c9a86c",
+    "build_android_api": 26,
+    "artifact_path": "alpine-runtime-probe/src/main/jniLibs/arm64-v8a/libproot_tty_resize_relay.so",
+    "sha256": "d423f4242b9213ff0daa38ea60cfa74cec37ca7b4600b0f16b4c0fa5b4c44df7",
+    "size_bytes": 284696,
+    "patch": {
+      "path": "scripts/runtime/experiments/proot-tty-resize-relay24-virtual-winsize-memfd.patch",
+      "sha256": "2885a7a1a1e8491d5831b067e04361a721fc4e9a99efb5a156ded36d651c96aa"
+    },
+    "license_declared": "GPL-2.0-or-later",
+    "production_packaging": false,
+    "source_level_relay": {
+      "direct_target": "Probe PRoot reads a private inherited four-byte memfd on successful guest TIOCGWINSZ exits",
+      "mode": "VIRTUAL_GUEST_TIOCGWINSZ_MEMFD_NO_POST_LAUNCH_SIGNAL",
+      "guest_routing": "The host bridge sends only a bounded binary frame to a private supervisor; the supervisor stores it in a private memfd and PRoot applies it only when a guest TIOCGWINSZ exits, without host master TIOCSWINSZ or any post-launch signal",
+      "physical_topology_proof": "Relay21 foreground diagnostics remain present; Relay24 records only fixed memfd ready/read-applied stages",
+      "forbidden": [
+        "host master TIOCSWINSZ after terminal launch",
+        "guest PID lookup",
+        "/proc fd reopen for routing",
+        "guest FIFO or polling",
+        "post-launch host or guest signal injection",
+        "terminal payload logging",
+        "production terminal use"
+      ]
+    }
+  },
+  "session_relay_launcher": {
+    "source_path": "scripts/runtime/experiments/tty_session_relay_launcher.c",
+    "build_script": "scripts/runtime/build-tty-session-relay-launcher.sh",
+    "abi": "arm64-v8a",
+    "build_android_api": 26,
+    "artifact_path": "alpine-runtime-probe/src/main/jniLibs/arm64-v8a/libtty_session_relay_launcher.so",
+    "sha256": "be47f2e7b9715d9a7684100195980e43337af97a18051aa427b3777d238bf3f0",
+    "size_bytes": 8336,
+    "production_packaging": false,
+    "contract": {
+      "creates_session": true,
+      "sets_controlling_tty": true,
+      "forbidden": [
+        "guest PID lookup",
+        "/proc fd reopen",
+        "terminal payload logging"
+      ],
+      "supervises_direct_proot_child": true,
+      "uses_event_driven_private_socket": true,
+      "forwards_fixed_resize_signal_only": true,
+      "forwards_direct_proot_child_only": true
+    }
+  },
+  "tracee_foreground_session_launcher": {
+    "source_path": "scripts/runtime/experiments/tty_session_tracee_foreground_launcher.c",
+    "build_script": "scripts/runtime/build-tty-session-tracee-foreground-launcher.sh",
+    "abi": "arm64-v8a",
+    "build_android_api": 26,
+    "artifact_path": "alpine-runtime-probe/src/main/jniLibs/arm64-v8a/libtty_session_tracee_foreground_launcher.so",
+    "sha256": "61b2e86a946ddc5f9a2301b91443fdf392e72efa50812625bdf172303ee6f45b",
+    "size_bytes": 8160,
+    "production_packaging": false,
+    "contract": {
+      "creates_session": true,
+      "sets_controlling_tty": true,
+      "bootstraps_direct_proot_group": true,
+      "acknowledges_fixed_resize_request": true,
+      "forwards_direct_proot_child_only": false,
+      "forbidden": [
+        "guest PID lookup",
+        "/proc fd reopen",
+        "terminal payload logging",
+        "host SIGWINCH injection",
+        "guest SIGWINCH injection"
+      ]
+    }
+  },
+  "host_pty_resize_control": {
+    "source_path": "scripts/runtime/experiments/tty_host_resize_control.c",
+    "build_script": "scripts/runtime/build-tty-host-resize-control.sh",
+    "abi": "arm64-v8a",
+    "build_android_api": 26,
+    "artifact_path": "alpine-runtime-probe/src/main/jniLibs/arm64-v8a/libtty_host_resize_control.so",
+    "sha256": "a02a1a4589ceb6748ceb0f45214e35f98f7ab32c4105850d96cea77a66d94624",
+    "size_bytes": 7648,
+    "production_packaging": false,
+    "contract": {
+      "creates_pty": true,
+      "creates_session": true,
+      "sets_controlling_tty": true,
+      "checks_host_sigwinch_and_later_input": true,
+      "accepted_output": "host_resize_control=PASS",
+      "forbidden": [
+        "app terminal payload",
+        "guest process execution",
+        "credential access",
+        "production terminal use"
+      ]
+    }
+  },
+  "virtual_winsize_session_launcher": {
+    "source_path": "scripts/runtime/experiments/tty_session_virtual_resize_launcher.c",
+    "build_script": "scripts/runtime/build-tty-session-virtual-resize-launcher.sh",
+    "abi": "arm64-v8a",
+    "build_android_api": 26,
+    "artifact_path": "alpine-runtime-probe/src/main/jniLibs/arm64-v8a/libtty_session_virtual_resize_launcher.so",
+    "sha256": "3bf5bde1192e8e07ceaf683ab282a135654572fce2f6fde286cf01a72654dde7",
+    "size_bytes": 9232,
+    "production_packaging": false,
+    "contract": {
+      "creates_session": true,
+      "sets_controlling_tty": true,
+      "supervises_direct_proot_child": true,
+      "uses_event_driven_private_socket": true,
+      "uses_private_inherited_memfd": true,
+      "sends_no_host_tiocswinsz": true,
+      "sends_no_guest_sigwinch": true,
+      "sends_no_post_launch_signal": true,
+      "fixed_request_bytes": 5,
+      "forbidden": [
+        "guest PID lookup",
+        "/proc fd reopen",
+        "guest FIFO or polling",
+        "host TIOCSWINSZ after initial PTY setup",
+        "terminal payload logging",
+        "production terminal use",
+        "post-launch host or guest signal injection"
+      ],
+      "has_no_write_negative_control": true
+    }
+  }
+}

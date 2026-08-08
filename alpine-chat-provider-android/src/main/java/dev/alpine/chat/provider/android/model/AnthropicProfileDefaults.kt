@@ -1,15 +1,11 @@
 package dev.alpine.chat.provider.android.model
 
-/** Reference-only model labels used by the standalone compatibility demo. */
+/**
+ * Legacy binary compatibility surface. Product UI and chat selection never read this catalog.
+ * An application owner must enter a Provider-approved model in its profile instead.
+ */
+@Deprecated("No Anthropic model catalog is bundled without Provider approval")
 object AnthropicProfileDefaults {
-    const val DEFAULT_MODEL = "claude-haiku-4-5"
-
-    val MODELS = listOf(
-        "claude-haiku-4-5",
-        "claude-sonnet-4-6",
-        "claude-sonnet-5",
-        "claude-opus-4-6",
-        "claude-opus-4-8",
-        "claude-fable-5",
-    )
+    const val DEFAULT_MODEL = ""
+    val MODELS: List<String> = emptyList()
 }

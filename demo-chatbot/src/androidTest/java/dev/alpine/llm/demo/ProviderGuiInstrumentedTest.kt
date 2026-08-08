@@ -27,7 +27,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
 import androidx.test.runner.lifecycle.Stage
-import dev.alpine.llm.AnthropicOAuthContract
 import dev.alpine.llm.OAuthTokenStore
 import dev.alpine.chat.provider.android.ProviderDependencies
 import dev.alpine.chat.provider.android.activity.ProviderEditActivity
@@ -40,11 +39,12 @@ import dev.alpine.chat.feature.data.ConversationStore
 import dev.alpine.chat.feature.model.ChatConversation
 import dev.alpine.chat.feature.model.ChatMessage
 import dev.alpine.chat.feature.model.ChatRole
-import dev.alpine.chat.provider.android.model.AnthropicProfileDefaults
-import dev.alpine.chat.provider.android.model.CodexProfileDefaults
+import dev.alpine.chat.feature.backend.ChatBackendStreamResult
 import dev.alpine.chat.provider.android.model.GeminiProfileDefaults
 import dev.alpine.chat.provider.android.model.ProviderType
-import dev.alpine.chat.provider.android.model.XaiProfileDefaults
+import dev.alpine.chat.provider.android.session.ChatCompletionSession
+import dev.alpine.chat.provider.android.session.ProviderAuthorizationRecoveryStore
+import dev.alpine.llm.OAuthAuthenticationState
 import dev.alpine.llm.demo.support.FakeProviderScenario
 import dev.alpine.llm.demo.support.ScriptedChatCompletionSession
 import dev.alpine.llm.demo.support.testProfile
@@ -57,6 +57,8 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.awaitCancellation
 
 @RunWith(AndroidJUnit4::class)
 class ProviderGuiInstrumentedTest {
@@ -73,6 +75,7 @@ class ProviderGuiInstrumentedTest {
     @Before
     fun resetTestState() {
         clearProfiles()
+        clearAuthorizationRecovery()
         clearConversations()
         clearAssistantDefaults()
         ProviderDependencies.installSessionFactoryForTests(null)
@@ -89,6 +92,7 @@ class ProviderGuiInstrumentedTest {
         oauthTokenIds.forEach(tokenStore::delete)
         oauthTokenIds.clear()
         clearProfiles()
+        clearAuthorizationRecovery()
         clearConversations()
         clearAssistantDefaults()
     }
@@ -102,8 +106,9 @@ class ProviderGuiInstrumentedTest {
         compose.onNodeWithTag("provider_selector").assertIsDisplayed()
         compose.onNodeWithTag("message_input").assertIsDisplayed()
         compose.onNodeWithTag("assistant_mode_selector").assertIsDisplayed()
-        compose.onAllNodesWithText("Connect an LLM to start", substring = true)
-            .assertCountEquals(1)
+        compose.onNodeWithText(
+            "Codex, Claude, Gemini 또는 Grok을 연결한 뒤 모델을 선택하세요.",
+        ).assertIsDisplayed()
     }
 
     @Test
@@ -174,8 +179,7 @@ class ProviderGuiInstrumentedTest {
         compose.onNodeWithTag("model_option_gemini-3.5-flash").performClick()
         scrollToFormTag("google_project")
         compose.onNodeWithTag("google_project").performTextInput("test-project")
-        scrollToFormTag("save_profile")
-        compose.onNodeWithTag("save_profile").performScrollTo().performClick()
+        compose.onNodeWithTag("save_for_later").assertIsDisplayed().performClick()
         compose.waitUntil(timeoutMillis = 5_000) {
             currentActivity?.isFinishing == true
         }
@@ -194,16 +198,16 @@ class ProviderGuiInstrumentedTest {
     }
 
     @Test
-    fun eachProviderFormShowsOnlyItsAdditionalField() {
+    fun eachProviderFormExposesOnlySafeOwnerConfigurationFields() {
         val expectations = listOf(
-            Triple(ProviderType.ANTHROPIC, true, false),
-            Triple(ProviderType.GEMINI, false, true),
-            Triple(ProviderType.OPENAI_COMPATIBLE, false, false),
-            Triple(ProviderType.CODEX, false, false),
-            Triple(ProviderType.XAI, false, false),
+            ProviderType.ANTHROPIC to false,
+            ProviderType.GEMINI to true,
+            ProviderType.OPENAI_COMPATIBLE to false,
+            ProviderType.CODEX to false,
+            ProviderType.XAI to false,
         )
 
-        expectations.forEach { (type, hasAnthropic, hasGoogle) ->
+        expectations.forEach { (type, hasGoogle) ->
             val activity = launch(
                 ProviderEditActivity::class.java,
                 Intent(context, ProviderEditActivity::class.java)
@@ -216,12 +220,7 @@ class ProviderGuiInstrumentedTest {
                 tag = "inference_endpoint",
                 expected = type.inferenceEndpointPlaceholder,
             )
-            if (hasAnthropic) {
-                scrollToFormTag("anthropic_beta")
-                compose.onNodeWithTag("anthropic_beta").assertExists()
-            } else {
-                compose.onNodeWithTag("anthropic_beta").assertDoesNotExist()
-            }
+            compose.onNodeWithTag("anthropic_beta").assertDoesNotExist()
             if (hasGoogle) {
                 scrollToFormTag("google_project")
                 compose.onNodeWithTag("google_project").assertExists()
@@ -236,7 +235,7 @@ class ProviderGuiInstrumentedTest {
     }
 
     @Test
-    fun codexFormRequiresHostClientIdAndAllowsModelSelection() {
+    fun codexFormRequiresCompleteHostOwnedConfigurationBeforeSave() {
         launch(
             ProviderEditActivity::class.java,
             Intent(context, ProviderEditActivity::class.java)
@@ -246,108 +245,99 @@ class ProviderGuiInstrumentedTest {
                 ),
         )
 
+        compose.onNodeWithTag("save_for_later").assertIsDisplayed().performClick()
+        scrollToFormTag("authorization_endpoint")
+        compose.onNodeWithText("Authorization endpoint 값을 입력하세요.").assertIsDisplayed()
+        compose.onNodeWithTag("authorization_endpoint")
+            .performTextInput("https://identity.example.test/oauth/authorize")
+        scrollToFormTag("token_endpoint")
+        compose.onNodeWithTag("token_endpoint")
+            .performTextInput("https://identity.example.test/oauth/token")
         scrollToFormTag("client_id")
         compose.onNodeWithTag("client_id").performTextInput("host-owned-codex-client")
+        scrollToFormTag("scopes")
+        compose.onNodeWithTag("scopes").performTextInput("openid profile offline_access")
         scrollToFormTag("model")
-        assertEditableTextContains("model", CodexProfileDefaults.DEFAULT_MODEL)
-        compose.onNodeWithTag("model").performClick()
-        compose.onNodeWithTag("model_option_gpt-5.6-sol").performClick()
-        assertEditableTextContains("model", "gpt-5.6-sol")
+        compose.onNodeWithTag("model").performTextInput("owner-approved-model")
 
-        scrollToFormTag("save_profile")
-        compose.onNodeWithTag("save_profile").performClick()
+        compose.onNodeWithTag("save_for_later").assertIsDisplayed().performClick()
         compose.waitUntil(timeoutMillis = 5_000) {
             currentActivity?.isFinishing == true
         }
 
         val saved = ProviderProfileStore(context).load().single()
-        assertEquals("host-owned-codex-client", saved.clientId)
-        assertEquals("gpt-5.6-sol", saved.model)
-    }
-
-    @Test
-    fun anthropicFormRequiresHostClientIdAndAllowsModelSelection() {
-        launch(
-            ProviderEditActivity::class.java,
-            Intent(context, ProviderEditActivity::class.java)
-                .putExtra(
-                    ProviderEditActivity.EXTRA_PROVIDER_TYPE,
-                    ProviderType.ANTHROPIC.wireName,
-                ),
-        )
-
-        scrollToFormTag("authorization_endpoint")
-        assertEditableTextContains(
-            "authorization_endpoint",
-            AnthropicOAuthContract.AUTHORIZATION_ENDPOINT,
-        )
-        scrollToFormTag("client_id")
-        compose.onNodeWithTag("client_id").performTextInput("host-owned-anthropic-client")
-        scrollToFormTag("callback_port")
-        assertEditableTextContains("callback_port", "54545")
-        scrollToFormTag("model")
-        assertEditableTextContains("model", AnthropicProfileDefaults.DEFAULT_MODEL)
-        compose.onNodeWithTag("model").performClick()
-        compose.onNodeWithTag("model_option_claude-sonnet-4-6").performClick()
-        scrollToFormTag("anthropic_beta")
-        assertEditableTextContains("anthropic_beta", AnthropicOAuthContract.OAUTH_BETA)
-
-        scrollToFormTag("save_profile")
-        compose.onNodeWithTag("save_profile").performClick()
-        compose.waitUntil(timeoutMillis = 5_000) {
-            currentActivity?.isFinishing == true
-        }
-
-        val saved = ProviderProfileStore(context).load().single()
-        assertEquals(ProviderType.ANTHROPIC, saved.type)
-        assertEquals("claude-sonnet-4-6", saved.model)
+        assertEquals(ProviderType.CODEX, saved.type)
+        assertEquals("owner-approved-model", saved.model)
         assertTrue(saved.validationErrors().isEmpty())
     }
 
     @Test
-    fun xaiFormRequiresHostClientIdAndAllowsGrokModelSelection() {
-        launch(
+    fun providerDraftSurvivesRecreationAndProtectsDirtyBackNavigation() {
+        val oldActivity = launch(
             ProviderEditActivity::class.java,
             Intent(context, ProviderEditActivity::class.java)
                 .putExtra(
                     ProviderEditActivity.EXTRA_PROVIDER_TYPE,
-                    ProviderType.XAI.wireName,
+                    ProviderType.OPENAI_COMPATIBLE.wireName,
                 ),
         )
 
-        scrollToFormTag("client_id")
-        compose.onNodeWithTag("client_id").performTextInput("host-owned-xai-client")
-        scrollToFormTag("callback_port")
-        assertEditableTextContains("callback_port", "56121")
-        scrollToFormTag("model")
-        assertEditableTextContains("model", XaiProfileDefaults.DEFAULT_MODEL)
-        compose.onNodeWithTag("model").performClick()
-        compose.onNodeWithTag("model_option_grok-3-mini-fast").performClick()
-        assertEditableTextContains("model", "grok-3-mini-fast")
+        scrollToFormTag("profile_label")
+        compose.onNodeWithTag("profile_label").performTextClearance()
+        compose.onNodeWithTag("profile_label").performTextInput("Unsaved lifecycle profile")
 
-        scrollToFormTag("save_profile")
-        compose.onNodeWithTag("save_profile").performClick()
-        compose.waitUntil(timeoutMillis = 5_000) {
-            currentActivity?.isFinishing == true
+        // adjustResize must keep the sticky action reachable while the IME is open.
+        compose.onNodeWithTag("save_for_later").assertIsDisplayed().performClick()
+        scrollToFormTag("client_id")
+        compose.onNodeWithText("OAuth Public Client ID를 입력하세요.").assertIsDisplayed()
+        hideKeyboard()
+        scrollToFormTag("protocol_details_toggle")
+        compose.onNodeWithTag("protocol_details_toggle").performClick()
+        compose.onNodeWithText("보기").assertIsDisplayed()
+
+        instrumentation.runOnMainSync { oldActivity.recreate() }
+        compose.waitUntil(timeoutMillis = 5_000) { oldActivity.isDestroyed }
+        instrumentation.runOnMainSync {
+            currentActivity = ActivityLifecycleMonitorRegistry.getInstance()
+                .getActivitiesInStage(Stage.RESUMED)
+                .filterIsInstance<ProviderEditActivity>()
+                .single()
         }
 
-        val saved = ProviderProfileStore(context).load().single()
-        assertEquals(ProviderType.XAI, saved.type)
-        assertEquals("grok-3-mini-fast", saved.model)
+        scrollToFormTag("profile_label")
+        assertEditableTextContains("profile_label", "Unsaved lifecycle profile")
+        scrollToFormTag("client_id")
+        compose.onNodeWithText("OAuth Public Client ID를 입력하세요.").assertIsDisplayed()
+        scrollToFormTag("protocol_details_toggle")
+        compose.onNodeWithText("보기").assertIsDisplayed()
+
+        compose.onNode(hasContentDescription("뒤로")).performClick()
+        compose.onNodeWithText("변경사항을 버릴까요?").assertIsDisplayed()
+        compose.onNodeWithText("취소").performClick()
+        scrollToFormTag("profile_label")
+        assertEditableTextContains("profile_label", "Unsaved lifecycle profile")
+
+        instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        compose.onNodeWithText("변경사항을 버릴까요?").assertIsDisplayed()
+        compose.onNodeWithText("버리고 나가기").performClick()
+        compose.waitUntil(timeoutMillis = 5_000) {
+            currentActivity?.isFinishing == true || currentActivity?.isDestroyed == true
+        }
+        assertTrue(ProviderProfileStore(context).load().isEmpty())
     }
 
     @Test
     fun profileStoreSupportsCrudLabelsAndMalformedDataRecovery() {
         val first = testProfile(
             id = "crud-first",
-            label = "Claude",
+            label = ProviderType.ANTHROPIC.displayName,
             type = ProviderType.ANTHROPIC,
             model = "claude-test",
             createdAtMs = 1,
         )
         val second = testProfile(
             id = "crud-second",
-            label = "Claude 2",
+            label = "${ProviderType.ANTHROPIC.displayName} 2",
             type = ProviderType.ANTHROPIC,
             model = "claude-test-2",
             createdAtMs = 2,
@@ -355,7 +345,7 @@ class ProviderGuiInstrumentedTest {
         val store = ProviderProfileStore(context)
 
         store.upsert(first)
-        assertEquals("Claude 2", store.nextLabel(ProviderType.ANTHROPIC))
+        assertEquals("${ProviderType.ANTHROPIC.displayName} 2", store.nextLabel(ProviderType.ANTHROPIC))
         store.upsert(second)
         store.upsert(first.copy(label = "Renamed Claude"))
         assertEquals("Renamed Claude", store.find(first.id)?.label)
@@ -398,43 +388,43 @@ class ProviderGuiInstrumentedTest {
 
         launch(ProviderProfilesActivity::class.java)
         compose.onNode(
-            hasText("Logout") and hasAnyAncestor(hasTestTag("profile_card_${first.id}")),
+            hasText("로그아웃") and hasAnyAncestor(hasTestTag("profile_card_${first.id}")),
         ).performClick()
         compose.waitUntil(timeoutMillis = 5_000) {
             scenario.logoutCount(first.id) == 1
         }
         compose.onNode(
-            hasText("Not connected") and hasAnyAncestor(hasTestTag("profile_card_${first.id}")),
+            hasText("연결 안 됨") and hasAnyAncestor(hasTestTag("profile_card_${first.id}")),
         ).assertExists()
         assertEquals(0, scenario.logoutCount(second.id))
 
         compose.onNode(
-            hasText("Connect") and hasAnyAncestor(hasTestTag("profile_card_${first.id}")),
+            hasText("로그인") and hasAnyAncestor(hasTestTag("profile_card_${first.id}")),
         ).performClick()
         compose.waitUntil(timeoutMillis = 5_000) {
             scenario.authorizeCount(first.id) == 1
         }
         compose.onNode(
-            hasText("Connected") and hasAnyAncestor(hasTestTag("profile_card_${first.id}")),
+            hasText("연결됨") and hasAnyAncestor(hasTestTag("profile_card_${first.id}")),
         ).assertExists()
 
         compose.onNode(
-            hasText("Reconnect") and hasAnyAncestor(hasTestTag("profile_card_${second.id}")),
+            hasText("다시 로그인") and hasAnyAncestor(hasTestTag("profile_card_${second.id}")),
         ).performClick()
         compose.waitUntil(timeoutMillis = 5_000) {
             scenario.authorizeCount(second.id) == 1
         }
         compose.onNode(
-            hasText("Connected") and hasAnyAncestor(hasTestTag("profile_card_${second.id}")),
+            hasText("연결됨") and hasAnyAncestor(hasTestTag("profile_card_${second.id}")),
         ).assertExists()
 
         compose.onNode(
-            hasContentDescription("Profile actions") and
+            hasContentDescription("${second.label} 작업 메뉴") and
                 hasAnyAncestor(hasTestTag("profile_card_${second.id}")),
         ).performClick()
-        compose.onNodeWithText("Delete").performClick()
+        compose.onNodeWithText("삭제").performClick()
         compose.waitForIdle()
-        compose.onNodeWithText("Delete").performClick()
+        compose.onNodeWithText("삭제").performClick()
         compose.waitUntil(timeoutMillis = 5_000) {
             store.find(second.id) == null
         }
@@ -442,6 +432,146 @@ class ProviderGuiInstrumentedTest {
         compose.onNodeWithTag("profile_card_${second.id}").assertDoesNotExist()
         assertEquals(1, scenario.logoutCount(first.id))
         assertEquals(1, scenario.logoutCount(second.id))
+    }
+
+    @Test
+    fun authorizationActivityRecreationRequiresOneExplicitRestartAndNeverAutoResumes() {
+        val profile = testProfile(
+            id = "oauth-recreation-profile",
+            label = "Lifecycle Login",
+            type = ProviderType.OPENAI_COMPATIBLE,
+            model = "lifecycle-model",
+            createdAtMs = 1,
+        )
+        ProviderProfileStore(context).upsert(profile)
+        val authorizeCount = AtomicInteger()
+        val session = object : ChatCompletionSession {
+            override val profile = profile
+
+            override fun authenticationState(): OAuthAuthenticationState =
+                OAuthAuthenticationState.SignedOut
+
+            override suspend fun authorize(activity: Activity) {
+                authorizeCount.incrementAndGet()
+                awaitCancellation()
+            }
+
+            override suspend fun stream(requestJson: String): ChatBackendStreamResult =
+                ChatBackendStreamResult()
+
+            override fun logout() = Unit
+
+            override fun cancelAuthorization() = Unit
+        }
+        ProviderDependencies.installSessionFactoryForTests { _, _ -> session }
+
+        val oldActivity = launch(ProviderProfilesActivity::class.java)
+        compose.onNode(
+            hasText("로그인") and hasAnyAncestor(hasTestTag("profile_card_${profile.id}")),
+        ).performClick()
+        compose.waitUntil(timeoutMillis = 5_000) { authorizeCount.get() == 1 }
+        compose.onNodeWithTag("authorization_progress_${profile.id}").assertIsDisplayed()
+
+        instrumentation.runOnMainSync { oldActivity.recreate() }
+        compose.waitUntil(timeoutMillis = 5_000) { oldActivity.isDestroyed }
+        updateCurrentProviderActivity()
+
+        compose.onNodeWithText("오류 · AUTH_FLOW_INTERRUPTED").assertIsDisplayed()
+        compose.onNodeWithText(
+            "로그인 도중 앱 실행이 중단되었습니다.\n" +
+                "기존 로그인 창을 닫고 처음부터 다시 로그인하세요.",
+        ).assertIsDisplayed()
+        assertEquals(1, authorizeCount.get())
+
+        compose.onNode(
+            hasText("로그인") and hasAnyAncestor(hasTestTag("profile_card_${profile.id}")),
+        ).performClick()
+        compose.waitUntil(timeoutMillis = 5_000) { authorizeCount.get() == 2 }
+        compose.onNodeWithTag("cancel_authorization_${profile.id}").performClick()
+        compose.waitUntil(timeoutMillis = 5_000) {
+            authorizationRecoveryPreferences().all.isEmpty()
+        }
+
+        val restartedActivity = checkNotNull(currentActivity)
+        instrumentation.runOnMainSync { restartedActivity.recreate() }
+        compose.waitUntil(timeoutMillis = 5_000) { restartedActivity.isDestroyed }
+        updateCurrentProviderActivity()
+        compose.onNodeWithText("오류 · AUTH_FLOW_INTERRUPTED").assertDoesNotExist()
+        assertEquals(2, authorizeCount.get())
+    }
+
+    @Test
+    fun orphanedEncryptedTransactionIsDiscardedAndShownAsRedactedInterruption() {
+        val profile = testProfile(
+            id = "orphaned-oauth-profile",
+            label = "Orphaned Login",
+            type = ProviderType.OPENAI_COMPATIBLE,
+            model = "orphan-model",
+            createdAtMs = 1,
+        )
+        ProviderProfileStore(context).upsert(profile)
+        val scenario = FakeProviderScenario().apply {
+            respond(profile.id, "unused")
+            startSignedOut(profile.id)
+        }
+        ProviderDependencies.installSessionFactoryForTests { _, selected -> scenario.create(selected) }
+        oauthTokenIds += profile.id
+        OAuthTokenStore(context).saveTransaction(
+            profile.id,
+            OAuthTokenStore.Transaction(
+                state = "must-not-be-rendered-state",
+                verifier = "must-not-be-rendered-verifier",
+                createdAtMs = System.currentTimeMillis(),
+            ),
+        )
+
+        launch(ProviderProfilesActivity::class.java)
+
+        compose.onNodeWithText("오류 · AUTH_FLOW_INTERRUPTED").assertIsDisplayed()
+        compose.onAllNodesWithText("must-not-be-rendered", substring = true).assertCountEquals(0)
+        assertFalse(OAuthTokenStore(context).hasTransaction(profile.id))
+        assertTrue(authorizationRecoveryPreferences().all.isNotEmpty())
+        assertEquals(0, scenario.authorizeCount(profile.id))
+    }
+
+    @Test
+    fun storedSuccessfulAuthenticationWinsOverStaleLifecycleMarker() {
+        val profile = testProfile(
+            id = "completed-oauth-profile",
+            label = "Completed Login",
+            type = ProviderType.OPENAI_COMPATIBLE,
+            model = "completed-model",
+            createdAtMs = 1,
+        )
+        ProviderProfileStore(context).upsert(profile)
+        val scenario = FakeProviderScenario().apply { respond(profile.id, "unused") }
+        ProviderDependencies.installSessionFactoryForTests { _, selected -> scenario.create(selected) }
+        val token = OAuthTokenStore.Token(
+            accessToken = "successful-access-token",
+            refreshToken = "successful-refresh-token",
+        )
+        oauthTokenIds += profile.id
+        OAuthTokenStore(context).apply {
+            save(profile.id, token)
+            saveTransaction(
+                profile.id,
+                OAuthTokenStore.Transaction(
+                    state = "stale-state",
+                    verifier = "stale-verifier",
+                    createdAtMs = System.currentTimeMillis(),
+                ),
+            )
+        }
+        ProviderAuthorizationRecoveryStore(context).begin(profile.id)
+
+        launch(ProviderProfilesActivity::class.java)
+
+        compose.onNodeWithText("연결됨").assertIsDisplayed()
+        compose.onNodeWithText("오류 · AUTH_FLOW_INTERRUPTED").assertDoesNotExist()
+        assertEquals(token, OAuthTokenStore(context).load(profile.id))
+        assertFalse(OAuthTokenStore(context).hasTransaction(profile.id))
+        assertTrue(authorizationRecoveryPreferences().all.isEmpty())
+        assertEquals(0, scenario.authorizeCount(profile.id))
     }
 
     @Test
@@ -487,8 +617,7 @@ class ProviderGuiInstrumentedTest {
             .performTextClearance()
         compose.onNodeWithTag("client_id")
             .performTextInput("replacement-public-client")
-        scrollToFormTag("save_profile")
-        compose.onNodeWithTag("save_profile").performClick()
+        compose.onNodeWithTag("save_for_later").assertIsDisplayed().performClick()
         compose.waitUntil(timeoutMillis = 5_000) {
             currentActivity?.isFinishing == true
         }
@@ -593,12 +722,18 @@ class ProviderGuiInstrumentedTest {
 
         compose.onNodeWithText("Result").assertExists()
         compose.onNodeWithText("**Bold** answer.").assertDoesNotExist()
-        compose.onNodeWithTag("message_code_block").assertIsDisplayed()
+        compose.onNodeWithTag("message_code_block", useUnmergedTree = true)
+            .performScrollTo()
+            .assertIsDisplayed()
         compose.onNodeWithText("val answer = 42").assertExists()
-        compose.onNodeWithTag("message_markdown_table").assertIsDisplayed()
+        compose.onNodeWithTag("message_markdown_table", useUnmergedTree = true)
+            .performScrollTo()
+            .assertIsDisplayed()
         compose.onNodeWithText("Alpine").assertExists()
         compose.onNodeWithText("[unsafe](javascript:alert(1))", substring = true).assertExists()
-        compose.onNodeWithText("Official docs").performClick()
+        compose.onNodeWithText("Official docs", useUnmergedTree = true)
+            .performScrollTo()
+            .performClick()
         compose.onNodeWithTag("markdown_link_dialog").assertIsDisplayed()
         compose.onNodeWithText("https://alpinelinux.org").assertIsDisplayed()
         compose.onNodeWithTag("markdown_link_cancel").performClick()
@@ -661,12 +796,12 @@ class ProviderGuiInstrumentedTest {
     }
 
     @Test
-    fun codexModelCanBeSwitchedAndPersistedDirectlyFromChat() {
+    fun verifiedGeminiModelCanBeSwitchedAndPersistedDirectlyFromChat() {
         val profile = testProfile(
-            id = "codex-quick-switch",
-            label = "Codex",
-            type = ProviderType.CODEX,
-            model = "gpt-5.6-luna",
+            id = "gemini-quick-switch",
+            label = "Gemini",
+            type = ProviderType.GEMINI,
+            model = "gemini-3.6-flash",
             createdAtMs = 1,
         )
         val store = ProviderProfileStore(context)
@@ -681,12 +816,12 @@ class ProviderGuiInstrumentedTest {
         launch(MainActivity::class.java)
         compose.onNodeWithTag("model_quick_switcher").assertIsDisplayed()
         compose.onNodeWithTag("model_quick_switcher")
-            .performScrollToNode(hasTestTag("quick_model_gpt-5.4-mini"))
-        compose.onNodeWithTag("quick_model_gpt-5.4-mini").performClick()
+            .performScrollToNode(hasTestTag("quick_model_gemini-3.5-flash"))
+        compose.onNodeWithTag("quick_model_gemini-3.5-flash").performClick()
         compose.waitUntil(timeoutMillis = 5_000) {
-            store.find(profile.id)?.model == "gpt-5.4-mini"
+            store.find(profile.id)?.model == "gemini-3.5-flash"
         }
-        compose.onNodeWithTag("quick_model_gpt-5.4-mini").assertIsSelected()
+        compose.onNodeWithTag("quick_model_gemini-3.5-flash").assertIsSelected()
 
         compose.onNodeWithTag("message_input").performTextInput("Use the faster model")
         compose.onNodeWithTag("send_button").performClick()
@@ -694,7 +829,7 @@ class ProviderGuiInstrumentedTest {
         waitForText("Quick model answer")
 
         assertEquals(1, scenario.requestCount(profile.id))
-        compose.onNodeWithText("Codex · gpt-5.4-mini", substring = true).assertExists()
+        compose.onNodeWithText("Gemini · gemini-3.5-flash", substring = true).assertExists()
     }
 
     @Test
@@ -722,10 +857,11 @@ class ProviderGuiInstrumentedTest {
         compose.onNodeWithTag("manage_providers").assertIsEnabled()
         compose.onNodeWithTag("message_input").assertIsEnabled()
         compose.onNodeWithTag("message_input").performTextInput("Draft next request")
+        hideKeyboard()
 
         compose.onNodeWithTag("assistant_mode_selector").performClick()
         compose.onNodeWithText(
-            "Changes apply to the next message. The current response continues unchanged.",
+            "변경 내용은 다음 메시지부터 적용되며 현재 답변은 그대로 계속됩니다.",
         ).assertIsDisplayed()
         instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         compose.waitForIdle()
@@ -739,6 +875,127 @@ class ProviderGuiInstrumentedTest {
         compose.onNodeWithTag("send_button").assertIsEnabled()
         compose.onNodeWithTag("message_input").assertIsEnabled()
         assertEditableTextContains("message_input", "Draft next request")
+        assertEquals(1, session.requestCount)
+    }
+
+    @Test
+    fun backgroundGenerationCanBeStoppedFromHistoryWithoutLosingTheNewDraft() {
+        val profile = testProfile(
+            id = "background-stop-profile",
+            label = "Background LLM",
+            type = ProviderType.OPENAI_COMPATIBLE,
+            model = "background-model",
+            createdAtMs = 1,
+        )
+        ProviderProfileStore(context).upsert(profile)
+        val session = ScriptedChatCompletionSession.slow(profile)
+        ProviderDependencies.installSessionFactoryForTests { _, _ -> session }
+
+        launch(MainActivity::class.java)
+        compose.onNodeWithTag("message_input").performTextInput("Start background stream")
+        compose.onNodeWithTag("send_button").performClick()
+        hideKeyboard()
+        waitForText("Slow partial answer")
+
+        compose.onNodeWithTag("new_chat").performClick()
+        compose.onNodeWithTag("background_generation_count").assertIsDisplayed()
+        compose.onNodeWithText("다른 대화 1개 생성 중").assertIsDisplayed()
+        compose.onNodeWithTag("message_input").performTextInput("Draft survives background stop")
+        hideKeyboard()
+
+        compose.onNodeWithTag("conversation_history").performClick()
+        compose.onNodeWithTag("conversation_history_list").assertIsDisplayed()
+        compose.onNodeWithText("생성 중").assertIsDisplayed()
+        compose.onNode(hasContentDescription("Start background stream 답변 생성 중지"))
+            .performClick()
+        compose.waitUntil(timeoutMillis = 5_000) {
+            compose.onAllNodesWithText("중지됨").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("conversation_history_list").assertIsDisplayed()
+
+        compose.onNode(
+            hasText("Slow partial answer") and
+                hasAnyAncestor(hasTestTag("conversation_history_list")),
+        ).performClick()
+        compose.onNodeWithText("Slow partial answer", substring = true).assertIsDisplayed()
+        assertTrue(compose.onAllNodesWithText("Stopped").fetchSemanticsNodes().isNotEmpty())
+
+        compose.onNodeWithTag("conversation_history").performClick()
+        compose.onNode(
+            hasText("새 대화") and
+                hasAnyAncestor(hasTestTag("conversation_history_list")),
+        ).performClick()
+        assertEditableTextContains("message_input", "Draft survives background stop")
+        assertEquals(1, session.requestCount)
+    }
+
+    @Test
+    fun activeStreamSurvivesProviderManagementRoundTripAndCanStillBeStopped() {
+        val profile = testProfile(
+            id = "background-activity-profile",
+            label = "Lifecycle LLM",
+            type = ProviderType.OPENAI_COMPATIBLE,
+            model = "lifecycle-model",
+            createdAtMs = 1,
+        )
+        ProviderProfileStore(context).upsert(profile)
+        val session = ScriptedChatCompletionSession.slow(profile)
+        ProviderDependencies.installSessionFactoryForTests { _, _ -> session }
+
+        launch(MainActivity::class.java)
+        compose.onNodeWithTag("message_input").performTextInput("Keep generating in background")
+        compose.onNodeWithTag("send_button").performClick()
+        hideKeyboard()
+        waitForText("Slow partial answer")
+
+        compose.onNodeWithTag("manage_providers").performClick()
+        compose.onNodeWithTag("provider_list_screen").assertIsDisplayed()
+        instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        compose.waitUntil(timeoutMillis = 5_000) {
+            compose.onAllNodes(hasTestTag("chat_screen")).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        compose.onNodeWithTag("stop_button").assertIsDisplayed().performClick()
+        compose.waitUntil(timeoutMillis = 5_000) {
+            compose.onAllNodesWithText("Stopped").fetchSemanticsNodes().isNotEmpty()
+        }
+        assertEquals(1, session.requestCount)
+    }
+
+    @Test
+    fun activeStreamSurvivesActivityRecreationWithoutDuplicateDispatch() {
+        val profile = testProfile(
+            id = "stream-recreation-profile",
+            label = "Recreation LLM",
+            type = ProviderType.OPENAI_COMPATIBLE,
+            model = "recreation-model",
+            createdAtMs = 1,
+        )
+        ProviderProfileStore(context).upsert(profile)
+        val session = ScriptedChatCompletionSession.slow(profile)
+        ProviderDependencies.installSessionFactoryForTests { _, _ -> session }
+
+        val oldActivity = launch(MainActivity::class.java)
+        compose.onNodeWithTag("message_input").performTextInput("Keep stream across recreation")
+        compose.onNodeWithTag("send_button").performClick()
+        hideKeyboard()
+        waitForText("Slow partial answer")
+
+        instrumentation.runOnMainSync { oldActivity.recreate() }
+        compose.waitUntil(timeoutMillis = 5_000) { oldActivity.isDestroyed }
+        instrumentation.runOnMainSync {
+            currentActivity = ActivityLifecycleMonitorRegistry.getInstance()
+                .getActivitiesInStage(Stage.RESUMED)
+                .filterIsInstance<MainActivity>()
+                .single()
+        }
+
+        compose.onNodeWithTag("chat_screen").assertIsDisplayed()
+        compose.onNodeWithText("Slow partial answer", substring = true).assertIsDisplayed()
+        compose.onNodeWithTag("stop_button").assertIsDisplayed().performClick()
+        compose.waitUntil(timeoutMillis = 5_000) {
+            compose.onAllNodesWithText("Stopped").fetchSemanticsNodes().isNotEmpty()
+        }
         assertEquals(1, session.requestCount)
     }
 
@@ -878,7 +1135,7 @@ class ProviderGuiInstrumentedTest {
         waitForText("Saved history answer")
 
         compose.onNodeWithTag("new_chat").performClick()
-        compose.onNodeWithText("Delete conversation?").assertDoesNotExist()
+        compose.onNodeWithText("대화를 삭제할까요?").assertDoesNotExist()
         compose.onNodeWithTag("message_input").performTextInput("Second saved topic")
         compose.onNodeWithTag("send_button").performClick()
         hideKeyboard()
@@ -947,10 +1204,10 @@ class ProviderGuiInstrumentedTest {
 
         compose.onNodeWithTag("conversation_history").performClick()
         compose.onNode(
-            hasContentDescription("Conversation actions") and
+            hasContentDescription("대화 작업", substring = true) and
                 hasAnyAncestor(hasTestTag("conversation_item_$conversationId")),
         ).performClick()
-        compose.onNodeWithText("Rename").performClick()
+        compose.onNodeWithText("이름 변경").performClick()
         compose.onNodeWithTag("rename_conversation_input").performTextClearance()
         compose.onNodeWithTag("rename_conversation_input").performTextInput("Renamed local chat")
         compose.onNodeWithTag("confirm_rename_conversation").performClick()
@@ -968,19 +1225,19 @@ class ProviderGuiInstrumentedTest {
         ).assertExists()
 
         compose.onNode(
-            hasContentDescription("Conversation actions") and
+            hasContentDescription("대화 작업", substring = true) and
                 hasAnyAncestor(hasTestTag("conversation_item_$conversationId")),
         ).performClick()
-        compose.onNodeWithText("Delete").performClick()
-        compose.onNodeWithText("Delete conversation?").assertIsDisplayed()
-        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithText("삭제").performClick()
+        compose.onNodeWithText("대화를 삭제할까요?").assertIsDisplayed()
+        compose.onNodeWithText("취소").performClick()
         compose.onNodeWithTag("conversation_item_$conversationId").assertExists()
 
         compose.onNode(
-            hasContentDescription("Conversation actions") and
+            hasContentDescription("대화 작업", substring = true) and
                 hasAnyAncestor(hasTestTag("conversation_item_$conversationId")),
         ).performClick()
-        compose.onNodeWithText("Delete").performClick()
+        compose.onNodeWithText("삭제").performClick()
         compose.onNodeWithTag("confirm_delete_conversation").performClick()
         compose.waitUntil(timeoutMillis = 5_000) {
             compose.onAllNodes(hasTestTag("conversation_item_$conversationId"))
@@ -1153,11 +1410,31 @@ class ProviderGuiInstrumentedTest {
         return activity
     }
 
+    private fun updateCurrentProviderActivity() {
+        instrumentation.runOnMainSync {
+            currentActivity = ActivityLifecycleMonitorRegistry.getInstance()
+                .getActivitiesInStage(Stage.RESUMED)
+                .filterIsInstance<ProviderProfilesActivity>()
+                .single()
+        }
+        instrumentation.waitForIdleSync()
+        compose.waitForIdle()
+    }
+
     private fun clearProfiles() {
         context.getSharedPreferences(
             ProviderProfileStore.FILE_NAME,
             android.content.Context.MODE_PRIVATE,
         ).edit().clear().commit()
+    }
+
+    private fun authorizationRecoveryPreferences() = context.getSharedPreferences(
+        ProviderAuthorizationRecoveryStore.FILE_NAME,
+        Context.MODE_PRIVATE,
+    )
+
+    private fun clearAuthorizationRecovery() {
+        authorizationRecoveryPreferences().edit().clear().commit()
     }
 
     private fun clearConversations() {

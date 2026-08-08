@@ -19,7 +19,7 @@ class AndroidModuleBoundaryTests(unittest.TestCase):
         "alpine-runtime-pack-x86_64": {"alpine-runtime-api"},
         "alpine-llm-bridge": {"alpine-runtime-api", "android"},
         "alpine-llm-gateway-pack-bundled": {"alpine-llm-bridge"},
-        "alpine-runtime-ui-compose": {"alpine-runtime-host"},
+        "alpine-runtime-ui-compose": {"alpine-runtime-host", "alpine-workspace-api"},
         "alpine-runtime-testkit": {"alpine-runtime-api"},
         "alpine-runtime-host": {"alpine-runtime-api"},
         "alpine-chat-routing": set(),
@@ -73,6 +73,167 @@ class AndroidModuleBoundaryTests(unittest.TestCase):
         self.assertFalse(
             (ROOT / "alpine-runtime-probe/src/debug/assets/alpine-minirootfs.tar.gz.asset").exists()
         )
+
+    def test_probe_tty_diagnostic_is_locked_and_excluded_from_production_pack(self) -> None:
+        lock = json.loads(
+            (ROOT / "runtime/probe/tty-diagnostic-artifacts.lock.json").read_text()
+        )
+        self.assertFalse(lock["proot"]["production_packaging"])
+        artifact = ROOT / lock["proot"]["artifact_path"]
+        self.assertTrue(artifact.is_file(), artifact)
+        self.assertEqual(lock["proot"]["sha256"], hashlib.sha256(artifact.read_bytes()).hexdigest())
+        self.assertEqual(lock["proot"]["size_bytes"], artifact.stat().st_size)
+        patch = ROOT / lock["proot"]["patch"]["path"]
+        self.assertTrue(patch.is_file(), patch)
+        self.assertEqual(lock["proot"]["patch"]["sha256"], hashlib.sha256(patch.read_bytes()).hexdigest())
+        self.assertFalse(
+            (ROOT / "alpine-runtime-pack-bundled/src/main/jniLibs/arm64-v8a/libproot_tty_trace.so").exists()
+        )
+        relay = lock["resize_relay_proot"]
+        self.assertFalse(relay["production_packaging"])
+        relay_artifact = ROOT / relay["artifact_path"]
+        self.assertTrue(relay_artifact.is_file(), relay_artifact)
+        self.assertEqual(
+            relay["sha256"], hashlib.sha256(relay_artifact.read_bytes()).hexdigest()
+        )
+        self.assertEqual(relay["size_bytes"], relay_artifact.stat().st_size)
+        relay_patch = ROOT / relay["patch"]["path"]
+        self.assertTrue(relay_patch.is_file(), relay_patch)
+        self.assertEqual(
+            relay["patch"]["sha256"], hashlib.sha256(relay_patch.read_bytes()).hexdigest()
+        )
+        relay_contract = relay["source_level_relay"]
+        self.assertEqual(
+            "VIRTUAL_GUEST_TIOCGWINSZ_MEMFD_NO_POST_LAUNCH_SIGNAL",
+            relay_contract["mode"],
+        )
+        self.assertEqual(
+            "The host bridge sends only a bounded binary frame to a private supervisor; the supervisor stores it in a private memfd and PRoot applies it only when a guest TIOCGWINSZ exits, without host master TIOCSWINSZ or any post-launch signal",
+            relay_contract["guest_routing"],
+        )
+        self.assertIn("Relay21", relay_contract["physical_topology_proof"])
+        self.assertIn("host master TIOCSWINSZ after terminal launch", relay_contract["forbidden"])
+        self.assertIn("guest FIFO or polling", relay_contract["forbidden"])
+        self.assertIn("production terminal use", relay_contract["forbidden"])
+        self.assertIn(
+            "setpgid(pid, pid)",
+            relay_patch.read_text(encoding="utf-8"),
+        )
+        self.assertNotIn(
+            "kill(primary_tracee, SIGWINCH)",
+            relay_patch.read_text(encoding="utf-8"),
+        )
+        self.assertIn("proot_tty_virtual_winsize", relay_patch.read_text(encoding="utf-8"))
+        self.assertIn("PROOT_TTY_VIRTUAL_WINSIZE_FD", relay_patch.read_text(encoding="utf-8"))
+        self.assertIn("TIOCGWINSZ", relay_patch.read_text(encoding="utf-8"))
+        self.assertIn(
+            "tcsetpgrp(STDIN_FILENO, pid)",
+            relay_patch.read_text(encoding="utf-8"),
+        )
+        self.assertIn("tcgetpgrp(STDIN_FILENO) != pid", relay_patch.read_text(encoding="utf-8"))
+        self.assertIn(
+            "primary_tracee_foreground_verified",
+            relay_patch.read_text(encoding="utf-8"),
+        )
+        self.assertIn("active_tty_tracee_foreground", relay_patch.read_text(encoding="utf-8"))
+        self.assertTrue(
+            lock["session_relay_launcher"]["contract"]
+            ["forwards_direct_proot_child_only"]
+        )
+        self.assertFalse(
+            (ROOT / "alpine-runtime-pack-bundled/src/main/jniLibs/arm64-v8a/libproot_tty_resize_relay.so").exists()
+        )
+        session_launcher = lock["session_relay_launcher"]
+        self.assertFalse(session_launcher["production_packaging"])
+        session_artifact = ROOT / session_launcher["artifact_path"]
+        self.assertTrue(session_artifact.is_file(), session_artifact)
+        self.assertEqual(
+            session_launcher["sha256"],
+            hashlib.sha256(session_artifact.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(session_launcher["size_bytes"], session_artifact.stat().st_size)
+        self.assertTrue((ROOT / session_launcher["source_path"]).is_file())
+        self.assertTrue((ROOT / session_launcher["build_script"]).is_file())
+        self.assertFalse(
+            (ROOT / "alpine-runtime-pack-bundled/src/main/jniLibs/arm64-v8a/libtty_session_relay_launcher.so").exists()
+        )
+        tracee_foreground_launcher = lock["tracee_foreground_session_launcher"]
+        self.assertFalse(tracee_foreground_launcher["production_packaging"])
+        tracee_foreground_artifact = ROOT / tracee_foreground_launcher["artifact_path"]
+        self.assertTrue(tracee_foreground_artifact.is_file(), tracee_foreground_artifact)
+        self.assertEqual(
+            tracee_foreground_launcher["sha256"],
+            hashlib.sha256(tracee_foreground_artifact.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(
+            tracee_foreground_launcher["size_bytes"], tracee_foreground_artifact.stat().st_size
+        )
+        tracee_foreground_source = (
+            ROOT / tracee_foreground_launcher["source_path"]
+        ).read_text(encoding="utf-8")
+        self.assertIn("relay_supervisor_resize_acknowledged", tracee_foreground_source)
+        self.assertNotIn("kill(child, SIGWINCH)", tracee_foreground_source)
+        self.assertTrue(tracee_foreground_launcher["contract"]["acknowledges_fixed_resize_request"])
+        self.assertFalse(tracee_foreground_launcher["contract"]["forwards_direct_proot_child_only"])
+        self.assertIn("host SIGWINCH injection", tracee_foreground_launcher["contract"]["forbidden"])
+        self.assertFalse(
+            (ROOT / "alpine-runtime-pack-bundled/src/main/jniLibs/arm64-v8a/libtty_session_tracee_foreground_launcher.so").exists()
+        )
+        virtual_launcher = lock["virtual_winsize_session_launcher"]
+        self.assertFalse(virtual_launcher["production_packaging"])
+        virtual_artifact = ROOT / virtual_launcher["artifact_path"]
+        self.assertTrue(virtual_artifact.is_file(), virtual_artifact)
+        self.assertEqual(
+            virtual_launcher["sha256"],
+            hashlib.sha256(virtual_artifact.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(virtual_launcher["size_bytes"], virtual_artifact.stat().st_size)
+        virtual_source = (ROOT / virtual_launcher["source_path"]).read_text(encoding="utf-8")
+        self.assertIn("virtual_winsize_supervisor_stored", virtual_source)
+        self.assertIn("virtual_winsize_supervisor_no_write_control", virtual_source)
+        self.assertIn("PROOT_TTY_VIRTUAL_WINSIZE_FD", virtual_source)
+        self.assertNotIn("ioctl(STDIN_FILENO, TIOCSWINSZ", virtual_source)
+        self.assertTrue(virtual_launcher["contract"]["uses_private_inherited_memfd"])
+        self.assertTrue(virtual_launcher["contract"]["sends_no_host_tiocswinsz"])
+        self.assertTrue(virtual_launcher["contract"]["sends_no_guest_sigwinch"])
+        self.assertTrue(virtual_launcher["contract"]["sends_no_post_launch_signal"])
+        self.assertTrue(virtual_launcher["contract"]["has_no_write_negative_control"])
+        self.assertIn("guest FIFO or polling", virtual_launcher["contract"]["forbidden"])
+        self.assertFalse(
+            (ROOT / "alpine-runtime-pack-bundled/src/main/jniLibs/arm64-v8a/libtty_session_virtual_resize_launcher.so").exists()
+        )
+        host_pty_control = lock["host_pty_resize_control"]
+        self.assertFalse(host_pty_control["production_packaging"])
+        host_pty_artifact = ROOT / host_pty_control["artifact_path"]
+        self.assertTrue(host_pty_artifact.is_file(), host_pty_artifact)
+        self.assertEqual(
+            host_pty_control["sha256"],
+            hashlib.sha256(host_pty_artifact.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(host_pty_control["size_bytes"], host_pty_artifact.stat().st_size)
+        host_pty_source = (ROOT / host_pty_control["source_path"]).read_text(encoding="utf-8")
+        self.assertIn("TIOCSWINSZ", host_pty_source)
+        self.assertIn("host_resize_control=PASS", host_pty_source)
+        self.assertIn("app terminal payload", host_pty_control["contract"]["forbidden"])
+        self.assertFalse(
+            (ROOT / "alpine-runtime-pack-bundled/src/main/jniLibs/arm64-v8a/libtty_host_resize_control.so").exists()
+        )
+        helper = lock["guest_winsize_helper"]
+        self.assertFalse(helper["production_packaging"])
+        helper_artifact = ROOT / helper["artifact_path"]
+        self.assertTrue(helper_artifact.is_file(), helper_artifact)
+        self.assertEqual(
+            helper["sha256"],
+            hashlib.sha256(helper_artifact.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(helper["size_bytes"], helper_artifact.stat().st_size)
+        self.assertTrue((ROOT / helper["source_path"]).is_file())
+        self.assertTrue((ROOT / helper["build_script"]).is_file())
+        self.assertFalse(
+            (ROOT / "alpine-runtime-pack-bundled/src/main/jniLibs/arm64-v8a/libtty_winsize_probe.so").exists()
+        )
+        integrated_build = (ROOT / "integrated-app/build.gradle.kts").read_text()
+        self.assertNotIn("alpine-runtime-probe", integrated_build)
 
     def test_x86_64_pack_payload_matches_experimental_lock(self) -> None:
         lock = json.loads(

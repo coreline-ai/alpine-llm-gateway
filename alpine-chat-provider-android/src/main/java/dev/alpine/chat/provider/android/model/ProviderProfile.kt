@@ -1,9 +1,6 @@
 package dev.alpine.chat.provider.android.model
 
-import dev.alpine.llm.AnthropicOAuthContract
-import dev.alpine.llm.CodexOAuthContract
 import dev.alpine.llm.GeminiOAuthContract
-import dev.alpine.llm.XaiOAuthContract
 import org.json.JSONObject
 import java.net.URI
 import java.util.UUID
@@ -17,38 +14,38 @@ enum class ProviderType(
 ) {
     ANTHROPIC(
         wireName = "anthropic",
-        displayName = "Anthropic compatibility",
-        description = "Reference-only direct OAuth; not a MobileAgent release connector",
-        inferenceEndpointPlaceholder = AnthropicOAuthContract.MESSAGES_ENDPOINT,
-        defaultScopes = AnthropicOAuthContract.SCOPES.joinToString(" "),
+        displayName = "Anthropic (승인 필요)",
+        description = "앱 소유 OAuth 등록과 Provider 승인이 필요합니다. consumer 기본값은 제공하지 않습니다.",
+        inferenceEndpointPlaceholder = "https://api.anthropic.com/v1/messages",
+        defaultScopes = "",
     ),
     GEMINI(
         wireName = "gemini",
         displayName = "Google Gemini",
-        description = "Official Gemini API with app-owned Google OAuth",
+        description = "앱이 소유한 Google OAuth로 공식 Gemini API에 연결합니다.",
         inferenceEndpointPlaceholder = GeminiOAuthContract.GENERATE_CONTENT_ENDPOINT,
         defaultScopes = GeminiOAuthContract.SCOPES.joinToString(" "),
     ),
     OPENAI_COMPATIBLE(
         wireName = "openai_compatible",
         displayName = "OpenAI-compatible",
-        description = "OAuth-enabled Chat Completions endpoint",
+        description = "OAuth를 지원하는 Chat Completions endpoint에 연결합니다.",
         inferenceEndpointPlaceholder = "https://provider.example.com/v1/chat/completions",
-        defaultScopes = "openid profile offline_access",
+        defaultScopes = "",
     ),
     CODEX(
         wireName = "codex",
-        displayName = "Codex compatibility",
-        description = "Reference-only direct OAuth; not a MobileAgent release connector",
-        inferenceEndpointPlaceholder = CodexOAuthContract.RESPONSES_ENDPOINT,
-        defaultScopes = CodexOAuthContract.SCOPES.joinToString(" "),
+        displayName = "OpenAI Responses (승인 필요)",
+        description = "앱 소유 OAuth 등록과 승인된 Responses relay가 필요합니다. ChatGPT/CLI 기본값은 제공하지 않습니다.",
+        inferenceEndpointPlaceholder = "https://provider.example.com/v1/responses",
+        defaultScopes = "",
     ),
     XAI(
         wireName = "xai",
-        displayName = "xAI compatibility",
-        description = "Reference-only direct OAuth; not a MobileAgent release connector",
-        inferenceEndpointPlaceholder = XaiOAuthContract.CHAT_COMPLETIONS_ENDPOINT,
-        defaultScopes = XaiOAuthContract.SCOPES.joinToString(" "),
+        displayName = "xAI (승인 필요)",
+        description = "앱 소유 OAuth 등록과 Provider 승인이 필요합니다. CLI scope 기본값은 제공하지 않습니다.",
+        inferenceEndpointPlaceholder = "https://api.x.ai/v1/chat/completions",
+        defaultScopes = "",
     );
 
     companion object {
@@ -69,6 +66,11 @@ data class ProviderProfile(
     val scopes: List<String>,
     val model: String,
     val callbackPort: Int = DEFAULT_CALLBACK_PORT,
+    /**
+     * Binary/source compatibility only for profiles compiled before the direct-OAuth cleanup.
+     * The value is neither restored from storage nor sent as a Provider header.
+     */
+    @Deprecated("Legacy compatibility field; direct OAuth beta headers are not supported")
     val anthropicBeta: String? = null,
     val googleProjectId: String? = null,
     val createdAtMs: Long = System.currentTimeMillis(),
@@ -92,12 +94,11 @@ data class ProviderProfile(
         .put("scopes", scopes.joinToString(" "))
         .put("model", model)
         .put("callback_port", callbackPort)
-        .putOpt("anthropic_beta", anthropicBeta)
         .putOpt("google_project_id", googleProjectId)
         .put("created_at_ms", createdAtMs)
 
     fun validationErrors(): Map<Field, String> = buildMap {
-        if (label.isBlank()) put(Field.LABEL, "Profile name is required")
+        if (label.isBlank()) put(Field.LABEL, "연결 이름을 입력하세요.")
         validateHttps(authorizationEndpoint, "Authorization endpoint")?.let {
             put(Field.AUTHORIZATION_ENDPOINT, it)
         }
@@ -108,120 +109,39 @@ data class ProviderProfile(
             put(Field.INFERENCE_ENDPOINT, it)
         }
         if (type == ProviderType.GEMINI && !inferenceEndpoint.contains("{model}")) {
-            put(Field.INFERENCE_ENDPOINT, "Gemini endpoint must contain {model}")
+            put(Field.INFERENCE_ENDPOINT, "Gemini endpoint에 {model} 값을 포함하세요.")
         }
         if (type == ProviderType.GEMINI) {
             if (authorizationEndpoint != GeminiOAuthContract.AUTHORIZATION_ENDPOINT) {
                 put(
                     Field.AUTHORIZATION_ENDPOINT,
-                    "Gemini authorization endpoint is fixed by the Provider contract",
+                    "Gemini Authorization endpoint는 Provider 계약의 고정값을 사용하세요.",
                 )
             }
             if (tokenEndpoint != GeminiOAuthContract.TOKEN_ENDPOINT) {
                 put(
                     Field.TOKEN_ENDPOINT,
-                    "Gemini token endpoint is fixed by the Provider contract",
+                    "Gemini Token endpoint는 Provider 계약의 고정값을 사용하세요.",
                 )
             }
             if (inferenceEndpoint != GeminiOAuthContract.GENERATE_CONTENT_ENDPOINT) {
                 put(
                     Field.INFERENCE_ENDPOINT,
-                    "Gemini inference endpoint is fixed by the Provider contract",
+                    "Gemini LLM endpoint는 Provider 계약의 고정값을 사용하세요.",
                 )
             }
             if (scopes != GeminiOAuthContract.SCOPES) {
-                put(Field.SCOPES, "Gemini OAuth scopes are fixed by the Provider contract")
+                put(Field.SCOPES, "Gemini OAuth scopes는 Provider 계약의 고정값을 사용하세요.")
             }
             if (callbackPort != GeminiOAuthContract.CALLBACK_PORT) {
-                put(Field.CALLBACK_PORT, "Gemini callback port must be 8085")
+                put(Field.CALLBACK_PORT, "Gemini callback port는 8085를 사용하세요.")
             }
         }
-        if (type == ProviderType.ANTHROPIC) {
-            if (authorizationEndpoint != AnthropicOAuthContract.AUTHORIZATION_ENDPOINT) {
-                put(
-                    Field.AUTHORIZATION_ENDPOINT,
-                    "Claude authorization endpoint is fixed by the Provider contract",
-                )
-            }
-            if (tokenEndpoint != AnthropicOAuthContract.TOKEN_ENDPOINT) {
-                put(
-                    Field.TOKEN_ENDPOINT,
-                    "Claude token endpoint is fixed by the Provider contract",
-                )
-            }
-            if (inferenceEndpoint != AnthropicOAuthContract.MESSAGES_ENDPOINT) {
-                put(
-                    Field.INFERENCE_ENDPOINT,
-                    "Claude inference endpoint is fixed by the Provider contract",
-                )
-            }
-            if (scopes != AnthropicOAuthContract.SCOPES) {
-                put(Field.SCOPES, "Claude OAuth scopes are fixed by the Provider contract")
-            }
-            if (callbackPort != AnthropicOAuthContract.CALLBACK_PORT) {
-                put(Field.CALLBACK_PORT, "Claude callback port must be 54545")
-            }
-            if (anthropicBeta != AnthropicOAuthContract.OAUTH_BETA) {
-                put(Field.ANTHROPIC_BETA, "Claude OAuth beta header is fixed by the Provider contract")
-            }
-        }
-        if (type == ProviderType.CODEX) {
-            if (authorizationEndpoint != CodexOAuthContract.AUTHORIZATION_ENDPOINT) {
-                put(
-                    Field.AUTHORIZATION_ENDPOINT,
-                    "Codex authorization endpoint is fixed by the Provider contract",
-                )
-            }
-            if (tokenEndpoint != CodexOAuthContract.TOKEN_ENDPOINT) {
-                put(
-                    Field.TOKEN_ENDPOINT,
-                    "Codex token endpoint is fixed by the Provider contract",
-                )
-            }
-            if (inferenceEndpoint != CodexOAuthContract.RESPONSES_ENDPOINT) {
-                put(
-                    Field.INFERENCE_ENDPOINT,
-                    "Codex inference endpoint is fixed by the Provider contract",
-                )
-            }
-            if (scopes != CodexOAuthContract.SCOPES) {
-                put(Field.SCOPES, "Codex OAuth scopes are fixed by the Provider contract")
-            }
-            if (callbackPort != CodexOAuthContract.CALLBACK_PORT) {
-                put(Field.CALLBACK_PORT, "Codex callback port must be 1455")
-            }
-        }
-        if (type == ProviderType.XAI) {
-            if (authorizationEndpoint != XaiOAuthContract.AUTHORIZATION_ENDPOINT) {
-                put(
-                    Field.AUTHORIZATION_ENDPOINT,
-                    "xAI authorization endpoint is fixed by the Provider contract",
-                )
-            }
-            if (tokenEndpoint != XaiOAuthContract.TOKEN_ENDPOINT) {
-                put(
-                    Field.TOKEN_ENDPOINT,
-                    "xAI token endpoint is fixed by the Provider contract",
-                )
-            }
-            if (inferenceEndpoint != XaiOAuthContract.CHAT_COMPLETIONS_ENDPOINT) {
-                put(
-                    Field.INFERENCE_ENDPOINT,
-                    "xAI inference endpoint is fixed by the Provider contract",
-                )
-            }
-            if (scopes != XaiOAuthContract.SCOPES) {
-                put(Field.SCOPES, "xAI OAuth scopes are fixed by the Provider contract")
-            }
-            if (callbackPort != XaiOAuthContract.CALLBACK_PORT) {
-                put(Field.CALLBACK_PORT, "xAI callback port must be 56121")
-            }
-        }
-        if (clientId.isBlank()) put(Field.CLIENT_ID, "Public client ID is required")
-        if (scopes.none(String::isNotBlank)) put(Field.SCOPES, "At least one scope is required")
-        if (model.isBlank()) put(Field.MODEL, "Default model is required")
+        if (clientId.isBlank()) put(Field.CLIENT_ID, "OAuth Public Client ID를 입력하세요.")
+        if (scopes.none(String::isNotBlank)) put(Field.SCOPES, "OAuth scope를 하나 이상 입력하세요.")
+        if (model.isBlank()) put(Field.MODEL, "기본 모델을 선택하거나 입력하세요.")
         if (callbackPort !in 1..65533) {
-            put(Field.CALLBACK_PORT, "Callback port must be between 1 and 65533")
+            put(Field.CALLBACK_PORT, "Callback port는 1~65533 범위로 입력하세요.")
         }
     }
 
@@ -234,7 +154,6 @@ data class ProviderProfile(
         SCOPES,
         MODEL,
         CALLBACK_PORT,
-        ANTHROPIC_BETA,
     }
 
     companion object {
@@ -253,7 +172,6 @@ data class ProviderProfile(
                 .filter(String::isNotBlank),
             model = json.getString("model"),
             callbackPort = json.optInt("callback_port", DEFAULT_CALLBACK_PORT),
-            anthropicBeta = json.optString("anthropic_beta").ifBlank { null },
             googleProjectId = json.optString("google_project_id").ifBlank { null },
             createdAtMs = json.optLong("created_at_ms", System.currentTimeMillis()),
         )
@@ -262,49 +180,32 @@ data class ProviderProfile(
             label = label,
             type = type,
             authorizationEndpoint = when (type) {
-                ProviderType.ANTHROPIC -> AnthropicOAuthContract.AUTHORIZATION_ENDPOINT
                 ProviderType.GEMINI -> GeminiOAuthContract.AUTHORIZATION_ENDPOINT
-                ProviderType.CODEX -> CodexOAuthContract.AUTHORIZATION_ENDPOINT
-                ProviderType.XAI -> XaiOAuthContract.AUTHORIZATION_ENDPOINT
                 else -> ""
             },
             tokenEndpoint = when (type) {
-                ProviderType.ANTHROPIC -> AnthropicOAuthContract.TOKEN_ENDPOINT
                 ProviderType.GEMINI -> GeminiOAuthContract.TOKEN_ENDPOINT
-                ProviderType.CODEX -> CodexOAuthContract.TOKEN_ENDPOINT
-                ProviderType.XAI -> XaiOAuthContract.TOKEN_ENDPOINT
                 else -> ""
             },
             inferenceEndpoint = type.inferenceEndpointPlaceholder,
             clientId = "",
-            scopes = type.defaultScopes.split(" "),
+            scopes = type.defaultScopes.split(" ").filter(String::isNotBlank),
             model = when (type) {
-                ProviderType.ANTHROPIC -> AnthropicProfileDefaults.DEFAULT_MODEL
                 ProviderType.GEMINI -> GeminiProfileDefaults.DEFAULT_MODEL
-                ProviderType.CODEX -> CodexProfileDefaults.DEFAULT_MODEL
-                ProviderType.XAI -> XaiProfileDefaults.DEFAULT_MODEL
                 else -> ""
             },
             callbackPort = when (type) {
-                ProviderType.ANTHROPIC -> AnthropicOAuthContract.CALLBACK_PORT
                 ProviderType.GEMINI -> GeminiOAuthContract.CALLBACK_PORT
-                ProviderType.CODEX -> CodexOAuthContract.CALLBACK_PORT
-                ProviderType.XAI -> XaiOAuthContract.CALLBACK_PORT
                 else -> DEFAULT_CALLBACK_PORT
-            },
-            anthropicBeta = if (type == ProviderType.ANTHROPIC) {
-                AnthropicOAuthContract.OAUTH_BETA
-            } else {
-                null
             },
         )
 
         private fun validateHttps(value: String, label: String): String? {
-            if (value.isBlank()) return "$label is required"
+            if (value.isBlank()) return "$label 값을 입력하세요."
             val uri = runCatching { URI(value.replace("{model}", "model")) }.getOrNull()
-                ?: return "$label must be a valid URL"
+                ?: return "$label 형식의 올바른 URL을 입력하세요."
             if (uri.scheme != "https" || uri.host.isNullOrBlank() || uri.userInfo != null) {
-                return "$label must use HTTPS"
+                return "${label}에는 사용자 정보 없이 HTTPS URL을 사용하세요."
             }
             return null
         }

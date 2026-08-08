@@ -12,32 +12,25 @@ fun testProfile(
 ): ProviderProfile = ProviderProfile.draft(type, label).let { draft ->
     draft.copy(
         id = id,
-        authorizationEndpoint = if (
-            type == ProviderType.ANTHROPIC || type == ProviderType.GEMINI ||
-                type == ProviderType.CODEX || type == ProviderType.XAI
-        ) {
+        authorizationEndpoint = if (type == ProviderType.GEMINI) {
             draft.authorizationEndpoint
         } else {
             "https://identity.example.test/oauth/authorize"
         },
-        tokenEndpoint = if (
-            type == ProviderType.ANTHROPIC || type == ProviderType.GEMINI ||
-            type == ProviderType.CODEX || type == ProviderType.XAI
-        ) {
+        tokenEndpoint = if (type == ProviderType.GEMINI) {
             draft.tokenEndpoint
         } else {
             "https://identity.example.test/oauth/token"
         },
-        clientId = if (
-            type == ProviderType.ANTHROPIC ||
-                type == ProviderType.CODEX || type == ProviderType.XAI
-        ) {
-            draft.clientId
+        // Credential-free instrumentation owns this synthetic public client identifier.
+        // Production defaults intentionally remain blank and require an app-owned registration.
+        clientId = "android-public-client",
+        scopes = if (type == ProviderType.GEMINI) {
+            draft.scopes
         } else {
-            "android-public-client"
+            listOf("openid", "profile", "offline_access")
         },
         model = model,
-        anthropicBeta = draft.anthropicBeta,
         googleProjectId = if (type == ProviderType.GEMINI) "test-project" else null,
         createdAtMs = createdAtMs,
     )

@@ -117,8 +117,8 @@ object Alpine321X8664Pack {
             id = "proot-x86_64",
             kind = RuntimeArtifactKind.NATIVE_LAUNCHER,
             version = "8cf13e997cdc9472997aae19df8050c073c9a86c",
-            sha256 = "9c0bf771ba92151514338643b03fce271d80543c30ae6395c472f313a5d98868",
-            sizeBytes = 293_992,
+            sha256 = "f0356742d84e200773c0dce508931aef31119ee2917c266a43e80fe90f13fbfd",
+            sizeBytes = 292_584,
             abi = "x86_64",
             license = "GPL-2.0-or-later (declared); binary conclusion review required",
         )
@@ -135,7 +135,7 @@ object Alpine321X8664Pack {
         return X8664RuntimePack(
             manifest = RuntimeArtifactManifest(
                 runtimeId = "alpine",
-                runtimeVersion = "3.21.3-openminis-8cf13e9-winsize1-x86_64-experimental",
+                runtimeVersion = "3.21.3-openminis-8cf13e9-unpatched1-x86_64-experimental",
                 artifacts = listOf(rootfs, launcher, loader),
                 metadata = mapOf(
                     RuntimeArtifactMetadataKeys.MANIFEST_SCHEMA to "1",
@@ -146,10 +146,10 @@ object Alpine321X8664Pack {
                     RuntimeArtifactMetadataKeys.SBOM_PATH to
                         "META-INF/alpine-runtime/x86_64/sbom.spdx.json",
                     RuntimeArtifactMetadataKeys.SBOM_SHA256 to
-                        "1aa09d877b3fec8a9149bfc967f86489087b0e4799d71d067ff2f3a971c2ecc4",
+                        "6ba3166b9f7a53f75cc2f333e52fb511b098b4786ff3385f8c1c09b1c3470abe",
                     RuntimeArtifactMetadataKeys.SOURCE_REVISION to
                         "proot:8cf13e997cdc9472997aae19df8050c073c9a86c;" +
-                            "patch:proot-android-winsize@20726d1ccf9b;" +
+                            "local-patches:none;" +
                             "alpine:3.21.3;x86_64:experimental",
                 ),
             ),

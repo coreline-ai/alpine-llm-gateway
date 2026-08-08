@@ -2,7 +2,7 @@
   "schema_version": 2,
   "support_status": "experimental_requires_emulator_e2e",
   "runtime_id": "alpine",
-  "runtime_version": "3.21.3-openminis-8cf13e9-winsize1-x86_64-experimental",
+  "runtime_version": "3.21.3-openminis-8cf13e9-unpatched1-x86_64-experimental",
   "abi": "x86_64",
   "android": {
     "min_sdk": 26,
@@ -21,14 +21,9 @@
     "repository": "https://github.com/OpenMinis/proot.git",
     "commit": "8cf13e997cdc9472997aae19df8050c073c9a86c",
     "build_android_api": 26,
-    "size_bytes": 293992,
-    "sha256": "9c0bf771ba92151514338643b03fce271d80543c30ae6395c472f313a5d98868",
-    "patches": [
-      {
-        "path": "scripts/runtime/patches/proot-android-winsize.patch",
-        "sha256": "20726d1ccf9bb8c952a6039d5158168dad58ec62bcf7cbf73bc3170b8c4a9a27"
-      }
-    ],
+    "size_bytes": 292584,
+    "sha256": "f0356742d84e200773c0dce508931aef31119ee2917c266a43e80fe90f13fbfd",
+    "patches": [],
     "license_declared": "GPL-2.0-or-later",
     "license_concluded": "NOASSERTION",
     "license_review_status": "REVIEW_REQUIRED"
@@ -50,6 +45,6 @@
   "sbom": {
     "format": "SPDX-2.3",
     "path": "alpine-runtime-pack-x86_64/src/main/resources/META-INF/alpine-runtime/x86_64/sbom.spdx.json",
-    "sha256": "1aa09d877b3fec8a9149bfc967f86489087b0e4799d71d067ff2f3a971c2ecc4"
+    "sha256": "6ba3166b9f7a53f75cc2f333e52fb511b098b4786ff3385f8c1c09b1c3470abe"
   }
 }

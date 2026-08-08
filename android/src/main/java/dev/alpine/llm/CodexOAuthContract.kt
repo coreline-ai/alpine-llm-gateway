@@ -1,15 +1,16 @@
 package dev.alpine.llm
 
 /**
- * Codex account OAuth wire contract.
+ * Optional OpenAI account OAuth configuration supplied by the application owner.
  *
- * The public client id is intentionally supplied by the host application. It
- * identifies an OAuth registration and must not be copied from another app.
+ * The public client ID identifies an OAuth registration and must not be copied from another
+ * app or CLI. This class does not authorize a ChatGPT consumer endpoint for inference; callers
+ * must provide an approved HTTPS Responses endpoint separately.
  */
 object CodexOAuthContract {
     const val AUTHORIZATION_ENDPOINT = "https://auth.openai.com/oauth/authorize"
     const val TOKEN_ENDPOINT = "https://auth.openai.com/oauth/token"
-    const val RESPONSES_ENDPOINT = "https://chatgpt.com/backend-api/codex/responses"
+    const val RESPONSES_ENDPOINT_PLACEHOLDER = "https://provider.example.com/v1/responses"
     const val CALLBACK_PORT = 1455
     const val REDIRECT_PATH = "/auth/callback"
     const val REDIRECT_HOST = "localhost"
@@ -31,27 +32,8 @@ object CodexOAuthContract {
         redirectPath = REDIRECT_PATH,
         redirectHost = REDIRECT_HOST,
         callbackFallbackPorts = emptyList(),
-        extraAuthorizationParams = mapOf(
-            "codex_cli_simplified_flow" to "true",
-            "originator" to "codex_cli_rs",
-            "id_token_add_organizations" to "true",
-        ),
-        // Match the current Codex CLI token endpoint wire contract. The
-        // authorization endpoint accepts the same PKCE parameters regardless
-        // of platform, but the first-party client posts token grants as form
-        // data rather than JSON.
         tokenRequestEncoding = OAuthTokenRequestEncoding.FORM_URLENCODED,
-        tokenRequestAdapter = OAuthTokenRequestAdapter { context ->
-            if (context.grantType == OAuthTokenGrantType.REFRESH_TOKEN) {
-                context.parameters + ("scope" to SCOPES.joinToString(" "))
-            } else {
-                context.parameters
-            }
-        },
-        tokenResponseAdapter = JwtClaimMetadataTokenResponseAdapter(),
-        // A callback code is short-lived. Retry only transport failures so a
-        // brief DNS/network hand-off after the Custom Tab closes does not make
-        // the whole login fail. HTTP/provider errors remain single-attempt.
+        tokenRequestAdapter = StandardOAuthTokenRequestAdapter,
         tokenRequestMaxAttempts = 3,
         tokenRetryInitialDelayMs = 1_000L,
         refreshSkewMs = refreshSkewMs,

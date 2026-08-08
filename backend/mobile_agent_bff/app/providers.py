@@ -12,6 +12,10 @@ import httpx
 from .models import ChatStreamRequest, ProviderName
 
 
+DEFAULT_MAX_PROVIDER_EVENT_BYTES = 1 * 1024 * 1024
+DEFAULT_MAX_PROVIDER_STREAM_BYTES = 32 * 1024 * 1024
+
+
 @dataclass(frozen=True)
 class ProviderEvent:
     type: str
@@ -34,11 +38,20 @@ class ProviderAdapter(ABC):
         models: tuple[str, ...],
         timeout: float,
         client: httpx.AsyncClient | None = None,
+        *,
+        max_event_bytes: int = DEFAULT_MAX_PROVIDER_EVENT_BYTES,
+        max_stream_bytes: int = DEFAULT_MAX_PROVIDER_STREAM_BYTES,
     ):
+        if max_event_bytes <= 0 or max_stream_bytes <= 0:
+            raise ValueError("Provider stream limits must be positive")
+        if max_event_bytes > max_stream_bytes:
+            raise ValueError("Provider event limit must not exceed stream limit")
         self.api_key = api_key
         self.models = models
         self.client = client or httpx.AsyncClient(timeout=timeout, follow_redirects=False)
         self._owns_client = client is None
+        self.max_event_bytes = max_event_bytes
+        self.max_stream_bytes = max_stream_bytes
 
     @property
     def configured(self) -> bool:
@@ -78,42 +91,114 @@ class ProviderAdapter(ABC):
                         _status_error(response.status_code),
                         _normalized_status(response.status_code),
                     )
-                event_type: str | None = None
-                data_lines: list[str] = []
-                async for line in response.aiter_lines():
+                content_type = response.headers.get("content-type", "")
+                if content_type.partition(";")[0].strip().lower() != "text/event-stream":
+                    raise ProviderStreamError("provider_stream_invalid")
+                decoder = _BoundedSseDecoder(
+                    max_event_bytes=self.max_event_bytes,
+                    max_stream_bytes=self.max_stream_bytes,
+                )
+                async for chunk in response.aiter_bytes():
                     if cancel.is_set():
                         return
-                    if line == "":
-                        if not data_lines:
-                            event_type = None
-                            continue
-                        raw_data = "\n".join(data_lines)
-                        data_lines.clear()
+                    for event_type, raw_data in decoder.feed(chunk):
                         if raw_data == "[DONE]":
                             return
-                        try:
-                            payload = json.loads(raw_data)
-                        except json.JSONDecodeError as error:
-                            raise ProviderStreamError("provider_stream_invalid") from error
-                        if not isinstance(payload, dict):
-                            raise ProviderStreamError("provider_stream_invalid")
-                        yield event_type, payload
-                        event_type = None
-                    elif line.startswith("event:"):
-                        event_type = line[6:].strip()
-                    elif line.startswith("data:"):
-                        data_lines.append(line[5:].lstrip())
-                if data_lines:
-                    try:
-                        payload = json.loads("\n".join(data_lines))
-                    except json.JSONDecodeError as error:
-                        raise ProviderStreamError("provider_stream_invalid") from error
-                    if isinstance(payload, dict):
-                        yield event_type, payload
+                        yield event_type, _json_object(raw_data)
+                for event_type, raw_data in decoder.finish():
+                    if raw_data == "[DONE]":
+                        return
+                    yield event_type, _json_object(raw_data)
         except ProviderStreamError:
             raise
-        except (httpx.TimeoutException, httpx.NetworkError) as error:
+        except httpx.HTTPError as error:
             raise ProviderStreamError("provider_unavailable", 503) from error
+
+
+class _BoundedSseDecoder:
+    """Incremental SSE framing with strict UTF-8 and raw byte limits."""
+
+    def __init__(self, *, max_event_bytes: int, max_stream_bytes: int):
+        self.max_event_bytes = max_event_bytes
+        self.max_stream_bytes = max_stream_bytes
+        self.total_bytes = 0
+        self.event_bytes = 0
+        self.buffer = bytearray()
+        self.event_type: str | None = None
+        self.data_lines: list[str] = []
+
+    def feed(self, chunk: bytes) -> list[tuple[str | None, str]]:
+        self.total_bytes += len(chunk)
+        if self.total_bytes > self.max_stream_bytes:
+            raise ProviderStreamError("provider_stream_too_large")
+        self.buffer.extend(chunk)
+        events: list[tuple[str | None, str]] = []
+        while True:
+            newline = self.buffer.find(b"\n")
+            if newline < 0:
+                if self.event_bytes + len(self.buffer) > self.max_event_bytes:
+                    raise ProviderStreamError("provider_stream_too_large")
+                return events
+            raw_line = bytes(self.buffer[:newline])
+            del self.buffer[: newline + 1]
+            events.extend(self._accept_line(raw_line, newline + 1))
+
+    def finish(self) -> list[tuple[str | None, str]]:
+        events: list[tuple[str | None, str]] = []
+        if self.buffer:
+            raw_line = bytes(self.buffer)
+            self.buffer.clear()
+            events.extend(self._accept_line(raw_line, len(raw_line)))
+        pending = self._dispatch()
+        if pending is not None:
+            events.append(pending)
+        return events
+
+    def _accept_line(
+        self,
+        raw_line: bytes,
+        consumed_bytes: int,
+    ) -> list[tuple[str | None, str]]:
+        self.event_bytes += consumed_bytes
+        if self.event_bytes > self.max_event_bytes:
+            raise ProviderStreamError("provider_stream_too_large")
+        if raw_line.endswith(b"\r"):
+            raw_line = raw_line[:-1]
+        try:
+            line = raw_line.decode("utf-8", errors="strict")
+        except UnicodeDecodeError as error:
+            raise ProviderStreamError("provider_stream_invalid") from error
+        if line == "":
+            pending = self._dispatch()
+            return [] if pending is None else [pending]
+        if line.startswith(":"):
+            return []
+        field, separator, raw_value = line.partition(":")
+        value = raw_value[1:] if separator and raw_value.startswith(" ") else raw_value
+        if field == "event":
+            self.event_type = value
+        elif field == "data":
+            self.data_lines.append(value)
+        return []
+
+    def _dispatch(self) -> tuple[str | None, str] | None:
+        pending = None
+        if self.data_lines:
+            pending = (self.event_type, "\n".join(self.data_lines))
+        self.event_type = None
+        self.data_lines.clear()
+        self.event_bytes = 0
+        return pending
+
+
+def _json_object(raw_data: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(raw_data)
+    except json.JSONDecodeError as error:
+        raise ProviderStreamError("provider_stream_invalid") from error
+    if not isinstance(payload, dict):
+        raise ProviderStreamError("provider_stream_invalid")
+    return payload
 
 
 class OpenAIAdapter(ProviderAdapter):

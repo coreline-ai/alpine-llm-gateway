@@ -1,16 +1,11 @@
 package dev.alpine.chat.provider.android.model
 
-/** Reference-only model labels used by the standalone compatibility demo. */
+/**
+ * Legacy binary compatibility surface. Product UI and chat selection never read this catalog.
+ * An application owner must enter an approved Responses model in its profile instead.
+ */
+@Deprecated("No OpenAI Responses model catalog is bundled without Provider approval")
 object CodexProfileDefaults {
-    const val DEFAULT_MODEL = "gpt-5.6-luna"
-
-    val MODELS = listOf(
-        "gpt-5.6-sol",
-        "gpt-5.6-terra",
-        "gpt-5.6-luna",
-        "gpt-5.5",
-        "gpt-5.4",
-        "gpt-5.4-mini",
-        "gpt-5.3-codex-spark",
-    )
+    const val DEFAULT_MODEL = ""
+    val MODELS: List<String> = emptyList()
 }

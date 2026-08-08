@@ -12,9 +12,8 @@ The exact checksums, build Android API and linkage are recorded in
 `runtime/alpine-3.21.3-arm64.lock.json`. The machine-readable component notice is
 `src/main/resources/META-INF/alpine-runtime/sbom.spdx.json`.
 
-The PRoot source revision above plus
-`scripts/runtime/patches/proot-android-winsize.patch` is the source used for the packaged
-executable. The patch is applied only to the disposable build copy by
-`scripts/runtime/build-proot-android.sh`.
+The packaged executable is built from the pinned PRoot source revision without local PRoot
+patches. `scripts/runtime/build-proot-android.sh` applies Android toolchain and linker settings
+only to the disposable build copy.
 Downstream distributors must preserve the GPL/LGPL notices and provide corresponding source under
 the applicable license terms.

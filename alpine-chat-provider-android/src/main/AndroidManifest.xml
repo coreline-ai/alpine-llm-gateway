@@ -3,7 +3,8 @@
     <application>
         <activity
             android:name=".activity.ProviderEditActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
         <activity
             android:name=".activity.ProviderProfilesActivity"
             android:exported="false" />

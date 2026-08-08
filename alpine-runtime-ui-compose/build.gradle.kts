@@ -33,6 +33,7 @@ lint {
 
 dependencies {
     api(project(":alpine-runtime-host"))
+    api(project(":alpine-workspace-api"))
     implementation(platform("androidx.compose:compose-bom:2024.09.00"))
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")

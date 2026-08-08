@@ -28,6 +28,8 @@ jobs:
         env:
           PYTHONPYCACHEPREFIX: ${{ github.workspace }}/build/python-cache
         run: python -m compileall -q alpine_llm
+      - name: Verify UI design tokens and README screenshots
+        run: python scripts/verify-ui-design-contract.py
       - name: Verify deterministic Python Gateway layer
         run: |
           python scripts/runtime/build-python-gateway-pack.py
@@ -103,6 +105,7 @@ jobs:
           :alpine-chat-feature:lintDebug
           :alpine-chat-provider-android:testDebugUnitTest
           :alpine-chat-provider-android:assembleRelease
+          :alpine-chat-provider-android:assembleDebugAndroidTest
           :alpine-chat-provider-android:lintDebug
           :alpine-chat-backend-direct:testDebugUnitTest
           :alpine-chat-backend-direct:assembleRelease
@@ -132,6 +135,8 @@ jobs:
           :alpine-llm-bridge-probe:lintDebug
           --no-daemon
           --stacktrace
+      - name: Verify integrated APK OAuth and app-boundary policy
+        run: python3 scripts/verify-mobile-oauth-release.py --integrated-product
       - name: Audit Gradle 9 readiness
         run: scripts/audit-gradle9-readiness.sh
       - name: Publish reusable SDK artifacts

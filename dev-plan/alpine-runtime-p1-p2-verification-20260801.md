@@ -58,6 +58,10 @@ BUILD SUCCESSFUL — 전체 로컬 release gate 1,391 tasks 포함
 
 ### x86_64
 
+> 2026-08-08 superseded: 아래 PRoot patch/checksum은 당시 `PROOT_WINSIZE_FILE` experiment의
+> historical evidence다. 현 제품 pack은 unpatched PRoot build를 사용하며 최신 상태는
+> `implement_20260808_203838.md`와 runtime lock을 기준으로 한다.
+
 - Alpine `3.21.3` x86_64 minirootfs SHA-256:
   `1a694899e406ce55d32334c47ac0b2efb6c06d7e878102d1840892ad44cd5239`
 - PRoot ELF machine `62`, `PT_LOAD` 4개 모두 `16384`.

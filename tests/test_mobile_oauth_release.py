@@ -20,6 +20,15 @@ def run_scan(path: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def run_integrated_scan(path: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(SCRIPT), "--integrated-product", str(path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
 def test_clean_mobile_client_passes() -> None:
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
@@ -100,3 +109,63 @@ def test_forbidden_material_inside_compressed_apk_fails() -> None:
         assert result.returncode == 1
         assert "assets/config.txt" in result.stderr
         assert "private OpenAI consumer endpoint" in result.stderr
+
+
+def test_integrated_product_scan_rejects_probe_package_in_apk() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        apk = Path(directory) / "integrated-product.apk"
+        with zipfile.ZipFile(apk, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("classes.dex", b"dev.alpine.llm.runtimeprobe")
+
+        result = run_integrated_scan(apk)
+
+        assert result.returncode == 1
+        assert "runtime probe package in integrated product" in result.stderr
+
+
+def test_integrated_product_scan_rejects_probe_only_proot_diagnostic_launcher() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        apk = Path(directory) / "integrated-product.apk"
+        with zipfile.ZipFile(apk, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("lib/arm64-v8a/libproot_tty_trace.so", b"test")
+
+        result = run_integrated_scan(apk)
+
+        assert result.returncode == 1
+        assert "Probe-only PRoot diagnostic launcher in integrated product" in result.stderr
+
+
+def test_integrated_product_scan_rejects_probe_only_proot_resize_relay_launcher() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        apk = Path(directory) / "integrated-product.apk"
+        with zipfile.ZipFile(apk, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("lib/arm64-v8a/libproot_tty_resize_relay.so", b"test")
+
+        result = run_integrated_scan(apk)
+
+        assert result.returncode == 1
+        assert "Probe-only PRoot resize relay launcher in integrated product" in result.stderr
+
+
+def test_integrated_product_scan_rejects_probe_only_proot_session_relay_launcher() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        apk = Path(directory) / "integrated-product.apk"
+        with zipfile.ZipFile(apk, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("lib/arm64-v8a/libtty_session_relay_launcher.so", b"test")
+
+        result = run_integrated_scan(apk)
+
+        assert result.returncode == 1
+        assert "Probe-only PRoot session relay launcher in integrated product" in result.stderr
+
+
+def test_integrated_product_scan_rejects_probe_only_guest_winsize_helper() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        apk = Path(directory) / "integrated-product.apk"
+        with zipfile.ZipFile(apk, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("lib/arm64-v8a/libtty_winsize_probe.so", b"test")
+
+        result = run_integrated_scan(apk)
+
+        assert result.returncode == 1
+        assert "Probe-only guest winsize helper in integrated product" in result.stderr

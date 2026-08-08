@@ -143,20 +143,14 @@ def verify_talloc_build_input(
 
 
 def verify_project_build_inputs(locks: list[dict[str, Any]]) -> dict[str, Any]:
-    patch = ROOT / "scripts/runtime/patches/proot-android-winsize.patch"
     build_script = ROOT / "scripts/runtime/build-proot-android.sh"
-    patch_sha256 = sha256(patch)
     android_apis = {lock["proot"]["build_android_api"] for lock in locks}
     if len(android_apis) != 1:
         fail("arm64 and x86_64 Android build API metadata must agree")
     for lock in locks:
         patches = lock["proot"].get("patches")
-        if not isinstance(patches, list) or not any(
-            item.get("path") == "scripts/runtime/patches/proot-android-winsize.patch"
-            and item.get("sha256") == patch_sha256
-            for item in patches
-        ):
-            fail(f"runtime lock does not match the local PRoot patch: {lock['abi']}")
+        if patches != []:
+            fail(f"runtime lock must declare no local PRoot patch: {lock['abi']}")
     script_text = build_script.read_text()
     android_api = next(iter(android_apis))
     for lock in locks:
@@ -165,7 +159,7 @@ def verify_project_build_inputs(locks: list[dict[str, Any]]) -> dict[str, Any]:
     if f'ANDROID_API="${{ANDROID_API:-{android_api}}}"' not in script_text:
         fail("native build script Android API differs from the runtime lock")
     return {
-        "patch_sha256": patch_sha256,
+        "patches": [],
         "android_api": android_api,
         "targets": [
             {
@@ -259,7 +253,6 @@ def build_bundle(
         )
         for relative in (
             "scripts/runtime/build-proot-android.sh",
-            "scripts/runtime/patches/proot-android-winsize.patch",
             "scripts/verify-runtime-toolchain.py",
             "runtime/alpine-3.21.3-arm64.lock.json",
             "runtime/alpine-3.21.3-x86_64.lock.json",
@@ -318,7 +311,7 @@ def build_bundle(
         (stage / "README.md").write_text(
             "# Native OSS source bundle\n\n"
             "This archive contains the pinned PRoot source, the complete official talloc source "
-            "archive, the exact standalone talloc build inputs, local patches, build scripts, "
+            "archive, the exact standalone talloc build inputs, reproducible build scripts, "
             "runtime locks, and license notices.\n\n"
             "It does not contain the package-level sources for the Alpine rootfs. Therefore this "
             "archive alone does not make the complete Android runtime externally releasable.\n\n"
@@ -361,7 +354,6 @@ def verify_bundle(path: Path) -> dict[str, Any]:
             f"{root}/sources/talloc/talloc-2.4.2/talloc.c",
             f"{root}/build-input/talloc-standalone/replace.h",
             f"{root}/scripts/runtime/build-proot-android.sh",
-            f"{root}/scripts/runtime/patches/proot-android-winsize.patch",
         }
         missing = required - set(by_name)
         if missing:

@@ -1,60 +1,21 @@
 package dev.alpine.llm
 
-import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
-import java.util.Base64
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AnthropicOAuthContractTest {
     @Test
-    fun anthropicCompatibilityContractRequiresHostRegistrationAndPinsWireContract() {
-        val config = AnthropicOAuthContract.providerConfig(
-            providerId = "claude-profile",
-            clientId = "host-owned-public-client",
+    fun anthropicDefaultsExposeOnlySafeHostConfigurationPlaceholders() {
+        assertEquals(
+            "https://provider.example.com/oauth/authorize",
+            AnthropicOAuthContract.AUTHORIZATION_ENDPOINT_PLACEHOLDER,
         )
-
-        assertEquals(AnthropicOAuthContract.AUTHORIZATION_ENDPOINT, config.authorizationEndpoint)
-        assertEquals(AnthropicOAuthContract.TOKEN_ENDPOINT, config.tokenEndpoint)
-        assertEquals("host-owned-public-client", config.clientId)
-        assertEquals(AnthropicOAuthContract.SCOPES, config.scopes)
-        assertEquals("http://localhost:54545/callback", config.redirectUri())
-        assertTrue(config.callbackFallbackPorts.isEmpty())
-        assertEquals(OAuthPkceMode.BASE64URL_96_BYTES, config.pkceMode)
-        assertEquals(OAuthTokenRequestEncoding.JSON, config.tokenRequestEncoding)
-
-        val pkce = OAuthPkce.create(config.pkceMode)
-        val expectedChallenge = Base64.getUrlEncoder().withoutPadding().encodeToString(
-            MessageDigest.getInstance("SHA-256")
-                .digest(pkce.verifier.toByteArray(StandardCharsets.US_ASCII)),
+        assertEquals(
+            "https://provider.example.com/oauth/token",
+            AnthropicOAuthContract.TOKEN_ENDPOINT_PLACEHOLDER,
         )
-        assertEquals(128, pkce.verifier.length)
-        assertEquals(expectedChallenge, pkce.challenge)
-    }
-
-    @Test
-    fun anthropicTokenExchangeEchoesStateInJsonButRefreshDoesNot() {
-        val adapter = AnthropicOAuthContract.providerConfig(
-            providerId = "claude-profile",
-            clientId = "host-owned-public-client",
-        ).tokenRequestAdapter
-        val exchange = adapter.adapt(
-            OAuthTokenRequestContext(
-                grantType = OAuthTokenGrantType.AUTHORIZATION_CODE,
-                parameters = mapOf("grant_type" to "authorization_code"),
-                state = "expected-state",
-            ),
-        )
-        val refresh = adapter.adapt(
-            OAuthTokenRequestContext(
-                grantType = OAuthTokenGrantType.REFRESH_TOKEN,
-                parameters = mapOf("grant_type" to "refresh_token"),
-            ),
-        )
-
-        assertEquals("expected-state", exchange["state"])
-        assertFalse("state" in refresh)
+        assertEquals("https://api.anthropic.com/v1/messages", AnthropicOAuthContract.MESSAGES_ENDPOINT)
+        assertFalse(AnthropicOAuthContract::class.java.declaredMethods.any { it.name == "providerConfig" })
     }
 }

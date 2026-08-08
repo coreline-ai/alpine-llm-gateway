@@ -6,6 +6,7 @@ ABI="${1:-}"
 PROOT_SOURCE="${2:-}"
 TALLOC_SOURCE="${3:-}"
 OUTPUT="${4:-$ROOT/build/runtime-toolchain/$ABI}"
+EXPERIMENTAL_PATCH="${PROOT_EXPERIMENTAL_PATCH:-}"
 [[ "$OUTPUT" = /* ]] || OUTPUT="$ROOT/$OUTPUT"
 case "$OUTPUT/" in
   "$ROOT/build/"*) ;;
@@ -47,9 +48,25 @@ mkdir -p "$WORK/proot" "$WORK/talloc" "$OUTPUT/artifacts"
 cp -R "$PROOT_SOURCE/src" "$WORK/proot/"
 cp "$TALLOC_SOURCE/talloc.c" "$TALLOC_SOURCE/talloc.h" "$TALLOC_SOURCE/replace.h" "$WORK/talloc/"
 
-WINSIZE_PATCH="$ROOT/scripts/runtime/patches/proot-android-winsize.patch"
-[[ -f "$WINSIZE_PATCH" ]] || { echo "missing PRoot winsize patch: $WINSIZE_PATCH" >&2; exit 2; }
-patch -d "$WORK/proot" -p1 --forward --batch < "$WINSIZE_PATCH" >/dev/null
+# Production binaries are deliberately built from the pinned upstream source
+# without local patches.  A single explicitly named patch is accepted only for
+# an isolated, disposable diagnostics build under scripts/runtime/experiments.
+# This keeps experiments reproducible without creating an accidental path for
+# a diagnostic implementation to become the release PRoot binary.
+PATCHES_JSON='[]'
+if [[ -n "$EXPERIMENTAL_PATCH" ]]; then
+  [[ "$EXPERIMENTAL_PATCH" = /* ]] || EXPERIMENTAL_PATCH="$ROOT/$EXPERIMENTAL_PATCH"
+  EXPERIMENTAL_ROOT="$ROOT/scripts/runtime/experiments/"
+  case "$EXPERIMENTAL_PATCH" in
+    "$EXPERIMENTAL_ROOT"*.patch) ;;
+    *) echo "experimental patch must stay under $EXPERIMENTAL_ROOT" >&2; exit 2 ;;
+  esac
+  [[ -f "$EXPERIMENTAL_PATCH" ]] || { echo "missing experimental patch: $EXPERIMENTAL_PATCH" >&2; exit 2; }
+  patch --batch --forward -d "$WORK/proot" -p1 < "$EXPERIMENTAL_PATCH"
+  PATCH_RELATIVE="${EXPERIMENTAL_PATCH#$ROOT/}"
+  PATCH_SHA256="$(shasum -a 256 "$EXPERIMENTAL_PATCH" | awk '{print $1}')"
+  PATCHES_JSON="[{\"path\":\"$PATCH_RELATIVE\",\"sha256\":\"$PATCH_SHA256\"}]"
+fi
 
 # PRoot's freestanding loader has its own linker flags and therefore does not
 # inherit the main binary's LDFLAGS. Patch only the disposable source copy so
@@ -106,9 +123,7 @@ cat > "$OUTPUT/toolchain-lock.json" <<EOF
   "android_api": $ANDROID_API,
   "ndk_version": "$(basename "$NDK_HOME")",
   "proot_revision": "$PROOT_REVISION",
-  "patches": [
-    {"path": "scripts/runtime/patches/proot-android-winsize.patch", "sha256": "$(sha "$WINSIZE_PATCH")"}
-  ],
+  "patches": $PATCHES_JSON,
   "talloc_version": "$TALLOC_VERSION",
   "artifacts": {
     "libproot.so": {"sha256": "$(sha "$PROOT_OUT")", "size_bytes": $(size "$PROOT_OUT")},

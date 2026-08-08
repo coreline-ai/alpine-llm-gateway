@@ -266,6 +266,7 @@ class ConversationDataTest {
         val loaded = repository.load()
         assertEquals(ConversationGenerationState.CANCELLED, loaded.activeConversation.generationState)
         assertEquals(ChatMessageState.CANCELLED, loaded.activeConversation.messages.single().state)
+        assertEquals("partial", loaded.activeConversation.messages.single().text)
 
         repository.requestPersistence(1)
         repository.persist(loaded, 1)

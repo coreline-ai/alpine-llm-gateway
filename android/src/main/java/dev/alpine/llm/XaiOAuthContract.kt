@@ -1,6 +1,6 @@
 package dev.alpine.llm
 
-/** xAI Grok browser OAuth and inference contract used by the Android host. */
+/** xAI endpoint metadata for an app-owned OAuth registration. */
 object XaiOAuthContract {
     const val DISCOVERY_ENDPOINT = "https://auth.x.ai/.well-known/openid-configuration"
     const val AUTHORIZATION_ENDPOINT = "https://auth.x.ai/oauth2/authorize"
@@ -9,16 +9,8 @@ object XaiOAuthContract {
     const val CALLBACK_PORT = 56121
     const val REDIRECT_PATH = "/callback"
     const val REDIRECT_HOST = "127.0.0.1"
-    const val REFERRER = "alpine-llm-gateway"
 
-    val SCOPES = listOf(
-        "openid",
-        "profile",
-        "email",
-        "offline_access",
-        "grok-cli:access",
-        "api:access",
-    )
+    val SCOPES = listOf("openid", "profile", "email", "offline_access")
 
     fun providerConfig(
         providerId: String,
@@ -36,22 +28,8 @@ object XaiOAuthContract {
         redirectHost = REDIRECT_HOST,
         callbackFallbackPorts = emptyList(),
         includeAuthorizationNonce = true,
-        pkceMode = OAuthPkceMode.HEX_32_BYTES,
-        extraAuthorizationParams = mapOf(
-            "plan" to "generic",
-            "referrer" to REFERRER,
-        ),
         tokenRequestEncoding = OAuthTokenRequestEncoding.FORM_URLENCODED,
-        tokenRequestAdapter = OAuthTokenRequestAdapter { context ->
-            if (context.grantType == OAuthTokenGrantType.AUTHORIZATION_CODE) {
-                context.parameters + mapOf(
-                    "code_challenge" to requireNotNull(context.codeChallenge),
-                    "code_challenge_method" to "S256",
-                )
-            } else {
-                context.parameters
-            }
-        },
+        tokenRequestAdapter = StandardOAuthTokenRequestAdapter,
         tokenResponseAdapter = JwtClaimMetadataTokenResponseAdapter(),
         tokenRequestMaxAttempts = 3,
         tokenRetryInitialDelayMs = 1_000L,

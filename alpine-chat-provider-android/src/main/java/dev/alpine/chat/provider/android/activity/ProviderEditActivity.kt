@@ -1,16 +1,21 @@
 package dev.alpine.chat.provider.android.activity
 
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import dev.alpine.chat.provider.android.R
 import dev.alpine.llm.OAuthTokenStore
 import dev.alpine.chat.provider.android.data.ProviderProfileStore
+import dev.alpine.chat.provider.android.model.ProviderDraftRestoration
 import dev.alpine.chat.provider.android.model.ProviderProfile
+import dev.alpine.chat.provider.android.model.ProviderSaveAction
 import dev.alpine.chat.provider.android.model.ProviderType
 import dev.alpine.chat.provider.android.ui.ProviderEditScreen
-import dev.alpine.chat.feature.ui.theme.AlpineChatTheme
+import dev.alpine.chat.feature.ui.theme.AlpineProductTheme
 
 /** Compose host for one OAuth-enabled LLM profile. */
 class ProviderEditActivity : ComponentActivity() {
@@ -20,6 +25,16 @@ class ProviderEditActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.TRANSPARENT,
+            ),
+            navigationBarStyle = SystemBarStyle.light(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.TRANSPARENT,
+            ),
+        )
         store = ProviderProfileStore(this)
 
         val profileId = intent.getStringExtra(EXTRA_PROFILE_ID)
@@ -37,10 +52,16 @@ class ProviderEditActivity : ComponentActivity() {
             return
         }
         isEditing = stored != null
-        initialProfile = stored ?: ProviderProfile.draft(type, store.nextLabel(type))
+        initialProfile = stored ?: ProviderDraftRestoration.restoreIdentity(
+            freshDraft = ProviderProfile.draft(type, store.nextLabel(type)),
+            savedId = savedInstanceState?.getString(STATE_DRAFT_PROFILE_ID),
+            savedCreatedAtMs = savedInstanceState
+                ?.takeIf { it.containsKey(STATE_DRAFT_CREATED_AT_MS) }
+                ?.getLong(STATE_DRAFT_CREATED_AT_MS),
+        )
 
         setContent {
-            AlpineChatTheme {
+            AlpineProductTheme {
                 ProviderEditScreen(
                     initialProfile = initialProfile,
                     isEditing = isEditing,
@@ -51,7 +72,18 @@ class ProviderEditActivity : ComponentActivity() {
         }
     }
 
-    private fun saveProfile(profile: ProviderProfile): Map<ProviderProfile.Field, String> {
+    override fun onSaveInstanceState(outState: Bundle) {
+        if (!isEditing) {
+            outState.putString(STATE_DRAFT_PROFILE_ID, initialProfile.id)
+            outState.putLong(STATE_DRAFT_CREATED_AT_MS, initialProfile.createdAtMs)
+        }
+        super.onSaveInstanceState(outState)
+    }
+
+    private fun saveProfile(
+        profile: ProviderProfile,
+        action: ProviderSaveAction,
+    ): Map<ProviderProfile.Field, String> {
         val errors = profile.validationErrors()
         if (errors.isNotEmpty()) return errors
 
@@ -63,7 +95,12 @@ class ProviderEditActivity : ComponentActivity() {
         }.fold(
             onSuccess = {
                 Toast.makeText(this, R.string.provider_saved, Toast.LENGTH_SHORT).show()
-                setResult(RESULT_OK)
+                setResult(
+                    RESULT_OK,
+                    Intent()
+                        .putExtra(EXTRA_RESULT_PROFILE_ID, profile.id)
+                        .putExtra(EXTRA_RESULT_REQUEST_LOGIN, action.requestLogin),
+                )
                 finish()
                 emptyMap()
             },
@@ -81,5 +118,9 @@ class ProviderEditActivity : ComponentActivity() {
     companion object {
         const val EXTRA_PROFILE_ID = "provider_profile_id"
         const val EXTRA_PROVIDER_TYPE = "provider_type"
+        const val EXTRA_RESULT_PROFILE_ID = "saved_provider_profile_id"
+        const val EXTRA_RESULT_REQUEST_LOGIN = "request_provider_login"
+        private const val STATE_DRAFT_PROFILE_ID = "provider_draft_profile_id"
+        private const val STATE_DRAFT_CREATED_AT_MS = "provider_draft_created_at_ms"
     }
 }

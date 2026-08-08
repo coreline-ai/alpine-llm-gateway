@@ -13,7 +13,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -24,11 +23,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,30 +44,37 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.content.FileProvider
 import dev.alpine.chat.feature.data.AssistantDefaultsStore
 import dev.alpine.chat.feature.data.ConversationRepository
 import dev.alpine.chat.feature.data.ConversationStore
 import dev.alpine.chat.feature.ui.ChatViewModel
+import dev.alpine.chat.feature.ui.designsystem.AlpineProductHeader
+import dev.alpine.chat.feature.ui.designsystem.AlpineSegmentOption
 import dev.alpine.chat.feature.ui.screens.chat.AlpineChatScreen
-import dev.alpine.chat.feature.ui.theme.AlpineChatTheme
+import dev.alpine.chat.feature.ui.theme.AlpineProductTheme
 import dev.alpine.chat.feature.ui.theme.AlpineTheme
 import dev.alpine.chat.provider.android.activity.ProviderProfilesActivity
 import dev.alpine.chat.routing.ChatExecutionMode
 import dev.alpine.chat.feature.ui.state.ChatRecoveryAction
 import dev.alpine.runtime.api.RuntimePackageAllowlistPolicy
+import dev.alpine.runtime.api.RuntimePackageAction
 import dev.alpine.runtime.api.RuntimePackageApproval
+import dev.alpine.runtime.api.RuntimePackageCatalog
 import dev.alpine.runtime.api.RuntimePackageInstallRequest
+import dev.alpine.runtime.api.RuntimePackageMetadata
+import dev.alpine.runtime.api.RuntimePackageMutationAllowlistPolicy
+import dev.alpine.runtime.api.RuntimePackageMutationRequest
 import dev.alpine.runtime.api.RuntimeTerminalSignal
 import dev.alpine.runtime.api.RuntimeLifecycleState
 import dev.alpine.runtime.bridge.LlmBridgeErrorCode
@@ -77,20 +82,62 @@ import dev.alpine.runtime.bridge.LlmBridgeLifecycleState
 import dev.alpine.runtime.host.RuntimeHostController
 import dev.alpine.runtime.host.RuntimeHostState
 import dev.alpine.runtime.ui.compose.RuntimeWorkspaceScreen
+import dev.alpine.workspace.android.WorkspaceSafTransfer
+import dev.alpine.workspace.android.WorkspaceShareFilePublisher
+import dev.alpine.workspace.api.WorkspaceErrorCode
+import dev.alpine.workspace.api.WorkspaceHostController
+import dev.alpine.workspace.api.WorkspaceHostState
+import dev.alpine.workspace.api.WorkspaceOperationException
+import dev.alpine.workspace.api.WorkspacePath
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
 
 class IntegratedMainActivity : ComponentActivity() {
     private val app by lazy { application as IntegratedApplication }
     private lateinit var chatViewModel: ChatViewModel
     private lateinit var chatHost: IntegratedChatHostController
+    private val modeGuideStore by lazy { IntegratedModeGuideStore(this) }
+    private val workspaceSafTransfer by lazy { WorkspaceSafTransfer(contentResolver) }
+    private val workspaceSharePublisher by lazy { WorkspaceShareFilePublisher(this) }
     private val mainHandler = Handler(Looper.getMainLooper())
     private var pendingNotificationAction: (() -> Unit)? = null
+    private var pendingWorkspaceImportDirectory: WorkspacePath? = null
+    private var pendingWorkspaceExportPath: WorkspacePath? = null
     private val notificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) {
         // A denied notification permission does not authorize a hidden daemon. Android still
         // exposes the user-started FGS in Task Manager, and the SDK keeps its stop contract.
         pendingNotificationAction?.also { pendingNotificationAction = null }?.invoke()
+    }
+    private val workspaceDocumentPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val directory = pendingWorkspaceImportDirectory ?: WorkspacePath.ROOT
+        pendingWorkspaceImportDirectory = null
+        if (uri == null) return@registerForActivityResult
+        Thread {
+            runCatching {
+                workspaceSafTransfer.readImport(uri, app.workspaceStore.limits.maxWriteBytes)
+            }.onSuccess { imported ->
+                app.workspaceController.importBytes(directory, imported.name, imported.bytes)
+            }.onFailure { error ->
+                app.workspaceController.reportExternalFailure(workspaceErrorCode(error))
+            }
+        }.start()
+    }
+    private val workspaceDocumentCreator = registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        val path = pendingWorkspaceExportPath
+        pendingWorkspaceExportPath = null
+        if (uri == null || path == null) return@registerForActivityResult
+        app.workspaceController.readForExport(path).whenComplete { bytes, error ->
+            if (error != null || bytes == null) {
+                app.workspaceController.reportExternalFailure(workspaceErrorCode(error))
+            } else {
+                runCatching { workspaceSafTransfer.writeExport(bytes, uri) }
+                    .onFailure { writeError ->
+                        app.workspaceController.reportExternalFailure(workspaceErrorCode(writeError))
+                    }
+            }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -116,9 +163,10 @@ class IntegratedMainActivity : ComponentActivity() {
         )[ChatViewModel::class.java]
         chatHost = IntegratedChatHostController(this, chatViewModel, app.alpineLlmHost)
         setContent {
-            AlpineChatTheme(darkTheme = false, dynamicColor = false) {
+            AlpineProductTheme {
                 IntegratedApp(
                     controller = app.runtimeController,
+                    workspaceController = app.workspaceController,
                     alpineHost = app.alpineLlmHost,
                     chatViewModel = chatViewModel,
                     chatHost = chatHost,
@@ -126,6 +174,14 @@ class IntegratedMainActivity : ComponentActivity() {
                     onStartAlpine = { startAlpineWithNotificationConsent() },
                     onRestartAlpine = { startAlpineWithNotificationConsent(restart = true) },
                     onRecoveryAction = ::handleRecoveryAction,
+                    onWorkspaceImport = ::requestWorkspaceImport,
+                    onWorkspaceExport = ::requestWorkspaceExport,
+                    onWorkspaceShare = ::requestWorkspaceShare,
+                    showModeGuideInitially = modeGuideStore.shouldShowGuide(),
+                    onCompleteModeGuide = { selectedMode ->
+                        modeGuideStore.markCompleted()
+                        chatViewModel.selectExecutionMode(selectedMode)
+                    },
                 )
             }
         }
@@ -203,12 +259,63 @@ class IntegratedMainActivity : ComponentActivity() {
                 startAlpineWithNotificationConsent(restart = true, retryAfterReady = true)
         }
     }
+
+    private fun requestWorkspaceImport() {
+        pendingWorkspaceImportDirectory = app.workspaceController.currentState().directory
+        workspaceDocumentPicker.launch(arrayOf("text/plain", "text/*", "application/json", "application/octet-stream"))
+    }
+
+    private fun requestWorkspaceExport(path: WorkspacePath) {
+        pendingWorkspaceExportPath = path
+        workspaceDocumentCreator.launch(path.name.ifBlank { "workspace.txt" })
+    }
+
+    private fun requestWorkspaceShare(path: WorkspacePath) {
+        app.workspaceController.readForExport(path).whenComplete { bytes, error ->
+            if (error != null || bytes == null) {
+                app.workspaceController.reportExternalFailure(workspaceErrorCode(error))
+                return@whenComplete
+            }
+            runCatching {
+                val target = workspaceSharePublisher.publish(
+                    displayName = path.name.ifBlank { "workspace.txt" },
+                    bytes = bytes,
+                    maxBytes = app.workspaceStore.limits.maxReadBytes,
+                )
+                FileProvider.getUriForFile(this, "$packageName.workspace-share", target)
+            }.onSuccess { uri ->
+                mainHandler.post {
+                    startActivity(
+                        Intent(Intent.ACTION_SEND)
+                            .setType("text/plain")
+                            .putExtra(Intent.EXTRA_STREAM, uri)
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
+                    )
+                }
+            }.onFailure { shareError ->
+                app.workspaceController.reportExternalFailure(workspaceErrorCode(shareError))
+            }
+        }
+    }
+
+    private fun workspaceErrorCode(error: Throwable?): WorkspaceErrorCode {
+        var current = error
+        repeat(8) {
+            when (current) {
+                is WorkspaceOperationException -> return current.errorCode
+                is CompletionException -> current = current.cause
+                else -> current = current?.cause
+            }
+        }
+        return WorkspaceErrorCode.IO_FAILED
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun IntegratedApp(
     controller: RuntimeHostController,
+    workspaceController: WorkspaceHostController,
     alpineHost: IntegratedAlpineLlmHost,
     chatViewModel: ChatViewModel,
     chatHost: IntegratedChatHostController,
@@ -216,29 +323,44 @@ private fun IntegratedApp(
     onStartAlpine: () -> Unit,
     onRestartAlpine: () -> Unit,
     onRecoveryAction: (ChatRecoveryAction) -> Unit,
+    onWorkspaceImport: () -> Unit,
+    onWorkspaceExport: (WorkspacePath) -> Unit,
+    onWorkspaceShare: (WorkspacePath) -> Unit,
+    showModeGuideInitially: Boolean,
+    onCompleteModeGuide: (ChatExecutionMode) -> Unit,
 ) {
     val chatState = chatViewModel.state.collectAsStateWithLifecycle().value
     val mode = chatState.executionMode
     var runtimeState by remember { mutableStateOf(controller.currentState()) }
+    var workspaceState by remember { mutableStateOf(workspaceController.currentState()) }
     var bridgeState by remember { mutableStateOf(alpineHost.currentState()) }
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
-    DisposableEffect(controller, alpineHost) {
+    DisposableEffect(controller, alpineHost, workspaceController) {
         val runtimeSubscription = controller.addStateListener { next ->
             mainHandler.post { runtimeState = next }
         }
         val bridgeSubscription = alpineHost.addStateListener { next ->
             mainHandler.post { bridgeState = next }
         }
+        val workspaceSubscription = workspaceController.addStateListener { next ->
+            mainHandler.post { workspaceState = next }
+        }
         onDispose {
             runtimeSubscription.close()
             bridgeSubscription.close()
+            workspaceSubscription.close()
         }
     }
     val pendingFallback = chatHost.pendingFallback.collectAsStateWithLifecycle().value
+    var showModeGuide by rememberSaveable { mutableStateOf(showModeGuideInitially) }
 
     Scaffold(
         topBar = {
-            AlpineBrandHeader()
+            AlpineProductHeader(
+                title = "ALPINE AI WORKSPACE",
+                subtitle = "LOCAL LINUX · EXTERNAL LLM",
+                statusLabel = "READY",
+            )
         },
         containerColor = MaterialTheme.colorScheme.background,
     ) { contentPadding ->
@@ -252,6 +374,7 @@ private fun IntegratedApp(
                 onModeChanged = { selected ->
                     chatViewModel.selectExecutionMode(selected)
                 },
+                onOpenGuide = { showModeGuide = true },
                 modifier = Modifier
                     .padding(horizontal = 16.dp, vertical = 8.dp)
                     .testTag("mode_selector"),
@@ -267,6 +390,7 @@ private fun IntegratedApp(
                     onSelectConversation = chatViewModel::selectConversation,
                     onRenameConversation = chatViewModel::renameConversation,
                     onDeleteConversation = chatViewModel::deleteConversation,
+                    onStopConversation = chatViewModel::stopStreaming,
                     onManageProviders = onManageProviders,
                     onDraftChange = chatViewModel::updateDraft,
                     onSend = chatHost::send,
@@ -278,8 +402,10 @@ private fun IntegratedApp(
                 )
                 ChatExecutionMode.ALPINE_WORKSPACE -> AlpineWorkspace(
                     runtimeState = runtimeState,
+                    workspaceState = workspaceState,
                     bridgeState = bridgeState,
                     controller = controller,
+                    workspaceController = workspaceController,
                     chatState = chatState,
                     chatViewModel = chatViewModel,
                     chatHost = chatHost,
@@ -287,6 +413,9 @@ private fun IntegratedApp(
                     onStartAlpine = onStartAlpine,
                     onRestartAlpine = onRestartAlpine,
                     onRecoveryAction = onRecoveryAction,
+                    onWorkspaceImport = onWorkspaceImport,
+                    onWorkspaceExport = onWorkspaceExport,
+                    onWorkspaceShare = onWorkspaceShare,
                     onStopAlpine = { alpineHost.stop() },
                     onHealthAlpine = { alpineHost.health() },
                     onRepairRuntime = {
@@ -307,64 +436,14 @@ private fun IntegratedApp(
             onDecline = { chatHost.resolveFallback(false) },
         )
     }
-}
-
-@Composable
-private fun AlpineBrandHeader() {
-    Surface(
-        color = MaterialTheme.colorScheme.background,
-        contentColor = MaterialTheme.colorScheme.onBackground,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Surface(
-                modifier = Modifier.size(48.dp),
-                shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.inverseSurface,
-                contentColor = MaterialTheme.colorScheme.inversePrimary,
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = ">_",
-                        fontWeight = FontWeight.Black,
-                        fontSize = 19.sp,
-                    )
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = "ALPINE AI WORKSPACE",
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = "LOCAL LINUX · EXTERNAL LLM",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    letterSpacing = 0.8.sp,
-                    maxLines = 1,
-                )
-            }
-            Spacer(Modifier.width(8.dp))
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline),
-                color = MaterialTheme.colorScheme.surface,
-            ) {
-                Text(
-                    text = "READY",
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                )
-            }
-        }
+    if (showModeGuide) {
+        IntegratedModeGuideSheet(
+            onDismiss = { showModeGuide = false },
+            onStartMode = { selectedMode ->
+                onCompleteModeGuide(selectedMode)
+                showModeGuide = false
+            },
+        )
     }
 }
 
@@ -372,13 +451,14 @@ private fun AlpineBrandHeader() {
 private fun ModeSelector(
     mode: ChatExecutionMode,
     onModeChanged: (ChatExecutionMode) -> Unit,
+    onOpenGuide: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        SegmentOption(
+        AlpineSegmentOption(
             selected = mode == ChatExecutionMode.FAST_CHAT,
             onClick = { onModeChanged(ChatExecutionMode.FAST_CHAT) },
             label = "빠른 채팅",
@@ -386,7 +466,7 @@ private fun ModeSelector(
                 .weight(1f)
                 .testTag("mode_fast_chat"),
         )
-        SegmentOption(
+        AlpineSegmentOption(
             selected = mode == ChatExecutionMode.ALPINE_WORKSPACE,
             onClick = { onModeChanged(ChatExecutionMode.ALPINE_WORKSPACE) },
             label = "Alpine 작업",
@@ -394,42 +474,19 @@ private fun ModeSelector(
                 .weight(1f)
                 .testTag("mode_alpine_workspace"),
         )
-    }
-}
-
-@Composable
-private fun SegmentOption(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier
-            .heightIn(min = 52.dp)
-            .selectable(
-                selected = selected,
-                role = Role.Tab,
-                onClick = onClick,
+        TextButton(
+            modifier = Modifier
+                .heightIn(min = 52.dp)
+                .testTag("open_mode_guide")
+                .semantics {
+                    contentDescription = "빠른 채팅과 Alpine 작업 모드 안내"
+                },
+            onClick = onOpenGuide,
+            colors = ButtonDefaults.textButtonColors(
+                contentColor = MaterialTheme.colorScheme.onSurface,
             ),
-        shape = RoundedCornerShape(18.dp),
-        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline),
-        color = if (selected) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.surface
-        },
-        contentColor = if (selected) {
-            MaterialTheme.colorScheme.onPrimary
-        } else {
-            MaterialTheme.colorScheme.onSurface
-        },
-    ) {
-        Box(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 13.dp),
-            contentAlignment = Alignment.Center,
         ) {
-            Text(label, style = MaterialTheme.typography.labelLarge)
+            Text("안내")
         }
     }
 }
@@ -438,8 +495,10 @@ private fun SegmentOption(
 @Composable
 private fun AlpineWorkspace(
     runtimeState: RuntimeHostState,
+    workspaceState: WorkspaceHostState,
     bridgeState: AlpineWorkspaceLlmState,
     controller: RuntimeHostController,
+    workspaceController: WorkspaceHostController,
     chatState: dev.alpine.chat.feature.ui.ChatUiState,
     chatViewModel: ChatViewModel,
     chatHost: IntegratedChatHostController,
@@ -447,6 +506,9 @@ private fun AlpineWorkspace(
     onStartAlpine: () -> Unit,
     onRestartAlpine: () -> Unit,
     onRecoveryAction: (ChatRecoveryAction) -> Unit,
+    onWorkspaceImport: () -> Unit,
+    onWorkspaceExport: (WorkspacePath) -> Unit,
+    onWorkspaceShare: (WorkspacePath) -> Unit,
     onStopAlpine: () -> Unit,
     onHealthAlpine: () -> Unit,
     onRepairRuntime: () -> Unit,
@@ -474,13 +536,13 @@ private fun AlpineWorkspace(
                     .padding(horizontal = 16.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                SegmentOption(
+                AlpineSegmentOption(
                     selected = selectedPane == AlpineWorkspacePane.CHAT,
                     onClick = { selectedPane = AlpineWorkspacePane.CHAT },
                     label = "Gateway 채팅",
                     modifier = Modifier.weight(1f).testTag("alpine_chat_pane"),
                 )
-                SegmentOption(
+                AlpineSegmentOption(
                     selected = selectedPane == AlpineWorkspacePane.TOOLS,
                     onClick = { selectedPane = AlpineWorkspacePane.TOOLS },
                     label = "터미널·도구",
@@ -499,6 +561,7 @@ private fun AlpineWorkspace(
                 onSelectConversation = chatViewModel::selectConversation,
                 onRenameConversation = chatViewModel::renameConversation,
                 onDeleteConversation = chatViewModel::deleteConversation,
+                onStopConversation = chatViewModel::stopStreaming,
                 onManageProviders = onManageProviders,
                 onDraftChange = chatViewModel::updateDraft,
                 onSend = chatHost::send,
@@ -526,9 +589,15 @@ private fun AlpineWorkspace(
                     onResetRuntime()
                 },
                 onOpenTerminal = { controller.openTerminal() },
+                onOpenAdditionalTerminal = { controller.openAdditionalTerminal() },
+                onSelectTerminal = { terminalId -> controller.selectTerminal(terminalId) },
+                onRenameTerminal = { terminalId, title -> controller.renameTerminal(terminalId, title) },
                 onSendTerminal = { controller.sendTerminalInput(it) },
+                onSendTerminalRaw = { controller.sendTerminalInput(it, appendNewline = false) },
                 onInterruptTerminal = { controller.signalTerminal(RuntimeTerminalSignal.INTERRUPT) },
                 onCloseTerminal = { controller.closeTerminal() },
+                onTerminateTerminal = { controller.signalTerminal(RuntimeTerminalSignal.TERMINATE) },
+                onKillTerminal = { controller.signalTerminal(RuntimeTerminalSignal.KILL) },
                 onInstallPackages = { packages ->
                     controller.installPackages(
                         request = RuntimePackageInstallRequest(packages),
@@ -537,6 +606,33 @@ private fun AlpineWorkspace(
                         approval = RuntimePackageApproval { CompletableFuture.completedFuture(true) },
                     )
                 },
+                packageCatalog = PACKAGE_CATALOG,
+                removablePackages = PACKAGE_REMOVABLE_ALLOWLIST,
+                onMutatePackages = { action, packages ->
+                    controller.mutatePackages(
+                        request = RuntimePackageMutationRequest(action, packages),
+                        policy = RuntimePackageMutationAllowlistPolicy(
+                            allowedPackages = PACKAGE_ALLOWLIST,
+                            removablePackages = PACKAGE_REMOVABLE_ALLOWLIST,
+                        ),
+                        // RuntimePackagePanel already displayed the action-specific confirmation.
+                        approval = RuntimePackageApproval { CompletableFuture.completedFuture(true) },
+                    )
+                },
+                onRunToolSmoke = controller::runToolSmoke,
+                workspaceState = workspaceState,
+                onWorkspaceRefresh = { workspaceController.refresh() },
+                onWorkspaceNavigate = { path -> workspaceController.navigate(path) },
+                onWorkspaceOpen = { path -> workspaceController.open(path) },
+                onWorkspaceSave = { text -> workspaceController.saveSelected(text) },
+                onWorkspaceCreateFile = { name -> workspaceController.createTextFile(name) },
+                onWorkspaceCreateDirectory = { name -> workspaceController.createDirectory(name) },
+                onWorkspaceRenameSelected = { name -> workspaceController.renameSelected(name) },
+                onWorkspaceDeleteSelected = { workspaceController.deleteSelected() },
+                onWorkspaceSearch = { query -> workspaceController.search(query) },
+                onWorkspaceImport = onWorkspaceImport,
+                onWorkspaceExport = onWorkspaceExport,
+                onWorkspaceShare = onWorkspaceShare,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -602,6 +698,20 @@ private fun AlpineGatewayStatusCard(
             }
             if (runtimeState.runtimeState.lifecycle == RuntimeLifecycleState.NOT_INSTALLED) {
                 Text("터미널·도구에서 Alpine Runtime을 먼저 설치하세요.")
+            }
+            if (bridgeState.operation != AlpineWorkspaceLlmOperation.IDLE) {
+                Text(
+                    bridgeState.operation.userLabel(),
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.testTag("alpine_gateway_operation"),
+                )
+                if (bridgeState.operation == AlpineWorkspaceLlmOperation.RECOVERING) {
+                    Text(
+                        "이전 대화 요청과 터미널 명령은 자동으로 다시 실행하지 않습니다.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
             bridgeState.errorCode?.let { code ->
                 Text(
@@ -721,6 +831,15 @@ private fun LlmBridgeLifecycleState.userLabel(): String = when (this) {
     LlmBridgeLifecycleState.FAILED -> "복구 필요"
 }
 
+private fun AlpineWorkspaceLlmOperation.userLabel(): String = when (this) {
+    AlpineWorkspaceLlmOperation.IDLE -> "대기"
+    AlpineWorkspaceLlmOperation.STARTING -> "Gateway 시작 중"
+    AlpineWorkspaceLlmOperation.CHECKING_HEALTH -> "Gateway 상태 확인 중"
+    AlpineWorkspaceLlmOperation.RESTARTING -> "Gateway 재시작 중"
+    AlpineWorkspaceLlmOperation.RECOVERING -> "Gateway 자동 복구 중"
+    AlpineWorkspaceLlmOperation.STOPPING -> "Gateway 종료 중"
+}
+
 private fun LlmBridgeErrorCode.userMessage(): String = when (this) {
     LlmBridgeErrorCode.INVALID_STATE -> "Runtime 상태를 확인한 뒤 다시 시도하세요."
     LlmBridgeErrorCode.ARTIFACT_INVALID -> "Gateway 설치 파일 검증에 실패했습니다."
@@ -735,4 +854,112 @@ private fun LlmBridgeErrorCode.userMessage(): String = when (this) {
     LlmBridgeErrorCode.INTERNAL_ERROR -> "내부 연결 오류가 발생했습니다."
 }
 
-private val PACKAGE_ALLOWLIST = setOf("git", "python3", "py3-pip", "curl", "openssh-client")
+private val PACKAGE_ALLOWLIST = setOf(
+    "git",
+    "python3",
+    "py3-pip",
+    "curl",
+    "openssh-client",
+    "nodejs",
+    "npm",
+)
+
+/** Gateway Python stays protected; these optional developer tools are the only removable set. */
+private val PACKAGE_REMOVABLE_ALLOWLIST = setOf(
+    "git",
+    "py3-pip",
+    "curl",
+    "openssh-client",
+    "nodejs",
+    "npm",
+)
+
+/**
+ * Informational snapshot for the bundled Alpine 3.21 arm64 Runtime only.
+ *
+ * This is not a live package solver and is intentionally not used to authorize or construct an
+ * apk command.  The package panel explains that dependencies, repository changes, index/cache
+ * downloads and filesystem overhead can make the actual transaction larger.
+ */
+private val PACKAGE_CATALOG = RuntimePackageCatalog(
+    listOf(
+        packageMetadata(
+            packageName = "git",
+            version = "2.47.3-r0",
+            license = "GPL-2.0-only",
+            downloadBytes = 3_414_900,
+            installedBytes = 6_997_971,
+            repository = "main",
+        ),
+        packageMetadata(
+            packageName = "python3",
+            version = "3.12.13-r0",
+            license = "PSF-2.0",
+            downloadBytes = 8_078_719,
+            installedBytes = 26_338_596,
+            repository = "main",
+        ),
+        packageMetadata(
+            packageName = "py3-pip",
+            version = "24.3.1-r0",
+            license = "MIT",
+            downloadBytes = 1_695_108,
+            installedBytes = 5_656_209,
+            repository = "community",
+        ),
+        packageMetadata(
+            packageName = "curl",
+            version = "8.14.1-r2",
+            license = "curl",
+            downloadBytes = 165_197,
+            installedBytes = 274_878,
+            repository = "main",
+        ),
+        packageMetadata(
+            packageName = "openssh-client",
+            resolvedPackageName = "openssh-client-default",
+            version = "9.9_p2-r0",
+            license = "SSH-OpenSSH",
+            downloadBytes = 367_738,
+            installedBytes = 854_664,
+            repository = "main",
+        ),
+        packageMetadata(
+            packageName = "nodejs",
+            version = "22.23.2-r0",
+            license = "MIT",
+            downloadBytes = 17_436_759,
+            installedBytes = 48_276_512,
+            repository = "main",
+        ),
+        packageMetadata(
+            packageName = "npm",
+            version = "10.9.1-r0",
+            license = "Artistic-2.0",
+            downloadBytes = 2_184_455,
+            installedBytes = 7_933_969,
+            repository = "community",
+        ),
+    ),
+)
+
+private fun packageMetadata(
+    packageName: String,
+    version: String,
+    license: String,
+    downloadBytes: Long,
+    installedBytes: Long,
+    repository: String,
+    resolvedPackageName: String = packageName,
+): RuntimePackageMetadata = RuntimePackageMetadata(
+    packageName = packageName,
+    resolvedPackageName = resolvedPackageName,
+    version = version,
+    licenseExpression = license,
+    downloadBytes = downloadBytes,
+    installedBytes = installedBytes,
+    repository = repository,
+    architecture = "aarch64",
+    snapshotId = "Alpine v3.21 aarch64 APKINDEX · 2026-08-08",
+    sourceUrl = "https://dl-cdn.alpinelinux.org/alpine/v3.21/$repository/aarch64/APKINDEX.tar.gz",
+)

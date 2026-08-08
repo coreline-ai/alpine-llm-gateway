@@ -133,8 +133,8 @@ object Alpine321Arm64Pack {
             id = "proot-arm64-v8a",
             kind = RuntimeArtifactKind.NATIVE_LAUNCHER,
             version = "8cf13e997cdc9472997aae19df8050c073c9a86c",
-            sha256 = "336627708766ac2065485c4759048412761ea749787ca3111889f225585cfa4c",
-            sizeBytes = 280_440,
+            sha256 = "5d2959c3a58f82609c8b95a92496835099a96faa8efc12f68e171a3597b5bc29",
+            sizeBytes = 279_144,
             abi = "arm64-v8a",
             license = "GPL-2.0-or-later (declared); binary conclusion review required",
         )
@@ -151,7 +151,7 @@ object Alpine321Arm64Pack {
         return BundledRuntimePack(
             manifest = RuntimeArtifactManifest(
                 runtimeId = "alpine",
-                runtimeVersion = "3.21.3-openminis-8cf13e9-winsize1",
+                runtimeVersion = "3.21.3-openminis-8cf13e9-unpatched1",
                 artifacts = listOf(rootfs, launcher, loader),
                 metadata = mapOf(
                     RuntimeArtifactMetadataKeys.MANIFEST_SCHEMA to "1",
@@ -162,10 +162,10 @@ object Alpine321Arm64Pack {
                     RuntimeArtifactMetadataKeys.SBOM_PATH to
                         "META-INF/alpine-runtime/sbom.spdx.json",
                     RuntimeArtifactMetadataKeys.SBOM_SHA256 to
-                        "2bc527c3aa878765bab4393437886d11caa6f3dca86ba345e59b5c29f7d58b2e",
+                        "678ed604a09a22d5e63c3f2289225de0a85b7c868f05e78817f7a54e4d1d42bc",
                     RuntimeArtifactMetadataKeys.SOURCE_REVISION to
                         "proot:8cf13e997cdc9472997aae19df8050c073c9a86c;" +
-                            "patch:proot-android-winsize@20726d1ccf9b;alpine:3.21.3",
+                            "local-patches:none;alpine:3.21.3",
                 ),
             ),
             rootfsAssetName = ROOTFS_ASSET_NAME,

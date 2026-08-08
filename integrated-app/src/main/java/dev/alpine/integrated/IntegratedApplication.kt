@@ -15,6 +15,9 @@ import dev.alpine.runtime.bridge.LlmBridgeEndpointRegistry
 import dev.alpine.runtime.bridge.LlmBridgeEnvironmentContributor
 import dev.alpine.runtime.pack.bundled.Alpine321Arm64Pack
 import dev.alpine.runtime.pack.bundled.BundledRuntimeArtifactProvider
+import dev.alpine.workspace.android.AppPrivateWorkspaceStore
+import dev.alpine.workspace.api.WorkspaceHostController
+import dev.alpine.workspace.api.WorkspaceStore
 
 class IntegratedApplication : Application() {
     lateinit var runtimeManager: AlpineRuntimeManager
@@ -24,6 +27,10 @@ class IntegratedApplication : Application() {
     lateinit var backgroundController: RuntimeForegroundServiceController
         private set
     lateinit var alpineLlmHost: IntegratedAlpineLlmHost
+        private set
+    lateinit var workspaceStore: WorkspaceStore
+        private set
+    lateinit var workspaceController: WorkspaceHostController
         private set
     private lateinit var bridgeEndpointRegistry: LlmBridgeEndpointRegistry
     private var backgroundBinding: RuntimeSubscription? = null
@@ -56,6 +63,12 @@ class IntegratedApplication : Application() {
         )
         RuntimeBackgroundMaintenance(this).enqueueRecoveryAudit(15L * 60L * 1000L)
         runtimeController = RuntimeHostController(runtimeManager)
+        workspaceStore = AppPrivateWorkspaceStore.forDirectory(
+            context = this,
+            directory = java.io.File(filesDir, "$runtimeDirectoryName/workspace"),
+        )
+        workspaceController = WorkspaceHostController(workspaceStore)
+        workspaceController.refresh()
         alpineLlmHost = IntegratedAlpineLlmHost(
             context = this,
             runtimeManager = runtimeManager,
@@ -72,6 +85,7 @@ class IntegratedApplication : Application() {
         backgroundBinding?.close()
         backgroundController.stop()
         alpineLlmHost.close()
+        workspaceController.close()
         runtimeController.close()
         runtimeManager.close()
         super.onTerminate()

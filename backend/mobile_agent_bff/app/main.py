@@ -24,6 +24,7 @@ from .registry import DuplicateRequestError, RequestLimitError, RequestRegistry
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
+    settings.validate()
     verifier = OidcVerifier(settings)
     registry = RequestRegistry(settings.max_concurrent_requests)
     adapters: dict[ProviderName, ProviderAdapter] = {
@@ -31,16 +32,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings.openai_api_key,
             settings.openai_models,
             settings.request_timeout_seconds,
+            max_event_bytes=settings.max_provider_event_bytes,
+            max_stream_bytes=settings.max_provider_stream_bytes,
         ),
         ProviderName.ANTHROPIC: AnthropicAdapter(
             settings.anthropic_api_key,
             settings.anthropic_models,
             settings.request_timeout_seconds,
+            max_event_bytes=settings.max_provider_event_bytes,
+            max_stream_bytes=settings.max_provider_stream_bytes,
         ),
         ProviderName.XAI: XaiAdapter(
             settings.xai_api_key,
             settings.xai_models,
             settings.request_timeout_seconds,
+            max_event_bytes=settings.max_provider_event_bytes,
+            max_stream_bytes=settings.max_provider_stream_bytes,
         ),
     }
 

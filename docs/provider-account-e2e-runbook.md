@@ -4,6 +4,28 @@
 사용자 승인 session에서만 수행한다. 자동 테스트는 fake Provider로 429/5xx/비정상 SSE를 검증하고,
 실계정은 정상 흐름과 사용자가 직접 유발한 취소만 확인한다.
 
+## 결정론 fault 기준선
+
+실계정 실행 전에 로컬 fake transport로 다음 항목이 통과해야 한다.
+
+- Python Gateway: 401/403/404와 retryable 408/429/500/502/503/504, `Retry-After`, timeout/disconnect,
+  malformed JSON/SSE, invalid UTF-8, event/전체 크기와 stream-open 이후 no-retry
+- MobileAgent BFF: 401/403/404/429/500/502/503/504 고정 mapping, `text/event-stream`, UTF-8 chunk split,
+  invalid UTF-8, multiline SSE, event 1 MiB·stream 32 MiB 상한, timeout과 HTTP 200 이후 redacted error
+- Android direct Provider: strict UTF-8 SSE, 모든 field/comment를 포함한 event/전체 상한,
+  OpenAI-compatible non-2xx·invalid success body redaction
+- OAuth callback: stale port/path/state, 중복 code/state/error와 code+error 동시 입력 거부,
+  Provider `error_description` 원문 비노출
+
+```bash
+python3.11 -m unittest discover -s tests -v
+cd backend/mobile_agent_bff && .venv/bin/pytest -q
+```
+
+2026-08-08 로컬 기준선은 Python 102/102, BFF 39/39, Android OAuth/Provider unit,
+Samsung OAuth 저장소 3/3·Provider 12/12·Integrated 10/10 통과다. 이는 실제 Provider 또는 staging
+fault proxy 실행을 대체하지 않는다.
+
 ## Provider별 공통 절차
 
 1. 별도 테스트 계정과 비용 한도를 준비한다.
@@ -17,6 +39,21 @@
 6. 같은 논리 요청을 다른 backend로 자동 fallback하지 않는지 확인한다.
 7. 로그에는 Provider, model, status category, request ID와 redacted error code만 보존한다.
 8. 로그아웃 후 refresh/access token과 bridge capability가 더 이상 동작하지 않는지 확인한다.
+
+## 실제 callback lifecycle 추가 절차
+
+이 절차는 credential-free fake 복구 테스트와 별개이며 계정 owner가 승인한 파괴적 테스트 창에서만 수행한다.
+
+1. OAuth 동의 화면을 연 상태에서 Activity recreation을 유발하고 자동 token 교환·자동 로그인 재실행이 없는지 확인한다.
+2. 새 로그인 시도를 시작한 뒤 callback 전에 app process를 종료하고 cold start한다.
+3. `AUTH_FLOW_INTERRUPTED` 또는 `AUTH_SESSION_EXPIRED`만 표시되고 code/state/verifier/Provider 원문이 보이지 않는지 확인한다.
+4. 기존 브라우저 callback이 token exchange를 시작하지 못하고, 사용자가 새 **로그인**을 누른 뒤에만 새 시도가 1회 시작되는지 확인한다.
+5. token 저장 직후 종료 fixture에서는 정상 인증 token이 유지되고 stale lifecycle marker만 정리되는지 확인한다.
+6. 각 단계의 화면·logcat에는 계정, client ID, callback query와 token을 남기지 않는다.
+
+로컬 기준선에서는 fake Provider Activity recreation, orphaned encrypted transaction, 성공 token 우선과
+Samsung `SM-S931N`의 credential-free `am force-stop` cold start가 통과했다. 이는 실제 Provider callback
+중 process kill 완료를 의미하지 않는다.
 
 실행 결과는 `integration-fixtures/provider-e2e/report.template.json`을 복사해 각 Provider의
 `models`, `non_stream`, `stream`, `cancel`, `logout` 상태만 `PASS`/`FAIL`/`NOT_RUN`으로 기록한다.

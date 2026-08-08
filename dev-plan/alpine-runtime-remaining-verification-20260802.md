@@ -12,6 +12,17 @@
   외부 승인·환경이 없어 `BLOCKED` 또는 `NOT_RUN`으로 유지한다.
 - 공개 배포는 **No-Go**다. 내부 개발용 SDK bundle만 생성했다.
 
+### 2026-08-08 재확인 및 제품 계약 정정
+
+- Samsung `SM-S931N`에서 동일 production PRoot binary로 probe를 재실행했다. Host control/tracee fd와
+  patch diagnostic은 `40 120`을 보고했으나 guest `stty size`는 다시 `28 96`이었다.
+- `DYNAMIC` capability가 FIFO ready만으로 노출된 뒤 `TERMINAL_UNAVAILABLE`를 반환하는 false capability를
+  확인했다. FIFO watcher, per-pid `/proc` terminal fd resize, guest state/ack 환경 변수를 Runtime 실행 경로에서
+  제거했다.
+- Native PTY는 최초 size만 적용하며 terminal은 `INITIAL_SIZE_ONLY`와
+  `TERMINAL_RESIZE_UNSUPPORTED`를 일관되게 반환한다. `GUEST_WINSIZE_NOT_PROPAGATED` gate는 해결되지 않았고
+  source-level PRoot hook 또는 terminal architecture 변경 전까지 계속 `BLOCKED`다.
+
 ## 1. Samsung terminal resize
 
 검증 기기:
@@ -51,19 +62,22 @@ terminal_resize_ack=MISMATCH ... STATE 40 120 PROOT EXIT_APPLIED 40 120 ...
 - public `DYNAMIC` 지원으로 선언하려면 guest `stty`, `SIGWINCH` TUI 재배치와 resize storm이 모두
   실제로 통과해야 한다.
 
-관련 구현:
+관련 구현 (당시 실패한 experiment):
 
 - `alpine-runtime-android/src/main/cpp/pty_bridge.c`
 - `alpine-runtime-android/src/main/kotlin/dev/alpine/runtime/android/internal/NativePtyBridge.kt`
 - `alpine-runtime-android/src/main/kotlin/dev/alpine/runtime/android/internal/GuestTerminalResizeChannel.kt`
 - `alpine-runtime-android/src/main/kotlin/dev/alpine/runtime/android/internal/ProotProcessLauncher.kt`
-- `scripts/runtime/patches/proot-android-winsize.patch`
+- `scripts/runtime/patches/proot-android-winsize.patch` — 2026-08-08에 제품 build와
+  source bundle에서 제거됨. 최신 source-to-binary 상태는 `implement_20260808_203838.md`를 기준으로 한다.
 
 ## 2. Runtime artifact 공급망
 
-공통 PRoot patch:
+공통 PRoot patch (당시 experiment):
 
 - SHA-256: `20726d1ccf9bb8c952a6039d5158168dad58ec62bcf7cbf73bc3170b8c4a9a27`
+- 이 patch와 해당 binary는 2026-08-08에 제거됐다. 아래 checksum은 당시 증거이며 현재 packaged
+  artifact 값이 아니다.
 
 arm64-v8a production pack:
 

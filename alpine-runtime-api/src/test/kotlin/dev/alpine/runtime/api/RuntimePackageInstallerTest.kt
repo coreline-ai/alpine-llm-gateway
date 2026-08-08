@@ -59,6 +59,52 @@ class RuntimePackageInstallerTest {
         }
     }
 
+    @Test
+    fun `remove rejects protected package before approval or command dispatch`() {
+        val session = RecordingSession()
+        var approvalRequested = false
+
+        val result = RuntimePackageMutator(
+            RuntimePackageMutationAllowlistPolicy(
+                allowedPackages = setOf("python3", "git"),
+                removablePackages = setOf("git"),
+            ),
+        ).mutate(
+            session = session,
+            request = RuntimePackageMutationRequest(RuntimePackageAction.REMOVE, listOf("python3")),
+            approval = RuntimePackageApproval {
+                approvalRequested = true
+                CompletableFuture.completedFuture(true)
+            },
+        ).toCompletableFuture().join()
+
+        assertEquals(RuntimePackageMutationOutcome.POLICY_DENIED, result.outcome)
+        assertEquals(false, approvalRequested)
+        assertEquals(null, session.lastRequest)
+    }
+
+    @Test
+    fun `approved update uses a fixed scoped apk upgrade command`() {
+        val session = RecordingSession()
+        val result = RuntimePackageMutator(
+            RuntimePackageMutationAllowlistPolicy(
+                allowedPackages = setOf("git"),
+                removablePackages = setOf("git"),
+            ),
+        ).mutate(
+            session = session,
+            request = RuntimePackageMutationRequest(RuntimePackageAction.UPDATE, listOf("git")),
+            approval = RuntimePackageApproval { request ->
+                assertEquals(RuntimePackageAction.UPDATE, request.action)
+                CompletableFuture.completedFuture(true)
+            },
+        ).toCompletableFuture().join()
+
+        assertEquals(RuntimePackageMutationOutcome.COMPLETED, result.outcome)
+        assertEquals("/sbin/apk", session.lastRequest?.executable)
+        assertEquals(listOf("upgrade", "--no-progress", "git"), session.lastRequest?.arguments)
+    }
+
     private class RecordingSession : RuntimeSession {
         override val id: String = "recording"
         override val startedAtEpochMillis: Long = 0

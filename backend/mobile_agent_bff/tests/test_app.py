@@ -6,7 +6,7 @@ import pytest
 from app.config import Settings
 from app.main import create_app
 from app.models import AuthPrincipal, ProviderName
-from app.providers import ProviderEvent
+from app.providers import ProviderEvent, ProviderStreamError
 
 
 def settings(**updates) -> Settings:
@@ -87,6 +87,24 @@ class _BlockingProvider:
         except asyncio.CancelledError:
             self.cancelled.set()
             raise
+        yield ProviderEvent("delta", {"text": "unreachable"})
+
+    async def close(self) -> None:
+        return None
+
+
+class _FaultProvider:
+    configured = True
+    models = ("coding-model",)
+
+    def validate(self, request) -> None:
+        assert request.model == "coding-model"
+
+    async def stream(self, request, cancel):
+        del request, cancel
+        raise ProviderStreamError("provider_unavailable", 503) from RuntimeError(
+            "provider-secret-cause"
+        )
         yield ProviderEvent("delta", {"text": "unreachable"})
 
     async def close(self) -> None:
@@ -202,3 +220,44 @@ async def test_rejected_request_does_not_echo_prompt_or_provider_secret(caplog) 
     assert prompt_marker not in combined_output
     assert provider_secret not in combined_output
     assert response.json() == {"detail": {"code": "model_not_allowed"}}
+
+
+@pytest.mark.asyncio
+async def test_stream_fault_after_http_200_is_redacted_and_registry_is_released(caplog) -> None:
+    prompt_marker = "private-stream-prompt-must-not-leak"
+    app = create_app(
+        settings(openai_api_key="unit-test-only", openai_models=("coding-model",))
+    )
+    verifier = app.state.verifier
+    app.state.adapters[ProviderName.OPENAI] = _FaultProvider()
+
+    async def fake_principal() -> AuthPrincipal:
+        return AuthPrincipal(
+            subject="user-1",
+            authorized_party="mobile-agent-native",
+            expires_at=2_000_000_000,
+            issued_at=1_900_000_000,
+            jwt_id="jwt-1",
+        )
+
+    app.dependency_overrides[verifier] = fake_principal
+    payload = {
+        "request_id": "request_1234",
+        "provider": "openai",
+        "model": "coding-model",
+        "messages": [{"role": "user", "content": prompt_marker}],
+    }
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="https://bff.test",
+        ) as client:
+            response = await client.post("/v1/chat/stream", json=payload)
+
+    assert response.status_code == 200
+    assert "event: start" in response.text
+    assert 'event: error\ndata: {"code":"provider_unavailable"' in response.text
+    combined_output = response.text + caplog.text
+    assert "provider-secret-cause" not in combined_output
+    assert prompt_marker not in combined_output
+    assert await app.state.registry.active_count() == 0

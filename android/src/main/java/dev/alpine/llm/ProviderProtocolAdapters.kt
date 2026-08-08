@@ -13,7 +13,6 @@ import java.util.Base64
 class AnthropicMessagesOAuthAdapter(
     private val messagesEndpoint: String,
     private val anthropicVersion: String = "2023-06-01",
-    private val anthropicBeta: String? = null,
     private val extraHeaders: Map<String, String> = emptyMap(),
 ) : OAuthStreamingProviderHttpAdapter {
     init {
@@ -119,7 +118,6 @@ class AnthropicMessagesOAuthAdapter(
         }
 
         val headers = linkedMapOf("anthropic-version" to anthropicVersion)
-        anthropicBeta?.takeIf { it.isNotBlank() }?.let { headers["anthropic-beta"] = it }
         headers.putAll(extraHeaders)
         return ProviderHttpRequest(messagesEndpoint, body.toString(), headers)
     }

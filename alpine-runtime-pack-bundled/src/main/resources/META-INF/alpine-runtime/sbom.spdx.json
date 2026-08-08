@@ -30,7 +30,7 @@
       "name": "OpenMinis PRoot Android fork",
       "versionInfo": "8cf13e997cdc9472997aae19df8050c073c9a86c",
       "downloadLocation": "https://github.com/OpenMinis/proot",
-      "sourceInfo": "OpenMinis commit plus scripts/runtime/patches/proot-android-winsize.patch (SHA256 20726d1ccf9bb8c952a6039d5158168dad58ec62bcf7cbf73bc3170b8c4a9a27)",
+      "sourceInfo": "OpenMinis commit 8cf13e997cdc9472997aae19df8050c073c9a86c; no local PRoot patches",
       "filesAnalyzed": false,
       "licenseConcluded": "NOASSERTION",
       "licenseDeclared": "GPL-2.0-or-later",

@@ -93,14 +93,15 @@ fi
 if ! printf '%s' "$PROBE_RESULT" | python3 -c '
 import json, sys
 result = json.load(sys.stdin)
-stdout = result.get("stdout", "")
 assert result.get("success") is True
 assert result.get("healthy") is True
 assert result.get("exit_code") == 0
-assert "machine=x86_64" in stdout
+assert result.get("command_probe_ok") is True
+assert result.get("guest_machine_matches_primary_abi") is True
+assert result.get("guest_alpine_release_present") is True
 assert result.get("terminal_responded") is True
 assert result.get("terminal_prompted") is True
-assert "restart=ok" in result.get("restart_stdout", "")
+assert result.get("restart_probe_ok") is True
 '; then
   write_report "FAILED" "$SERIAL" "RUNTIME_PROBE_DID_NOT_PASS" "$API_LEVEL" "$MODEL"
   exit 1

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-08-02T11:01:50Z",
+  "updated_at": "2026-08-08T13:58:55Z",
   "gates": [
     {
       "gate_id": "project_license",
@@ -77,9 +77,13 @@
       "state": "BLOCKED",
       "owner": "LOCAL_ENGINEERING",
       "release_blocking": false,
-      "blocker_code": "GUEST_WINSIZE_NOT_PROPAGATED",
+      "blocker_code": "GUEST_SIGWINCH_REPEAT_STRESS_UNSUPPORTED",
       "evidence": [
-        "dev-plan/alpine-runtime-p1-p2-verification-20260801.md"
+        "dev-plan/alpine-runtime-p1-p2-verification-20260801.md",
+        "dev-plan/implement_20260808_210833.md",
+        "dev-plan/implement_20260808_223000.md",
+        "dev-plan/implement_20260808_230032.md",
+        "docs/adr/0006-single-pty-dynamic-terminal-resize.md"
       ]
     },
     {

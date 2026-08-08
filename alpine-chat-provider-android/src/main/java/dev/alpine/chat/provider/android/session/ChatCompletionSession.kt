@@ -6,12 +6,9 @@ import dev.alpine.llm.HostLlmStreamEvent
 import dev.alpine.llm.HostLlmStreamResult
 import dev.alpine.chat.feature.backend.ChatBackendDescriptor
 import dev.alpine.chat.feature.backend.ChatBackendSession
-import dev.alpine.chat.provider.android.model.AnthropicProfileDefaults
-import dev.alpine.chat.provider.android.model.CodexProfileDefaults
 import dev.alpine.chat.provider.android.model.GeminiProfileDefaults
 import dev.alpine.chat.provider.android.model.ProviderProfile
 import dev.alpine.chat.provider.android.model.ProviderType
-import dev.alpine.chat.provider.android.model.XaiProfileDefaults
 import kotlinx.coroutines.flow.map
 
 interface ChatCompletionSession : ChatBackendSession {
@@ -47,10 +44,11 @@ fun ProviderProfile.toChatBackendDescriptor(): ChatBackendDescriptor = ChatBacke
     label = label,
     model = model,
     modelOptions = when (type) {
-        ProviderType.ANTHROPIC -> (AnthropicProfileDefaults.MODELS + model).distinct()
         ProviderType.GEMINI -> (GeminiProfileDefaults.MODELS + model).distinct()
-        ProviderType.CODEX -> (CodexProfileDefaults.MODELS + model).distinct()
-        ProviderType.XAI -> (XaiProfileDefaults.MODELS + model).distinct()
-        ProviderType.OPENAI_COMPATIBLE -> listOf(model)
+        ProviderType.ANTHROPIC,
+        ProviderType.CODEX,
+        ProviderType.OPENAI_COMPATIBLE,
+        ProviderType.XAI,
+        -> listOf(model)
     },
 )

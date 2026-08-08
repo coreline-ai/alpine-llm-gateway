@@ -2,6 +2,8 @@ package dev.alpine.runtime.api
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.io.ByteArrayInputStream
@@ -91,4 +93,73 @@ class RuntimeApiTest {
             RuntimeArtifactManifestCanonicalizer.canonicalBytes(reversed),
         )
     }
+
+    @Test
+    fun `default developer tool smoke workflows use fixed direct version argv`() {
+        assertEquals(setOf("python", "git", "ssh", "node"), DefaultRuntimeDeveloperToolProfiles.map { it.id }.toSet())
+        DefaultRuntimeDeveloperToolProfiles.forEach { profile ->
+            assertTrue(profile.smokeRequest.executable.startsWith("/"))
+            assertFalse(profile.smokeRequest.executable in setOf("/bin/sh", "/bin/ash", "/usr/bin/env"))
+            assertTrue(profile.smokeRequest.arguments.all { argument -> argument.startsWith("-") })
+            assertTrue(profile.packages.isNotEmpty())
+        }
+    }
+
+    @Test
+    fun `developer tool smoke workflow rejects shell execution`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            RuntimeDeveloperToolProfile(
+                id = "bad-shell",
+                label = "Bad",
+                packages = listOf("git"),
+                smokeRequest = RuntimeCommandRequest("/bin/sh", listOf("-c", "id")),
+            )
+        }
+    }
+
+    @Test
+    fun `package catalog estimates only known package archives and preserves missing names`() {
+        val git = packageMetadata(
+            packageName = "git",
+            downloadBytes = 3_414_900,
+            installedBytes = 6_997_971,
+        )
+        val catalog = RuntimePackageCatalog(listOf(git))
+
+        val estimate = catalog.estimate(listOf("git", "unknown-package", "git"))
+
+        assertEquals(listOf(git), estimate.metadata)
+        assertEquals(listOf("unknown-package"), estimate.missingPackageNames)
+        assertEquals(3_414_900, estimate.downloadBytes)
+        assertEquals(6_997_971, estimate.installedBytes)
+        assertFalse(estimate.isComplete)
+    }
+
+    @Test
+    fun `package catalog rejects duplicate names and invalid snapshot urls`() {
+        val git = packageMetadata(packageName = "git")
+        assertThrows(IllegalArgumentException::class.java) {
+            RuntimePackageCatalog(listOf(git, git.copy(version = "2.0")))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            packageMetadata(packageName = "git", sourceUrl = "http://example.test/index")
+        }
+    }
+
+    private fun packageMetadata(
+        packageName: String,
+        downloadBytes: Long = 1,
+        installedBytes: Long = 2,
+        sourceUrl: String = "https://example.test/index",
+    ) = RuntimePackageMetadata(
+        packageName = packageName,
+        version = "1.0-r0",
+        licenseExpression = "MIT",
+        downloadBytes = downloadBytes,
+        installedBytes = installedBytes,
+        repository = "main",
+        architecture = "aarch64",
+        snapshotId = "test snapshot",
+        sourceUrl = sourceUrl,
+    )
 }

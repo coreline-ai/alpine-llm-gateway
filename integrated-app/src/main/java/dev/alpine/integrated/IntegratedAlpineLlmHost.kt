@@ -19,6 +19,11 @@ import dev.alpine.runtime.api.RuntimeSubscription
 import dev.alpine.runtime.bridge.AlpineLlmBridgeConfiguration
 import dev.alpine.runtime.bridge.AlpineLlmBridgeController
 import dev.alpine.runtime.bridge.AlpineLlmBridgeHealth
+import dev.alpine.runtime.bridge.AlpineLlmBridgeRecoveryConfiguration
+import dev.alpine.runtime.bridge.AlpineLlmBridgeRecoveryListener
+import dev.alpine.runtime.bridge.AlpineLlmBridgeRecoveryMode
+import dev.alpine.runtime.bridge.AlpineLlmBridgeRecoveryState
+import dev.alpine.runtime.bridge.AlpineLlmBridgeRecoverySupervisor
 import dev.alpine.runtime.bridge.AlpineLlmModel
 import dev.alpine.runtime.bridge.LlmBridgeEndpointRegistry
 import dev.alpine.runtime.bridge.LlmBridgeErrorCode
@@ -46,6 +51,7 @@ enum class AlpineWorkspaceLlmOperation {
     STARTING,
     CHECKING_HEALTH,
     RESTARTING,
+    RECOVERING,
     STOPPING,
 }
 
@@ -88,6 +94,19 @@ class IntegratedAlpineLlmHost(
     private val listeners = CopyOnWriteArrayList<AlpineWorkspaceLlmStateListener>()
     private val lock = Any()
     private val ownerExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val recoverySupervisor = AlpineLlmBridgeRecoverySupervisor(
+        healthCheck = ::healthForAutomaticRecovery,
+        restartGateway = ::restartAfterUnexpectedFailure,
+        configuration = AlpineLlmBridgeRecoveryConfiguration(
+            // A user-visible Alpine workspace is long-lived, but recovery must never become a
+            // hidden daemon or an unbounded restart loop.
+            healthIntervalMillis = GATEWAY_HEALTH_INTERVAL_MILLIS,
+            maxAutomaticRestarts = MAX_AUTOMATIC_GATEWAY_RESTARTS,
+            initialBackoffMillis = GATEWAY_RECOVERY_INITIAL_BACKOFF_MILLIS,
+            maxBackoffMillis = GATEWAY_RECOVERY_MAX_BACKOFF_MILLIS,
+        ),
+        listener = AlpineLlmBridgeRecoveryListener(::onRecoveryStateChanged),
+    )
 
     @Volatile private var state = AlpineWorkspaceLlmState()
     private var ownerKey: OwnerKey? = null
@@ -114,7 +133,10 @@ class IntegratedAlpineLlmHost(
         }
         val alpine = BindingChatBackend(
             delegate = AlpineGatewayChatBackend(runtimeManager, activeController),
-            onReady = { bindActiveSession(activeController) },
+            onReady = {
+                bindActiveSession(activeController)
+                beginAutomaticRecovery(activeController)
+            },
         )
         SafeChatRouter(directBackend = direct, alpineBackend = alpine)
     }
@@ -131,6 +153,7 @@ class IntegratedAlpineLlmHost(
             }
             bindActiveSession(active)
             publishHealth(health)
+            recoverySupervisor.startMonitoring()
             health
         }
 
@@ -145,6 +168,7 @@ class IntegratedAlpineLlmHost(
             }
             bindActiveSession(active)
             publishHealth(health)
+            recoverySupervisor.startMonitoring()
             health
         }
 
@@ -159,6 +183,9 @@ class IntegratedAlpineLlmHost(
 
     fun stop(): CompletionStage<Void> {
         val future = CompletableFuture<Void>()
+        // Revoke the supervisor generation before queueing the user-requested Stop. A stale
+        // health callback may finish later, but it can no longer enqueue another restart.
+        recoverySupervisor.stopMonitoring()
         update { it.copy(operation = AlpineWorkspaceLlmOperation.STOPPING) }
         ownerExecutor.execute {
             runCatching {
@@ -205,6 +232,7 @@ class IntegratedAlpineLlmHost(
             if (ownerKey == key) return requireNotNull(controller)
         }
 
+        recoverySupervisor.stopMonitoring()
         detachRuntimeSession()
         val previous = synchronized(lock) {
             controller.also {
@@ -293,6 +321,40 @@ class IntegratedAlpineLlmHost(
         }
     }
 
+    /** Starts only after a user-selected Alpine session is already healthy. */
+    private fun beginAutomaticRecovery(activeController: AlpineLlmBridgeController) {
+        if (synchronized(lock) { controller === activeController } &&
+            activeController.currentState() == LlmBridgeLifecycleState.RUNNING
+        ) {
+            recoverySupervisor.startMonitoring()
+        }
+    }
+
+    private fun healthForAutomaticRecovery(): CompletionStage<AlpineLlmBridgeHealth> {
+        val active = synchronized(lock) { controller }
+            ?: return failedBridgeFuture(LlmBridgeErrorCode.INVALID_STATE)
+        return active.health()
+    }
+
+    /**
+     * Recovery owns only the Gateway/Runtime lifecycle. It does not submit a chat prompt, replay
+     * a terminal command, or use the direct Provider backend.
+     */
+    private fun restartAfterUnexpectedFailure(): CompletionStage<AlpineLlmBridgeHealth> =
+        submit(AlpineWorkspaceLlmOperation.RECOVERING) {
+            val active = synchronized(lock) { controller }
+                ?: throw LlmBridgeOperationException(LlmBridgeErrorCode.INVALID_STATE)
+            detachRuntimeSession()
+            val health = if (active.currentState() == LlmBridgeLifecycleState.STOPPED) {
+                active.start().toCompletableFuture().join()
+            } else {
+                active.restart().toCompletableFuture().join()
+            }
+            bindActiveSession(active)
+            publishHealth(health)
+            health
+        }
+
     private fun detachRuntimeSession() {
         synchronized(lock) {
             runtimeBinding?.close()
@@ -326,6 +388,31 @@ class IntegratedAlpineLlmHost(
                 healthy = event.healthy ?: current.healthy,
                 errorCode = event.errorCode,
             )
+        }
+    }
+
+    private fun onRecoveryStateChanged(recovery: AlpineLlmBridgeRecoveryState) {
+        update { current ->
+            when (recovery.mode) {
+                AlpineLlmBridgeRecoveryMode.RECOVERING -> current.copy(
+                    operation = AlpineWorkspaceLlmOperation.RECOVERING,
+                    healthy = false,
+                    errorCode = recovery.errorCode,
+                )
+                AlpineLlmBridgeRecoveryMode.EXHAUSTED -> current.copy(
+                    lifecycle = LlmBridgeLifecycleState.FAILED,
+                    operation = AlpineWorkspaceLlmOperation.IDLE,
+                    healthy = false,
+                    errorCode = recovery.errorCode ?: LlmBridgeErrorCode.GATEWAY_HEALTH_FAILED,
+                )
+                AlpineLlmBridgeRecoveryMode.MONITORING,
+                AlpineLlmBridgeRecoveryMode.STOPPED,
+                -> if (current.operation == AlpineWorkspaceLlmOperation.RECOVERING) {
+                    current.copy(operation = AlpineWorkspaceLlmOperation.IDLE)
+                } else {
+                    current
+                }
+            }
         }
     }
 
@@ -373,6 +460,11 @@ class IntegratedAlpineLlmHost(
         return LlmBridgeOperationException(LlmBridgeErrorCode.INTERNAL_ERROR)
     }
 
+    private fun failedBridgeFuture(errorCode: LlmBridgeErrorCode): CompletionStage<AlpineLlmBridgeHealth> =
+        CompletableFuture<AlpineLlmBridgeHealth>().also {
+            it.completeExceptionally(LlmBridgeOperationException(errorCode))
+        }
+
     private fun update(transform: (AlpineWorkspaceLlmState) -> AlpineWorkspaceLlmState) {
         val updated = synchronized(lock) { transform(state).also { state = it } }
         listeners.forEach { listener -> runCatching { listener.onStateChanged(updated) } }
@@ -381,6 +473,7 @@ class IntegratedAlpineLlmHost(
     override fun close() {
         if (closed) return
         closed = true
+        recoverySupervisor.close()
         runCatching { stop().toCompletableFuture().join() }
         detachRuntimeSession()
         val previous = synchronized(lock) {
@@ -397,7 +490,7 @@ class IntegratedAlpineLlmHost(
     private class BindingChatBackend(
         private val delegate: ChatBackend,
         private val onReady: () -> Unit,
-    ) : ChatBackend {
+        ) : ChatBackend {
         override val id: String = delegate.id
         override val kind = delegate.kind
         override val capabilities: ChatBackendCapabilities = delegate.capabilities
@@ -416,6 +509,10 @@ class IntegratedAlpineLlmHost(
     private companion object {
         const val DIRECT_BACKEND_ID = "android-direct"
         const val CAPABILITY_TTL_MILLIS = 15L * 60_000L
+        const val GATEWAY_HEALTH_INTERVAL_MILLIS = 30_000L
+        const val MAX_AUTOMATIC_GATEWAY_RESTARTS = 2
+        const val GATEWAY_RECOVERY_INITIAL_BACKOFF_MILLIS = 1_000L
+        const val GATEWAY_RECOVERY_MAX_BACKOFF_MILLIS = 8_000L
     }
 }
 

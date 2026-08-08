@@ -28,6 +28,7 @@ enum class WorkspaceErrorCode {
     DIRECTORY_NOT_EMPTY,
     LIMIT_EXCEEDED,
     SYMLINK_NOT_ALLOWED,
+    NOT_TEXT,
     IO_FAILED,
 }
 

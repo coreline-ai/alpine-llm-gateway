@@ -14,7 +14,6 @@ class ProviderProtocolAdaptersTest {
     fun anthropicAdapterMapsSystemMessagesAndUsage() {
         val adapter = AnthropicMessagesOAuthAdapter(
             messagesEndpoint = "https://api.example.com/v1/messages",
-            anthropicBeta = "feature-1",
         )
         val request = adapter.createRequest(
             """
@@ -37,7 +36,8 @@ class ProviderProtocolAdaptersTest {
         assertEquals("top-system\n\nmessage-system", body.getString("system"))
         assertEquals(2, body.getJSONArray("messages").length())
         assertEquals(123, body.getInt("max_tokens"))
-        assertEquals("feature-1", request.headers["anthropic-beta"])
+        assertEquals("2023-06-01", request.headers["anthropic-version"])
+        assertFalse(request.headers.containsKey("anthropic-beta"))
         assertFalse(request.headers.keys.any { it.equals("Authorization", ignoreCase = true) })
 
         val result = adapter.createResult(

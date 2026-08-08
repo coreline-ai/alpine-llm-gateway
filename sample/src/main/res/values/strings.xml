@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Alpine LLM Sample</string>
+    <string name="app_name">[SAMPLE] Alpine OAuth</string>
     <string name="screen_title">Alpine LLM OAuth sample</string>
     <string name="authorization_endpoint_hint">Authorization endpoint (https://…)</string>
     <string name="token_endpoint_hint">Token endpoint (https://…)</string>

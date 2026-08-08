@@ -37,6 +37,14 @@ internal class ProotProcessLauncher(
     private val environmentContributors: List<RuntimeEnvironmentContributor>,
     private val processListener: RuntimeHostProcessListener,
     private val maxOutputBytes: Int,
+    private val ttyDiagnosticFile: File? = null,
+    private val ttyDiagnosticGuestHelper: File? = null,
+    private val ttyDiagnosticSessionLauncher: File? = null,
+    private val ttyDiagnosticDisableProotSeccomp: Boolean = false,
+    private val ttyDiagnosticVirtualResize: Boolean = false,
+    private val ttyDiagnosticVirtualResizeNoWrite: Boolean = false,
+    private val ttyDiagnosticVirtualResizeNoRequest: Boolean = false,
+    private val ttyDiagnosticDisablePrimaryTraceeForeground: Boolean = false,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val processes = ConcurrentHashMap<Long, ProcessRecord>()
@@ -206,7 +214,7 @@ internal class ProotProcessLauncher(
         sessionId: String,
         sessionEnvironment: Map<String, String>,
         request: RuntimeTerminalRequest,
-        onClosed: () -> Unit = {},
+        onClosed: (terminalId: String, exitCode: Int?) -> Unit = { _, _ -> },
     ): RuntimeTerminalSession {
         if (!isSessionActive(sessionId)) {
             throw RuntimeOperationException(RuntimeErrorCode.PROCESS_EXITED)
@@ -217,37 +225,36 @@ internal class ProotProcessLauncher(
             .apply { mkdirs() }
         val guestPidFile = File(guestPidDirectory, "terminal-$pid.pid")
         val guestPidPath = "/workspace/.alpine-runtime/processes/${guestPidFile.name}"
-        val resizeControlId = UUID.randomUUID().toString()
-        val guestResizeFifoFile = File(guestPidDirectory, "terminal-$resizeControlId.resize")
-        val guestResizeReadyFile = File(guestPidDirectory, "terminal-$resizeControlId.resize.ready")
-        val guestResizeAckFile = File(guestPidDirectory, "terminal-$resizeControlId.resize.ack")
-        val guestResizeStateFile = File(guestPidDirectory, "terminal-$resizeControlId.resize.state")
-        val command = listOf(
-            runtime.launcher.absolutePath,
-            "-0",
-            "--kill-on-exit",
-            "--link2symlink",
-            "-r",
-            runtime.rootfsDirectory.absolutePath,
-            "-b",
-            "/dev",
-            "-b",
-            "/proc",
-            "-b",
-            "/sys",
-            "-b",
-            "${runtime.workspaceDirectory.absolutePath}:/workspace",
-            "-w",
-            request.workingDirectory,
-            "/bin/sh",
-            "-c",
-            GUEST_TERMINAL_WRAPPER,
-            "alpine-runtime-terminal",
-            guestPidPath,
-            request.shell,
-            request.columns.toString(),
-            request.rows.toString(),
-        )
+        val command = buildList {
+            add(runtime.launcher.absolutePath)
+            add("-0")
+            add("--kill-on-exit")
+            add("--link2symlink")
+            add("-r")
+            add(runtime.rootfsDirectory.absolutePath)
+            add("-b")
+            add("/dev")
+            add("-b")
+            add("/proc")
+            add("-b")
+            add("/sys")
+            add("-b")
+            add("${runtime.workspaceDirectory.absolutePath}:/workspace")
+            ttyDiagnosticGuestHelper?.let { helper ->
+                add("-b")
+                add("${helper.absolutePath}:$TTY_DIAGNOSTIC_HELPER_GUEST_PATH")
+            }
+            add("-w")
+            add(request.workingDirectory)
+            add("/bin/sh")
+            add("-c")
+            add(GUEST_TERMINAL_WRAPPER)
+            add("alpine-runtime-terminal")
+            add(guestPidPath)
+            add(request.shell)
+            add(request.columns.toString())
+            add(request.rows.toString())
+        }
         val resolvedEnvironment = guestEnvironment(
             sessionId = sessionId,
             sessionEnvironment = sessionEnvironment,
@@ -259,11 +266,6 @@ internal class ProotProcessLauncher(
                 request,
                 command,
                 resolvedEnvironment,
-                guestResizeFifoFile,
-                guestResizeReadyFile,
-                guestResizeAckFile,
-                guestResizeStateFile,
-                guestPidFile,
             )
         } catch (error: RuntimeOperationException) {
             throw error
@@ -290,8 +292,9 @@ internal class ProotProcessLauncher(
             terminateProcess(process, guestPidFile)
             throw RuntimeOperationException(RuntimeErrorCode.PROCESS_EXITED)
         }
+        val terminalId = UUID.randomUUID().toString()
         return ProcessRuntimeTerminalSession(
-            id = UUID.randomUUID().toString(),
+            id = terminalId,
             process = process,
             input = terminalProcess.input,
             output = terminalProcess.output,
@@ -303,13 +306,13 @@ internal class ProotProcessLauncher(
             terminate = { force ->
                 if (force) killProcess(process, guestPidFile) else terminateProcess(process, guestPidFile)
             },
-            onClosed = {
+            onClosed = { exitCode ->
                 val removed = synchronized(lifecycleLock) { processes.remove(pid) }
                 if (removed != null) {
                     notifyProcess(RuntimeHostProcessEventKind.STOPPED, sessionId, pid)
                 }
                 guestPidFile.delete()
-                onClosed()
+                onClosed(terminalId, exitCode)
             },
         )
     }
@@ -319,52 +322,81 @@ internal class ProotProcessLauncher(
         request: RuntimeTerminalRequest,
         command: List<String>,
         guestEnvironment: Map<String, String>,
-        guestResizeFifoFile: File,
-        guestResizeReadyFile: File,
-        guestResizeAckFile: File,
-        guestResizeStateFile: File,
-        guestPidFile: File,
     ): TerminalProcess {
-        val guestResizeFifoPath = "/workspace/.alpine-runtime/processes/${guestResizeFifoFile.name}"
-        val guestResizeReadyPath = "/workspace/.alpine-runtime/processes/${guestResizeReadyFile.name}"
-        val guestResizeAckPath = "/workspace/.alpine-runtime/processes/${guestResizeAckFile.name}"
-        val guestResizeStatePath = "/workspace/.alpine-runtime/processes/${guestResizeStateFile.name}"
-        val guestResizeDebugPath = "$guestResizeStatePath.debug"
-        val guestResizeDebugFile = File("${guestResizeStateFile.absolutePath}.debug")
         val pty = NativePtyBridge.open(request.columns, request.rows)
         if (pty != null) {
-            val guestResize = GuestTerminalResizeChannel.open(
-                guestResizeFifoFile,
-                guestResizeReadyFile,
-                guestResizeAckFile,
-                guestResizeStateFile,
-                request.columns,
-                request.rows,
-            )
             try {
-                val process = ProcessBuilder(listOf(SYSTEM_SETSID, "-c") + command)
+                val diagnosticFile = prepareTtyDiagnosticFile()
+                // A Probe-only native session leader performs setsid/TIOCSCTTY
+                // and then execs PRoot without changing the direct child PID.
+                // Production retains the existing system setsid invocation and
+                // never exposes dynamic resize.
+                val diagnosticSessionLauncher = ttyDiagnosticSessionLauncher
+                val diagnosticRelaySocket = diagnosticFile?.let {
+                    File(cacheDirectory, "tty-relay-${UUID.randomUUID()}.sock")
+                }
+                val diagnosticDynamicResize =
+                    diagnosticFile != null && diagnosticSessionLauncher != null && diagnosticRelaySocket != null
+                val diagnosticVirtualResize = diagnosticDynamicResize && ttyDiagnosticVirtualResize
+                val launchCommand = if (diagnosticDynamicResize) {
+                    listOf(diagnosticSessionLauncher.absolutePath) + command
+                } else {
+                    listOf(SYSTEM_SETSID, "-c") + command
+                }
+                val process = ProcessBuilder(launchCommand)
                     .directory(runtime.workspaceDirectory)
                     .redirectInput(File(pty.slavePath))
                     .redirectOutput(File(pty.slavePath))
                     .redirectError(File(pty.slavePath))
                     .apply {
                         configureHostEnvironment(runtime, guestEnvironment)
-                        environment()["COLUMNS"] = request.columns.toString()
-                        environment()["LINES"] = request.rows.toString()
-                        environment()["ALPINE_TERMINAL_MODE"] = "native-pty"
+                        // The wrapper applies the initial dimensions directly to the
+                        // controlling PTY. Static COLUMNS/LINES then make BusyBox stty
+                        // prefer stale launch-time values after a real TIOCSWINSZ, so the
+                        // native PTY path intentionally keeps them absent.
+                        environment().remove("COLUMNS")
+                        environment().remove("LINES")
+                        environment()["ALPINE_TERMINAL_MODE"] = when {
+                            diagnosticVirtualResize -> "probe-virtual-winsize"
+                            diagnosticDynamicResize -> "probe-session-relay"
+                            else -> "native-pty"
+                        }
                         environment()["ALPINE_TERMINAL_RESIZE_CHANNEL"] =
-                            if (guestResize != null) "available" else "unavailable"
-                        environment()["ALPINE_TERMINAL_RESIZE_FIFO"] = guestResizeFifoPath
-                        environment()["ALPINE_TERMINAL_RESIZE_READY"] = guestResizeReadyPath
-                        environment()["ALPINE_TERMINAL_RESIZE_ACK"] = guestResizeAckPath
-                        environment()["ALPINE_TERMINAL_RESIZE_STATE"] = guestResizeStatePath
-                        environment()["ALPINE_TERMINAL_RESIZE_DEBUG"] = guestResizeDebugPath
-                        environment()["PROOT_WINSIZE_FILE"] = guestResizeStateFile.absolutePath
-                        environment()["PROOT_WINSIZE_DEBUG_FILE"] = guestResizeDebugFile.absolutePath
-                        // Samsung's untrusted-app seccomp path may expose ioctl only after the
-                        // kernel has consumed it. Terminal sessions use full ptrace so the
-                        // patched TIOCGWINSZ enter/exit hooks remain ordered deterministically.
-                        environment()["PROOT_NO_SECCOMP"] = "1"
+                            when {
+                                diagnosticVirtualResize -> "probe-proot-virtual-winsize"
+                                diagnosticDynamicResize -> "probe-proot-resize-relay"
+                                else -> "unsupported"
+                            }
+                        if (diagnosticFile != null) {
+                            environment()["PROOT_TTY_DIAGNOSTIC_FILE"] = diagnosticFile.absolutePath
+                            environment()["PROOT_TTY_DIAGNOSTIC_EXPECTED_RDEV"] =
+                                pty.slaveDeviceId.toULong().toString()
+                            diagnosticRelaySocket?.let { socket ->
+                                environment()["ALPINE_TTY_RELAY_SOCKET"] = socket.absolutePath
+                            }
+                            // Probe-only PRoot raises a host-local SIGWINCH after installing
+                            // its recorder. It never signals a guest and proves that a zero
+                            // resize signal count is not a disabled recorder false negative.
+                            environment()["PROOT_TTY_DIAGNOSTIC_WINCH_SELF_TEST"] = "1"
+                            // Probe-only source-level topology. The diagnostic PRoot
+                            // moves only its known primary tracee into the physical
+                            // foreground group before exec; production never sets it.
+                            if (diagnosticDynamicResize && !ttyDiagnosticDisablePrimaryTraceeForeground) {
+                                environment()["PROOT_TTY_PRIMARY_FOREGROUND"] = "1"
+                                if (diagnosticVirtualResize && ttyDiagnosticVirtualResizeNoWrite) {
+                                    environment()["ALPINE_TTY_VIRTUAL_WINSIZE_NO_WRITE"] = "1"
+                                }
+                                // PRoot exposes this as its own host-side execution
+                                // switch. Keep it solely in the debug-gated Probe so
+                                // we can determine whether the seccomp/ptrace fast
+                                // path is responsible for the post-TIOCSWINSZ input
+                                // stall. Guest request environments remain unable to
+                                // set this variable.
+                                if (ttyDiagnosticDisableProotSeccomp) {
+                                    environment()["PROOT_NO_SECCOMP"] = "1"
+                                }
+                            }
+                        }
                     }
                     .start()
                 return TerminalProcess(
@@ -372,72 +404,52 @@ internal class ProotProcessLauncher(
                     input = pty.input,
                     output = pty.output,
                     resizeSupport = {
-                        if (guestResize?.isGuestReady == true) {
+                        if (diagnosticDynamicResize) {
                             RuntimeTerminalResizeSupport.DYNAMIC
                         } else {
                             RuntimeTerminalResizeSupport.INITIAL_SIZE_ONLY
                         }
                     },
                     resize = { columns, rows ->
-                        guestResize?.resize(columns, rows) {
-                            val guestPid = readGuestPid(guestPidFile)
-                            val controlResized = NativePtyBridge.resize(
-                                pty.controlFd,
-                                columns,
-                                rows,
+                        when {
+                            diagnosticVirtualResize && ttyDiagnosticVirtualResizeNoRequest -> true
+                            diagnosticVirtualResize -> NativePtyBridge.requestProbeVirtualResize(
+                                columns = columns,
+                                rows = rows,
+                                // The Probe-only supervisor accepts a bounded
+                                // binary frame, writes it to PRoot's private
+                                // memfd in the normal Probe mode, and never
+                                // issues host TIOCSWINSZ.
+                                relaySocketPath = diagnosticRelaySocket.absolutePath,
                             )
-                            val watcherPids = guestResize.participantPids()
-                            val terminalPids = (
-                                processDescendants(process) +
-                                    listOfNotNull(guestPid) +
-                                    watcherPids
-                                )
-                                .distinct()
-                            val processResizeResults = terminalPids.associateWith { terminalPid ->
-                                val terminalFd = if (terminalPid in watcherPids) 9 else 0
-                                NativePtyBridge.resizeProcessTerminalFd(
-                                    terminalPid,
-                                    terminalFd,
-                                    columns,
-                                    rows,
-                                )
-                            }
-                            val processResized = guestPid != null &&
-                                processResizeResults[guestPid] == true
-                            val controlSize = NativePtyBridge.readSize(pty.controlFd)
-                            val processSizes = terminalPids.joinToString(",") { terminalPid ->
-                                val result = if (processResizeResults[terminalPid] == true) 1 else 0
-                                val terminalFd = if (terminalPid in watcherPids) 9 else 0
-                                "$terminalPid/$terminalFd:$result:" +
-                                    NativePtyBridge.readProcessTerminalSizeFd(
-                                        terminalPid,
-                                        terminalFd,
-                                    ).asDiagnostic()
-                            }.take(96)
-                            guestResize.recordHostDiagnostic(
-                                "PID ${guestPid ?: 0} CONTROL ${controlSize.asDiagnostic()} " +
-                                    "PROCESSES $processSizes " +
-                                    "RESULT ${if (controlResized) 1 else 0} ${if (processResized) 1 else 0}",
+                            diagnosticDynamicResize -> NativePtyBridge.resizeAndRequestProbeRelay(
+                                fd = pty.controlFd,
+                                columns = columns,
+                                rows = rows,
+                                relaySocketPath = diagnosticRelaySocket.absolutePath,
                             )
-                            controlResized && processResized
-                        } == true
+                            else -> false
+                        }
                     },
                     closeIo = {
-                        guestResize?.close()
                         pty.close()
+                        diagnosticRelaySocket?.delete()
                     },
                 )
             } catch (_: Exception) {
-                guestResize?.close()
                 pty.close()
             }
         }
 
-        guestResizeFifoFile.delete()
-        guestResizeReadyFile.delete()
-        guestResizeAckFile.delete()
-        guestResizeStateFile.delete()
+        return launchPipeTerminalProcess(runtime, request, command, guestEnvironment)
+    }
 
+    private fun launchPipeTerminalProcess(
+        runtime: InstalledRuntime,
+        request: RuntimeTerminalRequest,
+        command: List<String>,
+        guestEnvironment: Map<String, String>,
+    ): TerminalProcess {
         val process = ProcessBuilder(command)
             .directory(runtime.workspaceDirectory)
             .redirectErrorStream(true)
@@ -535,6 +547,15 @@ internal class ProotProcessLauncher(
         environment()["LD_LIBRARY_PATH"] = runtime.launcher.parentFile?.absolutePath.orEmpty()
         environment()["PROOT_LOADER"] = runtime.loader.absolutePath
         environment().putAll(guestEnvironment)
+    }
+
+    private fun prepareTtyDiagnosticFile(): File? {
+        val file = ttyDiagnosticFile ?: return null
+        file.parentFile?.mkdirs()
+        if (file.exists() && !file.delete()) {
+            throw RuntimeOperationException(RuntimeErrorCode.PROCESS_START_FAILED)
+        }
+        return file
     }
 
     private fun notifyProcess(kind: RuntimeHostProcessEventKind, sessionId: String, pid: Long) {
@@ -635,9 +656,6 @@ internal class ProotProcessLauncher(
         val closeIo: () -> Unit,
     )
 
-    private fun NativePtySize?.asDiagnostic(): String =
-        this?.let { "${it.rows} ${it.columns}" } ?: "0 0"
-
     private class LimitedOutputCollector(
         private val input: InputStream,
         private val maxBytes: Int,
@@ -674,7 +692,7 @@ internal class ProotProcessLauncher(
         private val resizeTerminal: (Int, Int) -> Boolean,
         private val closeIo: () -> Unit,
         private val terminate: (Boolean) -> Unit,
-        private val onClosed: () -> Unit,
+        private val onClosed: (exitCode: Int?) -> Unit,
     ) : RuntimeTerminalSession {
         private val listeners = CopyOnWriteArrayList<RuntimeTerminalOutputListener>()
         private val open = AtomicBoolean(true)
@@ -682,6 +700,7 @@ internal class ProotProcessLauncher(
         private val writeLock = Any()
         private val outputLock = Any()
         private var replayBuffer = ByteArray(0)
+        @Volatile private var processExitCode: Int? = null
 
         override val isOpen: Boolean
             get() = open.get() && process.isAlive
@@ -764,9 +783,15 @@ internal class ProotProcessLauncher(
             open.set(false)
             if (!closed.compareAndSet(false, true)) return
             if (terminateProcess && process.isAlive) terminate(force)
+            if (!terminateProcess && process.isAlive) {
+                runCatching { process.waitFor(500, TimeUnit.MILLISECONDS) }
+            }
+            processExitCode = runCatching { process.exitValue() }
+                .getOrNull()
+                ?.takeIf { it in 0..MAX_PROCESS_EXIT_CODE }
             runCatching(closeIo)
             guestPidFile.delete()
-            onClosed()
+            onClosed(processExitCode)
         }
 
         private fun runOperation(block: () -> Unit): CompletionStage<Void> = try {
@@ -792,6 +817,7 @@ internal class ProotProcessLauncher(
 
         companion object {
             private const val MAX_TERMINAL_WRITE_BYTES = 64 * 1024
+            private const val MAX_PROCESS_EXIT_CODE = 255
         }
     }
 
@@ -800,47 +826,24 @@ internal class ProotProcessLauncher(
         private const val SIGTERM = 15
         private const val SIGKILL = 9
         private const val SYSTEM_SETSID = "/system/bin/setsid"
+        private const val TTY_DIAGNOSTIC_HELPER_GUEST_PATH = "/workspace/tty-winsize-probe"
         private const val GUEST_PROCESS_WRAPPER =
             "pid_file=\$1; shift; " +
                 "(umask 077; printf '%s\\n' \"\$\$\" > \"\$pid_file\"); " +
                 "exec \"\$@\""
         private const val GUEST_TERMINAL_WRAPPER =
             "pid_file=\$1; shell=\$2; cols=\$3; rows=\$4; " +
-                "resize_fifo=\${ALPINE_TERMINAL_RESIZE_FIFO:-}; " +
-                "resize_ready=\${ALPINE_TERMINAL_RESIZE_READY:-}; " +
-                "resize_ack=\${ALPINE_TERMINAL_RESIZE_ACK:-}; " +
-                "resize_state=\${ALPINE_TERMINAL_RESIZE_STATE:-}; " +
-            "resize_debug=\${ALPINE_TERMINAL_RESIZE_DEBUG:-}; " +
                 "(umask 077; printf '%s\\n' \"\$\$\" > \"\$pid_file\"); " +
                 "stty cols \"\$cols\" rows \"\$rows\" 2>/dev/null || true; " +
-                "if [ -n \"\$resize_fifo\" ]; then " +
-                "exec 9<&0; " +
-                "(IFS=' ' read -r watcher_pid _ < /proc/self/stat; " +
-                "case \"\$watcher_pid\" in *[!0-9]*|'') exit 1;; esac; " +
-                "printf '%s\\n' \"\$watcher_pid\" > \"\${resize_state}.watcher.pid\"; " +
-                "while IFS=' ' read -r seq next_rows next_cols; do " +
-                "case \"\$seq:\$next_rows:\$next_cols\" in *[!0-9:]*) continue;; esac; " +
-                "if stty rows \"\$next_rows\" cols \"\$next_cols\" <&9 2>/dev/null; then " +
-                "actual_size=\$(stty size <&9 2>/dev/null || true); " +
-                "if [ \"\$actual_size\" = \"\$next_rows \$next_cols\" ]; then " +
-                "printf '%s %s %s\\n' \"\$seq\" \"\$next_rows\" \"\$next_cols\" > \"\$resize_ack\"; " +
-                "kill -WINCH 0 2>/dev/null || true; else " +
-                "state_size=\$(cat \"\$resize_state\" 2>/dev/null || true); " +
-                "debug_state=\$(cat \"\$resize_debug\" 2>/dev/null || true); " +
-                "host_state=\$(cat \"\${resize_state}.host\" 2>/dev/null || true); " +
-                "printf 'MISMATCH %s STATE %s PROOT %s HOST %s\\n' \"\$actual_size\" \"\$state_size\" \"\$debug_state\" \"\$host_state\" > \"\$resize_ack\"; fi; else " +
-                "printf 'STTY_FAILED\\n' > \"\$resize_ack\"; fi; " +
-                "done < \"\$resize_fifo\") & " +
-                ": > \"\$resize_ready\"; exec 9<&-; fi; " +
                 "exec \"\$shell\" -i"
         private val ENVIRONMENT_NAME = Regex("[A-Za-z_][A-Za-z0-9_]*")
         private val RESERVED_ENVIRONMENT = setOf(
             "PROOT_TMP_DIR",
             "PROOT_LOADER",
-            "PROOT_WINSIZE_FILE",
-            "PROOT_WINSIZE_DEBUG_FILE",
             "PROOT_NO_SECCOMP",
             "LD_LIBRARY_PATH",
+            "PROOT_TTY_DIAGNOSTIC_FILE",
+            "PROOT_TTY_DIAGNOSTIC_EXPECTED_RDEV",
         )
     }
 }

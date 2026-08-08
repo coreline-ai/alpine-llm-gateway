@@ -20,14 +20,9 @@
     "commit": "8cf13e997cdc9472997aae19df8050c073c9a86c",
     "commit_date": "2026-05-03T19:28:15+08:00",
     "build_android_api": 26,
-    "sha256": "336627708766ac2065485c4759048412761ea749787ca3111889f225585cfa4c",
+    "sha256": "5d2959c3a58f82609c8b95a92496835099a96faa8efc12f68e171a3597b5bc29",
     "loader_sha256": "12d2b63e897fd91a334fce23edea5d2419cae4d5fd2a369f05d03ab75682add0",
-    "patches": [
-      {
-        "path": "scripts/runtime/patches/proot-android-winsize.patch",
-        "sha256": "20726d1ccf9bb8c952a6039d5158168dad58ec62bcf7cbf73bc3170b8c4a9a27"
-      }
-    ],
+    "patches": [],
     "loader_packaging": "stripped static loader packaged as jniLibs/arm64-v8a/libproot-loader.so",
     "license_declared": "GPL-2.0-or-later",
     "license_concluded": "NOASSERTION",

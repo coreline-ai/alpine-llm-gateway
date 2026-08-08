@@ -48,14 +48,17 @@ internal object OAuthCallbackValidator {
         timeoutMs: Long,
     ): String {
         if (!callback.error.isNullOrBlank()) {
-            val description = callback.errorDescription?.takeIf { it.isNotBlank() }
-            val suffix = description?.let { ": $it" }.orEmpty()
             val kind = if (callback.error == "access_denied") {
                 OAuthFailureKind.USER_DENIED
             } else {
                 OAuthFailureKind.PROVIDER_ERROR
             }
-            throw OAuthException("authorization failed (${callback.error})$suffix", kind)
+            val message = if (kind == OAuthFailureKind.USER_DENIED) {
+                "authorization was denied"
+            } else {
+                "authorization provider returned an error"
+            }
+            throw OAuthException(message, kind)
         }
         val code = callback.code?.takeIf { it.isNotBlank() }
             ?: throw OAuthException(

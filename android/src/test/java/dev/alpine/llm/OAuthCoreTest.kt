@@ -86,6 +86,30 @@ class OAuthCoreTest {
     }
 
     @Test
+    fun callbackProviderErrorsAreClassifiedWithoutRawDescription() {
+        val marker = "provider-secret-error-description"
+        val error = runCatching {
+            OAuthCallbackValidator.validate(
+                OAuthCallbackServer.Callback(
+                    code = null,
+                    state = null,
+                    error = "provider_specific_error_secret",
+                    errorDescription = marker,
+                ),
+                OAuthTokenStore.Transaction("expected", "verifier", 1_000L),
+                1_500L,
+                1_000L,
+            )
+        }.exceptionOrNull()
+
+        assertTrue(error is OAuthException)
+        assertEquals(OAuthFailureKind.PROVIDER_ERROR, (error as OAuthException).kind)
+        assertFalse(error.toString().contains(marker))
+        assertFalse(error.toString().contains("provider_specific_error_secret"))
+        assertEquals("authorization provider returned an error", error.message)
+    }
+
+    @Test
     fun callbackWaiterClassifiesTimeout() = runTest {
         val error = runCatching {
             OAuthCallbackAwaiter.await(CompletableDeferred(), timeoutMs = 1L)
@@ -429,6 +453,46 @@ class OAuthCoreTest {
                 }
                 socket.getInputStream().bufferedReader().use { it.readLine() }
             }
+            assertTrue(latch.await(2, TimeUnit.SECONDS))
+            assertEquals("ok", received?.code)
+            assertEquals("expected", received?.state)
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
+    fun loopbackCallbackRejectsDuplicateSecurityParametersAndContinuesListening() {
+        var received: OAuthCallbackServer.Callback? = null
+        val latch = CountDownLatch(1)
+        val server = OAuthCallbackServer(
+            requestedPort = 0,
+            redirectPath = "/oauth/callback",
+        ) {
+            received = it
+            latch.countDown()
+        }
+        server.start()
+        try {
+            val duplicateState = callbackRequest(
+                server.boundPort,
+                "GET /oauth/callback?code=bad&state=expected&state=attacker HTTP/1.1\r\n" +
+                    "Host: 127.0.0.1\r\nConnection: close\r\n\r\n",
+            )
+            val ambiguousResult = callbackRequest(
+                server.boundPort,
+                "GET /oauth/callback?code=bad&error=access_denied&state=expected HTTP/1.1\r\n" +
+                    "Host: 127.0.0.1\r\nConnection: close\r\n\r\n",
+            )
+            assertTrue(duplicateState.isEmpty())
+            assertTrue(ambiguousResult.isEmpty())
+            assertFalse(latch.await(100, TimeUnit.MILLISECONDS))
+
+            callbackRequest(
+                server.boundPort,
+                "GET /oauth/callback?code=ok&state=expected HTTP/1.1\r\n" +
+                    "Host: 127.0.0.1\r\nConnection: close\r\n\r\n",
+            )
             assertTrue(latch.await(2, TimeUnit.SECONDS))
             assertEquals("ok", received?.code)
             assertEquals("expected", received?.state)

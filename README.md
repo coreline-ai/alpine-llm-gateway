@@ -48,6 +48,7 @@
 
 - ⚡ **빠른 채팅 모드** — Android OAuth/Keystore에서 Provider를 직접 호출
 - 🐧 **Alpine 작업 모드** — Alpine 3.21.3, PRoot, Python Gateway, 터미널과 패키지 도구
+- 🖥️ **안전한 ANSI terminal** — bounded scrollback, ANSI colour·cursor·clear·alternate screen, raw output 없는 종료 code 요약
 - 🔐 **Credential 격리** — OAuth token은 Android Host에만 보관하고 Guest에는 전달하지 않음
 - 🔁 **안전한 라우팅** — dispatch 전 사용자 승인 fallback, dispatch 후 자동 재전송 금지
 - 💬 **공통 채팅 Feature** — 다중 대화, 암호화 저장, 모델, Skill, Persona, Stop과 Retry
@@ -58,40 +59,35 @@
 <a id="screens"></a>
 ## 📱 앱 화면
 
-실제 Samsung 기기에서 캡처한 `Alpine AI Workspace`입니다. 이미지에는 OAuth 계정, client ID, token 또는 기기 serial을 포함하지 않았습니다. 이미지를 누르면 원본 크기로 볼 수 있습니다.
-
-<table>
-  <tr>
-    <td align="center"><a href="docs/assets/screenshots/01-fast-chat.png"><img src="docs/assets/screenshots/01-fast-chat.png" width="260" alt="빠른 채팅"></a><br><strong>빠른 채팅</strong></td>
-    <td align="center"><a href="docs/assets/screenshots/07-alpine-gateway-chat.png"><img src="docs/assets/screenshots/07-alpine-gateway-chat.png" width="260" alt="Alpine Gateway 채팅"></a><br><strong>Alpine Gateway</strong></td>
-    <td align="center"><a href="docs/assets/screenshots/08-alpine-runtime-tools.png"><img src="docs/assets/screenshots/08-alpine-runtime-tools.png" width="260" alt="Alpine Runtime 도구"></a><br><strong>Runtime · 터미널</strong></td>
-  </tr>
-</table>
+실제 Samsung 기기에서 캡처한 `Alpine AI Workspace`입니다. 이미지에는 OAuth 계정, client ID, token 또는 기기 serial을 포함하지 않았습니다. 모든 미리보기는 같은 `260 × 563` 크기로 정렬했으며, 이미지를 누르면 `1080 × 2340` 원본을 볼 수 있습니다.
 
 <details open>
 <summary><strong>전체 화면 갤러리 펼치기</strong></summary>
 <br>
 <table>
   <tr>
-    <td align="center"><a href="docs/assets/screenshots/01-fast-chat.png"><img src="docs/assets/screenshots/01-fast-chat.png" width="235" alt="빠른 채팅 연결 전 화면"></a><br>연결 전 빠른 채팅</td>
-    <td align="center"><a href="docs/assets/screenshots/02-conversation-history.png"><img src="docs/assets/screenshots/02-conversation-history.png" width="235" alt="대화 기록 drawer"></a><br>암호화 대화 기록</td>
-    <td align="center"><a href="docs/assets/screenshots/03-assistant-mode.png"><img src="docs/assets/screenshots/03-assistant-mode.png" width="235" alt="Assistant skill 선택"></a><br>Assistant Skill</td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/01-fast-chat.png"><img src="docs/assets/screenshots/01-fast-chat.png" width="260" height="563" alt="빠른 채팅 연결 전 화면"></a><br><strong>빠른 채팅</strong><br><sub>Provider 연결 전 안내와 실행 모드 전환</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/02-conversation-history.png"><img src="docs/assets/screenshots/02-conversation-history.png" width="260" height="563" alt="대화 기록 drawer"></a><br><strong>암호화 대화 기록</strong><br><sub>기존 대화 검색·선택·관리</sub></td>
   </tr>
   <tr>
-    <td align="center"><a href="docs/assets/screenshots/04-assistant-personas.png"><img src="docs/assets/screenshots/04-assistant-personas.png" width="235" alt="Skill과 Persona 목록"></a><br>Skill · Persona 카탈로그</td>
-    <td align="center"><a href="docs/assets/screenshots/05-assistant-defaults.png"><img src="docs/assets/screenshots/05-assistant-defaults.png" width="235" alt="Persona와 기본값 설정"></a><br>Persona · 기본값</td>
-    <td align="center"><a href="docs/assets/screenshots/06-provider-connections.png"><img src="docs/assets/screenshots/06-provider-connections.png" width="235" alt="LLM 연결 목록"></a><br>LLM 연결 관리</td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/03-assistant-mode.png"><img src="docs/assets/screenshots/03-assistant-mode.png" width="260" height="563" alt="Assistant skill 선택"></a><br><strong>Assistant Skill</strong><br><sub>현재 대화의 응답 방식 선택</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/04-assistant-personas.png"><img src="docs/assets/screenshots/04-assistant-personas.png" width="260" height="563" alt="Skill과 Persona 목록"></a><br><strong>Skill · Persona 카탈로그</strong><br><sub>기본 Skill과 Persona 탐색</sub></td>
   </tr>
   <tr>
-    <td align="center"><a href="docs/assets/screenshots/06a-provider-types.png"><img src="docs/assets/screenshots/06a-provider-types.png" width="235" alt="Provider 유형 선택"></a><br>Provider 유형</td>
-    <td align="center"><a href="docs/assets/screenshots/07-alpine-gateway-chat.png"><img src="docs/assets/screenshots/07-alpine-gateway-chat.png" width="235" alt="Alpine Gateway 채팅 화면"></a><br>Gateway 채팅</td>
-    <td align="center"><a href="docs/assets/screenshots/08-alpine-runtime-tools.png"><img src="docs/assets/screenshots/08-alpine-runtime-tools.png" width="235" alt="Runtime과 Linux 터미널"></a><br>Runtime · Linux 터미널</td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/05-assistant-defaults.png"><img src="docs/assets/screenshots/05-assistant-defaults.png" width="260" height="563" alt="Persona와 기본값 설정"></a><br><strong>Persona · 기본값</strong><br><sub>대화별 선택과 기본값 저장</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/06-provider-connections.png"><img src="docs/assets/screenshots/06-provider-connections.png" width="260" height="563" alt="LLM 연결 목록"></a><br><strong>LLM 연결 관리</strong><br><sub>OAuth Provider profile 상태</sub></td>
   </tr>
   <tr>
-    <td align="center"><a href="docs/assets/screenshots/09-runtime-package-manager.png"><img src="docs/assets/screenshots/09-runtime-package-manager.png" width="235" alt="Alpine 패키지 설치 UI"></a><br>패키지 allowlist UI</td>
-    <td colspan="2"><strong>보안상 제외한 화면</strong><br>실제 OAuth 브라우저, 계정 정보, public client ID 입력값, token/credential이 포함될 수 있는 상세 설정은 저장소 이미지로 남기지 않습니다.</td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/06a-provider-types.png"><img src="docs/assets/screenshots/06a-provider-types.png" width="260" height="563" alt="Provider 유형 선택"></a><br><strong>Provider 유형</strong><br><sub>Codex·Claude·Gemini·Grok 연결 경로</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/07-alpine-gateway-chat.png"><img src="docs/assets/screenshots/07-alpine-gateway-chat.png" width="260" height="563" alt="Alpine Gateway 채팅 화면"></a><br><strong>Gateway 채팅</strong><br><sub>Alpine Gateway 기반 대화</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/08-alpine-runtime-tools.png"><img src="docs/assets/screenshots/08-alpine-runtime-tools.png" width="260" height="563" alt="Runtime과 Linux 터미널"></a><br><strong>Runtime · Linux 터미널</strong><br><sub>설치·복구·PTY terminal 제어</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/09-runtime-package-manager.png"><img src="docs/assets/screenshots/09-runtime-package-manager.png" width="260" height="563" alt="Alpine 패키지 설치 UI"></a><br><strong>패키지 allowlist UI</strong><br><sub>승인된 Alpine 패키지 설치</sub></td>
   </tr>
 </table>
+
+> **보안상 제외한 화면** — 실제 OAuth 브라우저, 계정 정보, public client ID 입력값, token/credential이 포함될 수 있는 상세 설정은 저장소 이미지로 남기지 않습니다.
 </details>
 
 ## 🧭 두 가지 실행 모드
@@ -102,6 +98,8 @@
 | **Alpine 작업** | Android → PRoot/Alpine → Python Gateway → loopback Host Bridge → Provider HTTPS | 터미널, Python, Git, 패키지, Linux 기반 Skill과 자동화 | 예 |
 
 두 모드는 동일한 대화·모델·Skill·Persona 상태를 사용합니다. Alpine 준비 실패 시 fallback은 Provider dispatch 전에 사용자가 승인한 **해당 요청 한 번**만 빠른 채팅으로 전송하며, 첫 Provider dispatch 또는 delta 이후에는 중복 비용을 막기 위해 다른 backend로 자동 전환하지 않습니다.
+
+첫 실행에서는 두 모드의 실행 경로, 준비 조건, 기능, 제한과 복구 방법을 비교하는 안내가 자동으로 열립니다. `빠른 채팅으로 시작` 또는 `Alpine 작업으로 시작`을 명시적으로 선택해야 완료되며, `나중에`로 닫으면 다음 새 실행에서 다시 표시됩니다. 완료 후에도 상단 모드 선택 옆 `안내` 버튼으로 언제든 다시 열 수 있습니다. 안내에서 Alpine 작업을 선택해도 Runtime 설치나 시작은 자동 실행하지 않습니다.
 
 <a id="architecture"></a>
 ## 🏗 아키텍처
@@ -127,10 +125,12 @@ flowchart LR
 ### Credential 경계
 
 1. OAuth access/refresh token은 Android Keystore-backed store에만 저장합니다.
-2. Alpine Guest에는 token 대신 loopback endpoint와 짧은 TTL capability 파일만 제공합니다.
-3. Host Bridge는 bounded concurrency, timeout, request ID, redacted error와 health metric을 적용합니다.
-4. Python Gateway는 기본 `127.0.0.1` bind, 모델 allowlist, 입력·출력·SSE 크기 제한을 적용합니다.
-5. 패키지 설치는 exact allowlist와 사용자 승인 모두를 통과한 이름만 고정 `apk add` 명령으로 실행합니다.
+2. OAuth lifecycle marker에는 profile/attempt ID와 상태·시각만 저장하며 token·code·PKCE state/verifier는 포함하지 않습니다.
+3. Activity 재생성·process death 뒤에는 이전 OAuth transaction을 자동 재개하지 않고 폐기한 뒤 명시적 재로그인을 요구합니다.
+4. Alpine Guest에는 token 대신 loopback endpoint와 짧은 TTL capability 파일만 제공합니다.
+5. Host Bridge는 bounded concurrency, timeout, request ID, redacted error와 health metric을 적용합니다.
+6. Python Gateway는 기본 `127.0.0.1` bind, 모델 allowlist, 입력·출력·SSE 크기 제한을 적용합니다.
+7. 패키지 install은 exact allowlist와 사용자 승인 모두를 통과한 이름만 고정 `apk add` 명령으로 실행합니다. delete는 별도 removable allowlist, update는 지정 allowlist package만 고정 argv로 실행하며 whole-system update는 제공하지 않습니다.
 
 <a id="modules"></a>
 ## 🧩 모듈 구성
@@ -165,11 +165,12 @@ adb install -r integrated-app/build/outputs/apk/debug/integrated-app-debug.apk
 
 앱 실행 후:
 
-1. `빠른 채팅`에서 `LLM connection`을 엽니다.
-2. 앱 소유·승인된 OAuth public client registration으로 profile을 만듭니다.
-3. 로그인 후 Provider와 모델을 선택합니다.
-4. Alpine 기능은 `Alpine 작업 → 터미널·도구 → 설치` 순서로 준비합니다.
-5. Gateway health가 정상이면 Gateway 채팅, 터미널과 허용 패키지 설치를 사용할 수 있습니다.
+1. 첫 실행 안내에서 두 모드를 비교하고 시작 모드를 선택합니다.
+2. `빠른 채팅`에서 `LLM connection`을 엽니다.
+3. 앱 소유·승인된 OAuth public client registration으로 profile을 만듭니다.
+4. 로그인 후 Provider와 모델을 선택합니다.
+5. Alpine 기능은 `Alpine 작업 → 터미널·도구 → 설치` 순서로 준비합니다.
+6. Gateway health가 정상이면 Gateway 채팅, 터미널과 허용 패키지 설치를 사용할 수 있습니다.
 
 > [!CAUTION]
 > 다른 앱이나 공식 CLI의 public client ID·fingerprint를 복사해 제품에 포함하지 마세요. 현재 Android direct OAuth 화면의 Anthropic/Codex/xAI 항목은 compatibility/reference 경로이며 공식 제품 승인을 의미하지 않습니다.
@@ -247,25 +248,50 @@ ANDROID_SERIAL=<device-serial> ./gradlew :integrated-app:connectedDebugAndroidTe
 | 항목 | 상태 | 기준 |
 |---|---|---|
 | Python unit/compile/smoke | ✅ CI PASS | GitHub Actions `Python 3.11` |
+| 결정론 Provider fault matrix | ✅ Local PASS | Python 102/102 + MobileAgent BFF 39/39; status·timeout·malformed/oversized SSE·strict UTF-8·no-retry |
 | Android modules·publication matrix | ✅ CI PASS | remote run `30807869557`, commit `3389fcb` |
-| 통합 앱 compile·unit·lint·APK | ✅ Local PASS | 2026-08-07 UI/가독성 패치 |
-| Samsung 통합 채팅 instrumentation | ✅ 4/4 PASS | Android 16 arm64 |
-| arm64 Runtime·PTY·Bridge·Gateway probe | ✅ PASS | Samsung `SM-S931N` |
+| 통합 앱 compile·unit·lint·APK | ✅ Local PASS | 2026-08-08 terminal exit summary·접근성·한글 IME 반영 |
+| Samsung Android regression | ✅ PASS | OAuth core 3/3, Provider 12/12, Runtime Compose 7/7, integrated-app 10/10 |
+| Samsung Demo 전체 회귀 | ✅ 35/35 PASS | Provider·Chat·lifecycle·Markdown·theme |
+| Samsung OAuth lifecycle | ✅ Local PASS | OAuth core 3건 + Provider 12건 + 복구 3건 + credential-free `am force-stop` cold start |
+| Samsung Provider 변경 회귀 | ✅ 25/25 PASS | OAuth 저장소 3건 + Provider 12건 + Integrated 10건 |
+| Integrated APK OAuth/app boundary scan | ✅ Local PASS | production source·APK에서 consumer/CLI fingerprint·known copied registration/API key/private key·demo/probe/sample package를 fail-closed 검사 |
+| arm64 Runtime·PTY·Bridge·Gateway probe | ✅ PASS | Samsung actual PRoot: initial `stty size=28 96`, fail-closed `INITIAL_SIZE_ONLY`/`TERMINAL_RESIZE_UNSUPPORTED`, terminal exit event, Host lifecycle `STARTED:3`/`STOPPED:3`, restart/repair healthy |
+| ANSI terminal screen renderer·exit summary | ✅ Local PASS | colour·cursor·clear·alternate screen·CJK·raw output 없는 마지막 종료 code unit regression + integrated compile |
+| Developer tool fixed smoke workflow | ✅ Local PASS | reusable direct argv Python·Git·SSH·Node profile + API/Host regression; actual repository install은 `NOT_RUN` |
+| Runtime Compose package/tool action | ✅ Samsung PASS | 7/7 — terminal accessibility/한글 IME·exit summary·confirmed SIGTERM/SIGKILL, fixed Git smoke, package snapshot/workspace action forwarding |
+| Foreground-service process lease | ✅ Local PASS | background 4/4 — first start/last stop, nested terminal·command, duplicate close, FGS start-rejection host-policy callback; actual notification cleanup은 `NOT_RUN` |
+| Package metadata snapshot UI | ✅ Local PASS | exact allowlist의 license·download/installed payload·network/estimate boundary; live dependency preflight는 `NOT_RUN` |
+| Workspace SAF·share boundary | ✅ Samsung PASS | 5/5 — test `content://` import/export, 이름 정규화, size cap, provider 오류 축소, app-private atomic share file; DocumentsUI full manual flow는 `NOT_RUN` |
+| bounded Gateway 복구·package mutation·workspace diff | ✅ Local PASS | supervisor/package/workspace unit test + 통합 APK build |
+| Gateway process crash·package network/disk-full | ⏳ `NOT_RUN` | 실제 runtime/repository 조건과 destructive matrix 필요 |
+| tablet layout 수동 smoke | ⏳ `NOT_RUN` | 연결 기기의 Play Protect 선택은 사용자 동의 필요 |
 | 실제 Provider 계정 OAuth/API E2E | ⏳ `NOT_RUN` | 앱 소유 registration·계정 승인 필요 |
 | x86_64 emulator E2E | ⛔ BLOCKED | 연결된 검증 emulator 없음 |
-| 공개 배포 | ⛔ `NO-GO` | release gate 7개 중 6개 BLOCKED |
+| 공개 배포 | ⛔ `NO-GO` | release readiness 10개 gate 중 6개 release blocker BLOCKED |
 
 Remote CI의 최신 성공은 원격 `main`의 기준선입니다. 현재 로컬 commit 또는 working tree가 Push되지 않았다면 그 변경은 원격 CI로 검증된 것으로 간주하지 않습니다.
 
 ## ⚠️ 현재 제한
 
 - arm64-v8a는 제품 검증 대상이며 x86_64 pack은 emulator E2E 전까지 실험 상태입니다.
-- 현재 PRoot는 최초 PTY 크기만 Guest에 반영합니다. 실행 중 동적 resize는 `INITIAL_SIZE_ONLY`로 명시됩니다.
+- Probe-only relay21은 initial/active same-PTY guest tracee가 physical foreground group임을 확인했고,
+  PRoot 없는 host PTY control은 `TIOCSWINSZ → SIGWINCH → 이후 input`을 통과했습니다. 그러나 PRoot session은
+  resize 뒤 guest signal과 fixed marker·helper input이 재개되지 않았습니다. 이 evidence는 제품 기능이 아니며,
+  제품 터미널은 실행 중 동적 resize를 계속 `INITIAL_SIZE_ONLY`로 명시합니다.
+
+- Probe-only relay24는 host-master resize와 post-launch signal 없이 private memfd winsize 경로를 검증했지만,
+  Samsung에서 PRoot guest read/apply와 이후 input 재개에 실패했습니다. 같은 private request를 validate/ack만
+  하는 no-write control도 input을 재개하지 못했습니다. 따라서 Android 직접 Provider/Alpine 생산 앱은 계속
+  `INITIAL_SIZE_ONLY` terminal contract를 유지합니다.
 - 실제 Provider direct OAuth는 앱 소유 registration과 inference 사용 승인이 필요합니다.
+- Gemini 외 direct Provider는 승인된 model catalog를 번들하지 않으며, 앱 소유자가 입력한 model만 후보로 노출합니다.
 - MobileAgent OIDC/BFF의 실제 staging Provider E2E는 external account/secret이 없어 아직 실행하지 않았습니다.
 - BFF request/cancel/revocation registry는 단일 process memory 구현이며 다중 replica 전 Redis 경계가 필요합니다.
 - Play Asset Delivery 전체 E2E는 signed AAB와 Play test track이 필요합니다.
-- Samsung 재부팅·Doze·process-kill 복구는 파괴적 기기 테스트 승인 창이 필요합니다.
+- Provider OAuth의 credential-free Activity 재생성·`am force-stop` 복구는 통과했지만, 실제 계정 browser callback 도중 process kill과 Runtime 재부팅·Doze 검증은 승인 창이 필요합니다.
+- Workspace는 app-private bounded text file과 one-shot SAF transfer를 지원합니다. 실제 DocumentsUI에서 선택한 파일을 import → 편집 → 실행 중 terminal과 연결 → export/share하는 수동 사용성 흐름은 Runtime 설치 후 별도 검증이 필요합니다.
+- Chat·History·Assistant의 한국어 semantics와 48dp·한글 IME 자동 검증은 통과했지만 실제 TalkBack 음성·focus gesture와 Switch Access는 수동 QA가 필요합니다.
 - 루트 프로젝트 `LICENSE`와 Alpine package-level exact source mirror가 없어 외부 배포는 차단됩니다.
 
 전체 gate는 [SDK publication과 배포 가이드](docs/sdk-publication-and-distribution.md)와 [release readiness](distribution/release-readiness.json)에서 확인할 수 있습니다.
@@ -279,7 +305,9 @@ Remote CI의 최신 성공은 원격 `main`의 기준선입니다. 현재 로컬
 | [Android 통합](android/README.md) | OAuth, Host Bridge, Provider adapter와 manifest |
 | [Runtime SDK 모듈](docs/alpine-runtime-sdk-modules.md) | 19개 artifact 역할과 권장 조합 |
 | [Runtime Host 통합](docs/alpine-runtime-host-integration.md) | Application owner, FGS, terminal, package, recovery |
+| [Alpine package catalog snapshot](docs/alpine-package-catalog-20260808.md) | allowlist package license·payload estimate와 live preflight 경계 |
 | [Provider OAuth adapter](docs/provider-oauth-adapters.md) | 제품 OIDC/BFF와 compatibility direct OAuth 경계 |
+| [UI 디자인 적용 범위](docs/ui-design-coverage-and-proposal.md) | 미적용 화면 코드 분석과 권장 이식 순서 |
 | [Provider 계정 E2E](docs/provider-account-e2e-runbook.md) | opt-in 실제 계정 검증 절차 |
 | [Samsung lifecycle E2E](docs/samsung-background-lifecycle-e2e.md) | reboot·Doze·process-kill 검증 절차 |
 | [배포 가이드](docs/sdk-publication-and-distribution.md) | Maven bundle, source, Play와 공개 gate |

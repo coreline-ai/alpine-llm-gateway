@@ -17,7 +17,7 @@ Alpine 기능을 특정 채팅 앱에 고정하지 않고, 필요한 기능만 �
 | `:alpine-runtime-host` | install/start/복구/터미널/패키지의 UI 중립 상태 제어 | Android/Compose 없음 |
 | `:alpine-llm-bridge` | Host Bridge, capability, Python Gateway lifecycle과 Android LLM 연결 | Android LLM 선택 시 필요 |
 | `:alpine-llm-gateway-pack-bundled` | 검증된 Python Gateway/`llmctl` layer 공급 | Alpine LLM 사용 시 선택 |
-| `:alpine-runtime-ui-compose` | 선택형 Compose 상태·복구·터미널·패키지 UI | Compose 선택 시에만 필요 |
+| `:alpine-runtime-ui-compose` | 선택형 Compose 상태·복구·터미널·패키지·Workspace editor UI | Compose 선택 시에만 필요 (`workspace-api` 포함) |
 | `:alpine-runtime-testkit` | fake runtime, 결정적 dispatcher, virtual artifact | 테스트에서만 필요 |
 | `:alpine-chat-routing` | 공통 request/stream/failure, mode, fallback, audit, request ledger 계약 | Android/Compose 없음 |
 | `:alpine-chat-feature` | 다중 대화·암호화 저장·모델·Skill·Persona·생성 상태와 Compose 채팅 UI | Android/Compose 필요, Runtime 없음 |
@@ -25,7 +25,7 @@ Alpine 기능을 특정 채팅 앱에 고정하지 않고, 필요한 기능만 �
 | `:alpine-chat-backend-direct` | 기존 Android OAuth/Provider 빠른 채팅 adapter | Android LLM만 필요 |
 | `:alpine-chat-backend-alpine` | Runtime/Bridge/Python Gateway 작업 모드 adapter | Alpine LLM 사용 시 필요 |
 | `:alpine-workspace-api` | 안전 상대경로·quota·bounded 파일 작업 계약 | Android/Compose 없음 |
-| `:alpine-workspace-android` | app-private, symlink 차단, atomic write 구현 | 파일 작업공간 사용 시 선택 |
+| `:alpine-workspace-android` | app-private, symlink 차단, atomic write, bounded SAF transfer/share file publish | 파일 작업공간 사용 시 선택 |
 
 모든 재사용 모듈은 `dev.alpine.llm:<artifact>:0.3.0` 좌표로 로컬 Maven repository에
 발행된다. 예를 들어 자체 UI runtime 앱은 다음처럼 조합한다.
@@ -71,16 +71,36 @@ dependencies {
 - raw OAuth token은 Linux 환경 변수로 전달하지 않는다. LLM bridge는 loopback URL과 TTL capability file 경로만 기여한다.
 - fallback은 runtime 준비 실패에 한해 사용자 승인 전에만 가능하고 Provider dispatch 이후에는 금지한다.
 - 현재 backend idempotency capability는 `NONE`이다. 검증되지 않은 Provider 요청을 router가 재전송하지 않는다.
-- 패키지 설치는 exact allowlist와 명시적 승인을 모두 통과한 이름만 고정 `apk add` 명령으로 실행한다.
-- 현재 PRoot는 최초 PTY 크기만 guest에 반영한다. `RuntimeTerminalSession.resizeSupport`가
-  `INITIAL_SIZE_ONLY`이므로 Host는 동적 resize를 성공한 것처럼 표시하지 않는다.
+- 패키지 설치는 exact allowlist와 명시적 승인을 모두 통과한 이름만 고정 `apk add` 명령으로 실행한다. delete는 별도 removable allowlist, update는 allowlist의 지정 package만 고정 `apk del`/`apk upgrade` argv로 실행하며 whole-system update와 임의 subcommand를 허용하지 않는다.
+- `RuntimePackageCatalog`은 pack/Host가 주입하는 display-only snapshot이다. license와 direct package
+  download/installed payload를 approval UI에 표시할 수 있지만, dependency/index/cache/filesystem overhead와
+  현재 repository solver 결과를 포함하지 않으며 allowlist/argv를 바꾸지 않는다. 통합 앱 기준은
+  [Alpine package catalog snapshot](alpine-package-catalog-20260808.md)이다.
+- Probe는 Native PTY의 실행 중 winsize가 guest `stty`/독립 helper에서 `40×120`으로 보이는 것을 확인했지만,
+  PRoot session에서 Android `TIOCSWINSZ` 뒤 guest `SIGWINCH`와 input 재개를 보장하지 못한다. relay21은
+  active same-PTY guest tracee의 physical foreground group까지 확인했고, PRoot 없는 host-only PTY control은
+  signal과 이후 input을 통과했으나 PRoot marker/helper input은 계속 멈췄다. relay24 private-memfd path와
+  socket validate/ack-only negative control도 PRoot input 재개를 만들지 못했다. 따라서 production
+  `RuntimeTerminalSession.resizeSupport`는 계속 `INITIAL_SIZE_ONLY`이며 Host는 동적 resize를 성공한 것처럼
+  표시하지 않는다. `COLUMNS`/`LINES`는 Native PTY exec 전에 제거해 stale initial-size hint가 관측을
+  가리지 않도록 한다. direct tracee signal workaround는 제품에 없으며, PRoot ptrace reinjection 뒤
+  interactive input 재개가 유지보수 가능한 source-level 해법에서 증명되기 전까지 capability를 승격하지 않는다.
+- Runtime Host는 bounded ANSI screen snapshot을 제공한다. standard colour, cursor/erase, alternate
+  screen은 raw escape byte 없이 표시하지만, 완전한 VT/TUI emulator 또는 PRoot guest dynamic resize를
+  의미하지 않는다.
+- `RuntimeDeveloperToolProfile`과 `RuntimeHostController.runToolSmoke()`는 UI와 분리된 fixed-argv
+  Python/Git/SSH/Node first-run check를 제공한다. 이 API는 arbitrary shell command나 tool stdout/stderr를
+  Host UI state로 전달하지 않는다.
 - background adapter는 `START_NOT_STICKY`이며 부팅·process death 뒤 runtime을 자동 시작하지 않는다.
   SharedPreferences에는 lifecycle 상태와 시각만 기록하고 command, prompt, token을 저장하지 않는다.
 - WorkManager는 stale transition 점검만 수행하며 사용자 작업이나 Alpine process를 시작·재실행하지 않는다.
+- Bridge recovery supervisor는 사용자가 이미 시작한 Gateway만 health check하며, 최대 2회와 1~8초 backoff로 복구를 제한한다. cold start, 명시적 Stop 이후, prompt·terminal command에 대한 자동 재전송은 금지한다.
 - Play asset provider는 rootfs/auxiliary만 asset pack에서 열고 native launcher/loader는 항상 base APK의
   `nativeLibraryDir`에서 가져온다. 최종 설치기는 기존과 같이 크기와 SHA-256을 다시 검증한다.
 - workspace adapter는 absolute/traversal/NUL/symlink 경로를 거부하며 bounded read/write와 같은 디렉터리
   atomic move를 사용한다.
+- Android workspace adapter는 persisted SAF permission을 요구하지 않는다. 사용자가 고른 URI를 한 번만
+  bounded transfer하고, share 대상은 app-private cache file을 Host `FileProvider`로 명시적으로 공개한다.
 
 ## 현재 상태와 다음 단계
 
@@ -103,6 +123,8 @@ dependencies {
   stream/Stop/retry·대화 복원에 연결했다. Phase 3에서는 같은 공통 채팅 화면을
   Runtime·HostBridge·Python Gateway backend와 결합하고 Gateway lifecycle·health·사용자 승인
   fallback, 터미널·패키지 도구까지 통합했다.
+- `:alpine-workspace-api`는 저장본과 draft의 bounded line diff를 제공하고, Compose UI는 이를 저장 없이 표시한다. `:alpine-llm-bridge` recovery supervisor와 package mutation은 Android/Compose 밖의 계약으로 유지해 다른 host 앱에서도 재사용할 수 있다.
+- terminal close는 Android adapter → Runtime event → Host controller 경계를 통해 safe terminal ID와 numeric exit code만 전달한다. Compose UI는 마지막 종료 요약 한 건을 표시할 수 있으나 guest output, command, PID와 영구 terminal history는 보관하지 않는다.
 - Host lifecycle/service/notification/manifest/저장소 지침은
   [Host 통합 가이드](alpine-runtime-host-integration.md)를 따른다.
 - 현재 19개 AAR/JAR의 sources/POM/Gradle metadata/checksum, 8개 외부 release 축소 앱,

@@ -54,6 +54,64 @@ class StreamingBridgeTest {
     }
 
     @Test
+    fun rejectsInvalidUtf8WithoutLeakingRawBytes() {
+        val raw = byteArrayOf(
+            'd'.code.toByte(), 'a'.code.toByte(), 't'.code.toByte(), 'a'.code.toByte(),
+            ':'.code.toByte(), ' '.code.toByte(), 0xff.toByte(), '\n'.code.toByte(),
+            '\n'.code.toByte(),
+        )
+
+        val error = runCatching {
+            runBlocking {
+                SseEventParser.parse(
+                    ByteArrayInputStream(raw),
+                    maxEventBytes = 1024,
+                    maxTotalBytes = 4096,
+                ).toList()
+            }
+        }.exceptionOrNull()
+
+        assertTrue(error is ProviderStreamException)
+        assertEquals("Provider SSE contains invalid UTF-8", error?.message)
+    }
+
+    @Test
+    fun countsAllFieldsAndCommentsAgainstEventAndTotalLimits() {
+        val oversizedEvent = ": ${"x".repeat(32)}\ndata: {}\n\n"
+        val repeatedEvents = "data: {}\n\n".repeat(8)
+
+        val eventError = runCatching {
+            runBlocking {
+                SseEventParser.parse(
+                    ByteArrayInputStream(oversizedEvent.toByteArray()),
+                    maxEventBytes = 16,
+                    maxTotalBytes = 1024,
+                ).toList()
+            }
+        }.exceptionOrNull()
+        val totalError = runCatching {
+            runBlocking {
+                SseEventParser.parse(
+                    ByteArrayInputStream(repeatedEvents.toByteArray()),
+                    maxEventBytes = 32,
+                    maxTotalBytes = 32,
+                ).toList()
+            }
+        }.exceptionOrNull()
+
+        assertTrue(eventError is ProviderStreamException)
+        assertTrue(totalError is ProviderStreamException)
+    }
+
+    @Test
+    fun acceptsOnlyEventStreamMediaType() {
+        assertTrue(isEventStreamContentType("text/event-stream"))
+        assertTrue(isEventStreamContentType("Text/Event-Stream; charset=utf-8"))
+        assertFalse(isEventStreamContentType("application/json"))
+        assertFalse(isEventStreamContentType(null))
+    }
+
+    @Test
     fun normalizesProviderStreamEvents() {
         val openAi = OpenAiCompatibleOAuthAdapter("https://provider.example.com/completions")
         val openAiRequest = openAi.createStreamRequest("""{"model":"m","messages":[]}""")

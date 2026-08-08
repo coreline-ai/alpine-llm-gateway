@@ -1,28 +1,31 @@
 package dev.alpine.chat.provider.android.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
@@ -30,23 +33,23 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MenuAnchorType
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,19 +62,48 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import dev.alpine.chat.provider.android.session.ProviderConnection
+import dev.alpine.chat.provider.android.session.ProviderConnectionIssue
 import dev.alpine.chat.provider.android.session.ProviderConnectionState
-import dev.alpine.chat.provider.android.model.AnthropicProfileDefaults
-import dev.alpine.chat.provider.android.model.CodexProfileDefaults
 import dev.alpine.chat.provider.android.model.GeminiProfileDefaults
 import dev.alpine.chat.provider.android.model.ProviderProfile
+import dev.alpine.chat.provider.android.model.ProviderSaveAction
 import dev.alpine.chat.provider.android.model.ProviderType
-import dev.alpine.chat.provider.android.model.XaiProfileDefaults
-import dev.alpine.chat.feature.ui.theme.AlpineTheme
+import dev.alpine.chat.feature.ui.designsystem.AlpineConfirmDialog
+import dev.alpine.chat.feature.ui.designsystem.AlpineEmptyState
+import dev.alpine.chat.feature.ui.designsystem.AlpinePrimaryAction
+import dev.alpine.chat.feature.ui.designsystem.AlpineProductHeader
+import dev.alpine.chat.feature.ui.designsystem.AlpineSectionCard
+import dev.alpine.chat.feature.ui.designsystem.AlpineStatusRail
+import dev.alpine.chat.feature.ui.designsystem.AlpineStatusTone
+import dev.alpine.chat.feature.ui.designsystem.AlpineStepLabel
 
 private val ContentMaxWidth = 840.dp
+
+private val ProviderValidationErrorsSaver = listSaver<
+    Map<ProviderProfile.Field, String>,
+    String,
+>(
+    save = { errors ->
+        errors.entries
+            .sortedBy { it.key.name }
+            .flatMap { (field, message) -> listOf(field.name, message) }
+    },
+    restore = { saved ->
+        saved.chunked(2).mapNotNull { entry ->
+            val field = entry.getOrNull(0)
+                ?.let { name -> ProviderProfile.Field.entries.firstOrNull { it.name == name } }
+                ?: return@mapNotNull null
+            val message = entry.getOrNull(1) ?: return@mapNotNull null
+            field to message
+        }.toMap()
+    },
+)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
@@ -86,6 +118,8 @@ fun ProviderProfilesScreen(
     onDelete: (ProviderConnection) -> Unit,
     onConfirmDelete: (ProviderConnection) -> Unit,
     onDismissDelete: () -> Unit,
+    connectionIssues: Map<String, ProviderConnectionIssue> = emptyMap(),
+    onCancelAuthorization: () -> Unit = {},
 ) {
     var showChooser by rememberSaveable { mutableStateOf(false) }
     Scaffold(
@@ -93,26 +127,18 @@ fun ProviderProfilesScreen(
             .semantics { testTagsAsResourceId = true }
             .testTag("provider_list_screen"),
         topBar = {
-            TopAppBar(
-                title = { Text(text = "LLM connections") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
+            AlpineProductHeader(
+                title = "LLM 연결",
+                subtitle = "OAUTH PROVIDER · MODEL",
+                statusLabel = if (connections.any { it.state == ProviderConnectionState.AUTHENTICATED }) {
+                    "CONNECTED"
+                } else {
+                    "SETUP"
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
+                onBack = onBack,
             )
         },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                modifier = Modifier.testTag("add_provider"),
-                onClick = { showChooser = true },
-                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text("Add LLM") },
-            )
-        },
+        containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         Box(
             modifier = Modifier
@@ -120,32 +146,45 @@ fun ProviderProfilesScreen(
                 .padding(padding),
             contentAlignment = Alignment.TopCenter,
         ) {
-            if (connections.isEmpty()) {
-                EmptyProviders()
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .widthIn(max = ContentMaxWidth)
-                        .fillMaxSize()
-                        .testTag("profile_list"),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        horizontal = 16.dp,
-                        vertical = 12.dp,
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
+            LazyColumn(
+                modifier = Modifier
+                    .widthIn(max = ContentMaxWidth)
+                    .fillMaxSize()
+                    .testTag("profile_list"),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    horizontal = 16.dp,
+                    vertical = 12.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (connections.isEmpty()) {
+                    item {
+                        EmptyProviders(onAddProvider = { showChooser = true })
+                    }
+                } else {
+                    item {
+                        ProviderOverview(
+                            connectedCount = connections.count {
+                                it.state == ProviderConnectionState.AUTHENTICATED
+                            },
+                            totalCount = connections.size,
+                            onAddProvider = { showChooser = true },
+                        )
+                    }
                     items(connections, key = { it.profile.id }) { connection ->
                         ProviderProfileCard(
                             connection = connection,
                             isAuthorizing = authorizingProfileId == connection.profile.id,
                             authorizationInProgress = authorizingProfileId != null,
+                            issue = connectionIssues[connection.profile.id],
                             onEdit = { onEdit(connection) },
                             onConnectionAction = { onConnectionAction(connection) },
+                            onCancelAuthorization = onCancelAuthorization,
                             onDelete = { onDelete(connection) },
                         )
                     }
-                    item { Spacer(Modifier.height(80.dp)) }
                 }
+                item { Spacer(Modifier.height(24.dp)) }
             }
         }
     }
@@ -159,117 +198,221 @@ fun ProviderProfilesScreen(
         )
     }
     deleteCandidate?.let { connection ->
-        AlertDialog(
-            onDismissRequest = onDismissDelete,
-            title = { Text("Delete LLM profile?") },
-            text = {
-                Text("OAuth credentials for this profile will also be removed.")
-            },
-            confirmButton = {
-                TextButton(onClick = { onConfirmDelete(connection) }) { Text("Delete") }
-            },
-            dismissButton = { TextButton(onClick = onDismissDelete) { Text("Cancel") } },
+        AlpineConfirmDialog(
+            title = "LLM 연결을 삭제할까요?",
+            message = "이 profile에 저장된 OAuth 인증 정보도 함께 삭제됩니다.",
+            confirmLabel = "삭제",
+            onConfirm = { onConfirmDelete(connection) },
+            onDismiss = onDismissDelete,
         )
     }
 }
 
 @Composable
-private fun EmptyProviders() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 32.dp, vertical = 96.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text("No LLM profiles yet.", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(8.dp))
+private fun EmptyProviders(onAddProvider: () -> Unit) {
+    AlpineEmptyState(
+        title = "연결된 LLM이 없습니다",
+        message = "앱이 소유한 OAuth registration으로 Provider를 추가한 뒤 로그인하세요.",
+        actionLabel = "새 LLM 연결",
+        onAction = onAddProvider,
+        actionModifier = Modifier.testTag("add_provider"),
+    )
+}
+
+@Composable
+private fun ProviderOverview(
+    connectedCount: Int,
+    totalCount: Int,
+    onAddProvider: () -> Unit,
+) {
+    AlpineSectionCard {
+        Text("외부 LLM 연결", style = MaterialTheme.typography.headlineSmall)
         Text(
-            "Add a provider, then connect it with OAuth to start chatting.",
+            "OAuth credential은 Android Host에만 저장하고 Alpine Guest에는 전달하지 않습니다.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        AlpineStatusRail(
+            label = "연결 상태",
+            message = "${totalCount}개 profile 중 ${connectedCount}개 연결됨",
+            tone = if (connectedCount > 0) AlpineStatusTone.CONNECTED else AlpineStatusTone.NEUTRAL,
+        )
+        AlpinePrimaryAction(
+            text = "새 LLM 연결",
+            onClick = onAddProvider,
+            modifier = Modifier.fillMaxWidth().testTag("add_provider"),
         )
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ProviderProfileCard(
     connection: ProviderConnection,
     isAuthorizing: Boolean,
     authorizationInProgress: Boolean,
+    issue: ProviderConnectionIssue?,
     onEdit: () -> Unit,
     onConnectionAction: () -> Unit,
+    onCancelAuthorization: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val profile = connection.profile
     val status = when (connection.state) {
-        ProviderConnectionState.AUTHENTICATED -> "Connected"
-        ProviderConnectionState.SIGNED_OUT -> "Not connected"
-        ProviderConnectionState.REAUTHENTICATION_REQUIRED -> "Reconnect required"
+        ProviderConnectionState.AUTHENTICATED -> "연결됨"
+        ProviderConnectionState.SIGNED_OUT -> "연결 안 됨"
+        ProviderConnectionState.REAUTHENTICATION_REQUIRED -> "재로그인 필요"
     }
-    val statusColors = when (connection.state) {
-        ProviderConnectionState.AUTHENTICATED -> AlpineTheme.statusColors.connected to
-            AlpineTheme.statusColors.onConnected
-        ProviderConnectionState.SIGNED_OUT -> MaterialTheme.colorScheme.surfaceContainerHigh to
-            MaterialTheme.colorScheme.onSurfaceVariant
-        ProviderConnectionState.REAUTHENTICATION_REQUIRED -> AlpineTheme.statusColors.warning to
-            AlpineTheme.statusColors.onWarning
+    val tone = when (connection.state) {
+        ProviderConnectionState.AUTHENTICATED -> AlpineStatusTone.CONNECTED
+        ProviderConnectionState.SIGNED_OUT -> AlpineStatusTone.NEUTRAL
+        ProviderConnectionState.REAUTHENTICATION_REQUIRED -> AlpineStatusTone.WARNING
     }
-    Card(
+    val modelLabel = profile.model.ifBlank { "설정 필요" }
+    val accessibilityState = when {
+        isAuthorizing -> "연결 중. 브라우저 인증 완료 대기 중"
+        issue != null -> "오류 ${issue.code}. ${issue.message} ${issue.nextAction}"
+        else -> "$status. 모델 $modelLabel"
+    }
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .testTag("profile_card_${profile.id}"),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            .testTag("profile_card_${profile.id}")
+            .semantics { stateDescription = accessibilityState },
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(
+            1.5.dp,
+            MaterialTheme.colorScheme.outline,
+        ),
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ProviderMonogram(profile.type)
                 Spacer(Modifier.size(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(profile.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = profile.label,
+                        modifier = Modifier
+                            .testTag("profile_label_${profile.id}")
+                            .semantics { heading() },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                     Text(
                         profile.type.displayName,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-                ProviderOverflow(onEdit = onEdit, onDelete = onDelete)
-            }
-            Spacer(Modifier.height(14.dp))
-            Surface(
-                shape = CircleShape,
-                color = statusColors.first,
-                contentColor = statusColors.second,
-            ) {
-                Text(
-                    text = if (isAuthorizing) "Connecting…" else status,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                    style = MaterialTheme.typography.labelMedium,
+                ProviderOverflow(
+                    profileLabel = profile.label,
+                    profileId = profile.id,
+                    enabled = !authorizationInProgress,
+                    onEdit = onEdit,
+                    onDelete = onDelete,
                 )
             }
-            Spacer(Modifier.height(10.dp))
-            Text(
-                text = "Model · ${profile.model.ifBlank { "Not configured" }}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Spacer(Modifier.height(14.dp))
+            when {
+                isAuthorizing -> {
+                    AlpineStatusRail(
+                        label = "연결 중",
+                        message = "브라우저 인증 완료를 기다리고 있습니다.",
+                        tone = AlpineStatusTone.WARNING,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("authorization_progress_${profile.id}")
+                            .semantics {
+                                contentDescription = "${profile.label} 로그인 진행 중"
+                            },
+                    )
+                }
+                issue != null -> AlpineStatusRail(
+                    label = "오류 · ${issue.code}",
+                    message = "${issue.message}\n${issue.nextAction}",
+                    tone = AlpineStatusTone.ERROR,
+                    modifier = Modifier.testTag("connection_issue_${profile.id}"),
+                )
+                else -> AlpineStatusRail(
+                    label = status,
+                    message = "MODEL · $modelLabel",
+                    tone = tone,
+                    modifier = Modifier.testTag("profile_model_${profile.id}"),
+                    messageMaxLines = 3,
+                    messageOverflow = TextOverflow.Ellipsis,
+                )
+            }
             Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (connection.state == ProviderConnectionState.AUTHENTICATED) {
-                    TextButton(onClick = onConnectionAction, enabled = !authorizationInProgress) {
-                        Text("Logout")
-                    }
-                } else {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                if (isAuthorizing) {
                     FilledTonalButton(
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .testTag("cancel_authorization_${profile.id}")
+                            .semantics {
+                                contentDescription = "${profile.label} 로그인 취소"
+                            },
+                        onClick = onCancelAuthorization,
+                    ) {
+                        Text("로그인 취소")
+                    }
+                } else if (connection.state == ProviderConnectionState.AUTHENTICATED) {
+                    TextButton(
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .testTag("connection_action_${profile.id}")
+                            .semantics {
+                                contentDescription = "${profile.label} 로그아웃"
+                            },
                         onClick = onConnectionAction,
                         enabled = !authorizationInProgress,
                     ) {
-                        Text(if (connection.state == ProviderConnectionState.REAUTHENTICATION_REQUIRED) "Reconnect" else "Connect")
+                        Text("로그아웃")
+                    }
+                } else {
+                    val actionLabel = if (
+                        connection.state == ProviderConnectionState.REAUTHENTICATION_REQUIRED
+                    ) {
+                        "다시 로그인"
+                    } else {
+                        "로그인"
+                    }
+                    FilledTonalButton(
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .testTag("connection_action_${profile.id}")
+                            .semantics {
+                                contentDescription = "${profile.label} $actionLabel"
+                            },
+                        onClick = onConnectionAction,
+                        enabled = !authorizationInProgress,
+                    ) {
+                        Text(actionLabel)
                     }
                 }
-                TextButton(onClick = onEdit, enabled = !authorizationInProgress) { Text("Edit") }
+                TextButton(
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .testTag("edit_profile_${profile.id}")
+                        .semantics {
+                            contentDescription = "${profile.label} 설정"
+                        },
+                    onClick = onEdit,
+                    enabled = !authorizationInProgress,
+                ) {
+                    Text("설정")
+                }
             }
         }
     }
@@ -297,23 +440,41 @@ private fun ProviderMonogram(type: ProviderType) {
 }
 
 @Composable
-private fun ProviderOverflow(onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun ProviderOverflow(
+    profileLabel: String,
+    profileId: String,
+    enabled: Boolean,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { expanded = true }) {
-            Icon(Icons.Filled.MoreVert, contentDescription = "Profile actions")
+        IconButton(
+            modifier = Modifier
+                .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                .testTag("profile_actions_$profileId")
+                .semantics {
+                    contentDescription = "$profileLabel 작업 메뉴"
+                },
+            onClick = { expanded = true },
+            enabled = enabled,
+        ) {
+            Icon(
+                Icons.Filled.MoreVert,
+                contentDescription = null,
+            )
         }
         androidx.compose.material3.DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {
             androidx.compose.material3.DropdownMenuItem(
-                text = { Text("Edit") },
+                text = { Text("편집") },
                 onClick = { expanded = false; onEdit() },
                 leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
             )
             androidx.compose.material3.DropdownMenuItem(
-                text = { Text("Delete") },
+                text = { Text("삭제") },
                 onClick = { expanded = false; onDelete() },
                 leadingIcon = { Icon(Icons.Filled.DeleteOutline, contentDescription = null) },
             )
@@ -321,26 +482,62 @@ private fun ProviderOverflow(onEdit: () -> Unit, onDelete: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProviderChooser(
     onDismiss: () -> Unit,
     onSelected: (ProviderType) -> Unit,
 ) {
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = { Text("Choose an LLM type") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ProviderChoiceCard(ProviderType.ANTHROPIC, "provider_card_anthropic", onSelected)
-                ProviderChoiceCard(ProviderType.GEMINI, "provider_card_gemini", onSelected)
-                ProviderChoiceCard(ProviderType.OPENAI_COMPATIBLE, "provider_card_openai", onSelected)
-                ProviderChoiceCard(ProviderType.CODEX, "provider_card_codex", onSelected)
-                ProviderChoiceCard(ProviderType.XAI, "provider_card_xai", onSelected)
+        containerColor = MaterialTheme.colorScheme.background,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.92f)
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "LLM Provider 선택",
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+                TextButton(
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .testTag("dismiss_provider_chooser"),
+                    onClick = onDismiss,
+                ) {
+                    Text("취소")
+                }
             }
-        },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
+            Text(
+                "제품 지원 범위와 OAuth registration 요구사항을 확인한 뒤 선택하세요.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp),
+            ) {
+                item { ProviderChoiceCard(ProviderType.ANTHROPIC, "provider_card_anthropic", onSelected) }
+                item { ProviderChoiceCard(ProviderType.GEMINI, "provider_card_gemini", onSelected) }
+                item { ProviderChoiceCard(ProviderType.OPENAI_COMPATIBLE, "provider_card_openai", onSelected) }
+                item { ProviderChoiceCard(ProviderType.CODEX, "provider_card_codex", onSelected) }
+                item { ProviderChoiceCard(ProviderType.XAI, "provider_card_xai", onSelected) }
+            }
+        }
+    }
 }
 
 @Composable
@@ -349,13 +546,18 @@ private fun ProviderChoiceCard(
     tag: String,
     onSelected: (ProviderType) -> Unit,
 ) {
-    Card(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .clickable { onSelected(type) }
             .testTag(tag),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(
+            1.25.dp,
+            MaterialTheme.colorScheme.outline,
+        ),
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -363,12 +565,30 @@ private fun ProviderChoiceCard(
         ) {
             ProviderMonogram(type)
             Spacer(Modifier.size(12.dp))
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text(type.displayName, style = MaterialTheme.typography.titleSmall)
                 Text(
                     type.description,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Surface(
+                shape = CircleShape,
+                color = when (type) {
+                    ProviderType.GEMINI -> MaterialTheme.colorScheme.primary
+                    ProviderType.OPENAI_COMPATIBLE -> MaterialTheme.colorScheme.tertiaryContainer
+                    else -> MaterialTheme.colorScheme.surfaceContainerHigh
+                },
+            ) {
+                Text(
+                    text = when (type) {
+                        ProviderType.GEMINI -> "지원"
+                        ProviderType.OPENAI_COMPATIBLE -> "설정 필요"
+                        else -> "호환성"
+                    },
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                    style = MaterialTheme.typography.labelSmall,
                 )
             }
         }
@@ -381,7 +601,7 @@ fun ProviderEditScreen(
     initialProfile: ProviderProfile,
     isEditing: Boolean,
     onBack: () -> Unit,
-    onSave: (ProviderProfile) -> Map<ProviderProfile.Field, String>,
+    onSave: (ProviderProfile, ProviderSaveAction) -> Map<ProviderProfile.Field, String>,
 ) {
     var label by rememberSaveable(initialProfile.id) { mutableStateOf(initialProfile.label) }
     var authorizationEndpoint by rememberSaveable(initialProfile.id) { mutableStateOf(initialProfile.authorizationEndpoint) }
@@ -391,22 +611,22 @@ fun ProviderEditScreen(
     var scopes by rememberSaveable(initialProfile.id) { mutableStateOf(initialProfile.scopes.joinToString(" ")) }
     var model by rememberSaveable(initialProfile.id) { mutableStateOf(initialProfile.model) }
     var callbackPort by rememberSaveable(initialProfile.id) { mutableStateOf(initialProfile.callbackPort.toString()) }
-    var anthropicBeta by rememberSaveable(initialProfile.id) { mutableStateOf(initialProfile.anthropicBeta.orEmpty()) }
     var googleProjectId by rememberSaveable(initialProfile.id) { mutableStateOf(initialProfile.googleProjectId.orEmpty()) }
-    var errors by remember { mutableStateOf<Map<ProviderProfile.Field, String>>(emptyMap()) }
-    val fixedProtocolContract = initialProfile.type == ProviderType.ANTHROPIC ||
-        initialProfile.type == ProviderType.GEMINI ||
-        initialProfile.type == ProviderType.CODEX ||
-        initialProfile.type == ProviderType.XAI
+    var showProtocolDetails by rememberSaveable(initialProfile.id) { mutableStateOf(true) }
+    var showDiscardConfirmation by rememberSaveable(initialProfile.id) { mutableStateOf(false) }
+    var errors by rememberSaveable(
+        initialProfile.id,
+        stateSaver = ProviderValidationErrorsSaver,
+    ) {
+        mutableStateOf(emptyMap())
+    }
+    val fixedProtocolContract = initialProfile.type == ProviderType.GEMINI
     val selectableModels = when (initialProfile.type) {
-        ProviderType.ANTHROPIC -> AnthropicProfileDefaults.MODELS
         ProviderType.GEMINI -> GeminiProfileDefaults.MODELS
-        ProviderType.CODEX -> CodexProfileDefaults.MODELS
-        ProviderType.XAI -> XaiProfileDefaults.MODELS
         else -> emptyList()
     }
 
-    fun profile() = initialProfile.copy(
+    val editedProfile = initialProfile.copy(
         label = label.trim(),
         authorizationEndpoint = authorizationEndpoint.trim(),
         tokenEndpoint = tokenEndpoint.trim(),
@@ -415,26 +635,62 @@ fun ProviderEditScreen(
         scopes = scopes.trim().split(Regex("\\s+")).filter(String::isNotBlank),
         model = model.trim(),
         callbackPort = callbackPort.trim().toIntOrNull() ?: 0,
-        anthropicBeta = anthropicBeta.trim().ifBlank { null },
         googleProjectId = googleProjectId.trim().ifBlank { null },
     )
-    fun save() { errors = onSave(profile()) }
+    val hasUnsavedChanges = editedProfile != initialProfile
+    fun save(action: ProviderSaveAction) { errors = onSave(editedProfile, action) }
+    fun requestBack() {
+        if (hasUnsavedChanges) {
+            showDiscardConfirmation = true
+        } else {
+            onBack()
+        }
+    }
+
+    BackHandler(enabled = !showDiscardConfirmation) { requestBack() }
 
     Scaffold(
         modifier = Modifier.semantics { testTagsAsResourceId = true },
         topBar = {
-            TopAppBar(
-                title = { Text(if (isEditing) "Edit LLM" else "Add LLM") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    TextButton(onClick = ::save) { Text("Save") }
-                },
+            AlpineProductHeader(
+                title = if (isEditing) "LLM 연결 수정" else "새 LLM 연결",
+                subtitle = "PROVIDER · OAUTH · MODEL",
+                statusLabel = if (isEditing) "EDIT" else "NEW",
+                onBack = ::requestBack,
             )
         },
+        bottomBar = {
+            Surface(
+                color = MaterialTheme.colorScheme.background,
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant,
+                ),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    AlpinePrimaryAction(
+                        text = "저장하고 로그인",
+                        onClick = { save(ProviderSaveAction.SAVE_AND_LOGIN) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("save_and_login"),
+                    )
+                    TextButton(
+                        modifier = Modifier.testTag("save_for_later"),
+                        onClick = { save(ProviderSaveAction.SAVE_FOR_LATER) },
+                    ) {
+                        Text("나중에 로그인")
+                    }
+                }
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         Box(
             modifier = Modifier
@@ -450,58 +706,54 @@ fun ProviderEditScreen(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                item {
+                    AlpineStepLabel(
+                        step = 1,
+                        title = "Provider 확인",
+                        description = "연결할 LLM과 제품 지원 범위를 확인합니다.",
+                    )
+                }
                 item { ProviderTypeHeader(initialProfile.type) }
-                item { SectionTitle("Profile") }
+                item {
+                    AlpineStepLabel(
+                        step = 2,
+                        title = "앱 소유 OAuth 정보",
+                        description = "다른 앱이나 CLI의 Client ID를 복사하지 마세요.",
+                    )
+                }
                 item {
                     ProfileTextField(
-                        value = label, onValueChange = { label = it }, label = "Profile name",
+                        value = label, onValueChange = { label = it }, label = "연결 이름",
                         error = errors[ProviderProfile.Field.LABEL], tag = "profile_label",
                     )
                 }
-                item { SectionTitle("OAuth") }
                 item {
                     ProfileTextField(
-                        value = authorizationEndpoint, onValueChange = { authorizationEndpoint = it },
-                        label = "Authorization endpoint", error = errors[ProviderProfile.Field.AUTHORIZATION_ENDPOINT],
-                        tag = "authorization_endpoint", keyboardType = KeyboardType.Uri,
-                        readOnly = fixedProtocolContract,
-                    )
-                }
-                item {
-                    ProfileTextField(
-                        value = tokenEndpoint, onValueChange = { tokenEndpoint = it }, label = "Token endpoint",
-                        error = errors[ProviderProfile.Field.TOKEN_ENDPOINT], tag = "token_endpoint", keyboardType = KeyboardType.Uri,
-                        readOnly = fixedProtocolContract,
-                    )
-                }
-                item {
-                    ProfileTextField(
-                        value = clientId, onValueChange = { clientId = it }, label = "OAuth public client ID",
+                        value = clientId, onValueChange = { clientId = it }, label = "OAuth Public Client ID",
                         error = errors[ProviderProfile.Field.CLIENT_ID], tag = "client_id",
                         readOnly = false,
                     )
                 }
                 item {
-                    ProfileTextField(
-                        value = scopes, onValueChange = { scopes = it }, label = "OAuth scopes (space-separated)",
-                        error = errors[ProviderProfile.Field.SCOPES], tag = "scopes",
-                        readOnly = fixedProtocolContract,
+                    AlpineStatusRail(
+                        label = "앱 소유 registration 필요",
+                        message = "공식 CLI·OpenMinis·다른 앱의 Client ID와 fingerprint를 제품에 포함하지 않습니다.",
+                        tone = AlpineStatusTone.WARNING,
                     )
                 }
-                item {
-                    ProfileTextField(
-                        value = callbackPort, onValueChange = { callbackPort = it }, label = "Loopback callback port",
-                        error = errors[ProviderProfile.Field.CALLBACK_PORT], tag = "callback_port", keyboardType = KeyboardType.Number,
-                        readOnly = fixedProtocolContract,
-                    )
+                if (initialProfile.type == ProviderType.GEMINI) {
+                    item {
+                        ProfileTextField(
+                            value = googleProjectId, onValueChange = { googleProjectId = it },
+                            label = "Google Cloud Quota Project ID", tag = "google_project",
+                        )
+                    }
                 }
-                item { SectionTitle("LLM") }
                 item {
-                    ProfileTextField(
-                        value = inferenceEndpoint, onValueChange = { inferenceEndpoint = it }, label = "LLM endpoint",
-                        placeholder = initialProfile.type.inferenceEndpointPlaceholder,
-                        error = errors[ProviderProfile.Field.INFERENCE_ENDPOINT], tag = "inference_endpoint", keyboardType = KeyboardType.Uri,
-                        readOnly = fixedProtocolContract,
+                    AlpineStepLabel(
+                        step = 3,
+                        title = "기본 모델 선택",
+                        description = "연결 직후 사용할 모델을 선택합니다.",
                     )
                 }
                 item {
@@ -514,60 +766,72 @@ fun ProviderEditScreen(
                         )
                     } else {
                         ProfileTextField(
-                            value = model, onValueChange = { model = it }, label = "Default model",
+                            value = model, onValueChange = { model = it }, label = "기본 모델",
                             error = errors[ProviderProfile.Field.MODEL], tag = "model",
                         )
                     }
                 }
-                if (initialProfile.type == ProviderType.ANTHROPIC) {
-                    item { SectionTitle("Anthropic options") }
-                    item {
-                        ProfileTextField(
-                            value = anthropicBeta, onValueChange = { anthropicBeta = it },
-                            label = "Anthropic OAuth beta header", tag = "anthropic_beta",
-                            error = errors[ProviderProfile.Field.ANTHROPIC_BETA],
-                            readOnly = true,
-                        )
-                    }
-                    item {
-                        Text(
-                            text = "Reference-only direct OAuth contract입니다. 다른 앱이나 CLI의 " +
-                                "client ID를 복사하지 말고 사용 권한이 있는 registration을 입력하세요. " +
-                                "MobileAgent release는 BFF의 공식 Anthropic API를 사용합니다.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                item {
+                    ProtocolSectionHeader(
+                        title = if (fixedProtocolContract) "프로토콜 정보 · 읽기 전용" else "고급 프로토콜 설정",
+                        expanded = showProtocolDetails,
+                        onToggle = { showProtocolDetails = !showProtocolDetails },
+                    )
                 }
-                if (initialProfile.type == ProviderType.GEMINI) {
-                    item { SectionTitle("Google options") }
-                    item {
-                        Text(
-                            text = "Use a Google OAuth Desktop client ID and quota project " +
-                                "owned by this app. Gemini CLI credentials are not reused.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    item {
-                        ProfileTextField(
-                            value = googleProjectId, onValueChange = { googleProjectId = it },
-                            label = "Google Cloud quota project ID", tag = "google_project",
-                        )
-                    }
+                if (showProtocolDetails) {
+                item {
+                    ProfileTextField(
+                        value = authorizationEndpoint, onValueChange = { authorizationEndpoint = it },
+                        label = "Authorization Endpoint", error = errors[ProviderProfile.Field.AUTHORIZATION_ENDPOINT],
+                        tag = "authorization_endpoint", keyboardType = KeyboardType.Uri,
+                        readOnly = fixedProtocolContract,
+                    )
                 }
                 item {
-                    Button(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp)
-                            .testTag("save_profile"),
-                        onClick = ::save,
-                    ) { Text("Save profile") }
+                    ProfileTextField(
+                        value = tokenEndpoint, onValueChange = { tokenEndpoint = it }, label = "Token Endpoint",
+                        error = errors[ProviderProfile.Field.TOKEN_ENDPOINT], tag = "token_endpoint", keyboardType = KeyboardType.Uri,
+                        readOnly = fixedProtocolContract,
+                    )
+                }
+                item {
+                    ProfileTextField(
+                        value = scopes, onValueChange = { scopes = it }, label = "OAuth Scopes",
+                        error = errors[ProviderProfile.Field.SCOPES], tag = "scopes",
+                        readOnly = fixedProtocolContract,
+                    )
+                }
+                item {
+                    ProfileTextField(
+                        value = callbackPort, onValueChange = { callbackPort = it }, label = "Loopback Callback Port",
+                        error = errors[ProviderProfile.Field.CALLBACK_PORT], tag = "callback_port", keyboardType = KeyboardType.Number,
+                        readOnly = fixedProtocolContract,
+                    )
+                }
+                item {
+                    ProfileTextField(
+                        value = inferenceEndpoint, onValueChange = { inferenceEndpoint = it }, label = "LLM Endpoint",
+                        placeholder = initialProfile.type.inferenceEndpointPlaceholder,
+                        error = errors[ProviderProfile.Field.INFERENCE_ENDPOINT], tag = "inference_endpoint", keyboardType = KeyboardType.Uri,
+                        readOnly = fixedProtocolContract,
+                    )
+                }
                 }
                 item { Spacer(Modifier.height(16.dp)) }
             }
         }
+    }
+    if (showDiscardConfirmation) {
+        AlpineConfirmDialog(
+            title = "변경사항을 버릴까요?",
+            message = "저장하지 않은 Provider 설정이 있습니다. 나가면 입력한 내용이 삭제됩니다.",
+            confirmLabel = "버리고 나가기",
+            onConfirm = {
+                showDiscardConfirmation = false
+                onBack()
+            },
+            onDismiss = { showDiscardConfirmation = false },
+        )
     }
 }
 
@@ -595,7 +859,7 @@ private fun ProviderModelSelector(
                 .testTag("model"),
             value = value,
             onValueChange = {},
-            label = { Text("Default model") },
+            label = { Text("기본 모델") },
             supportingText = error?.let { { Text(it) } },
             isError = error != null,
             readOnly = true,
@@ -641,15 +905,31 @@ private fun ProviderTypeHeader(type: ProviderType) {
 }
 
 @Composable
-private fun SectionTitle(text: String) {
+private fun ProtocolSectionHeader(
+    title: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
     Column {
         Spacer(Modifier.height(4.dp))
-        Text(
-            text = text,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            TextButton(
+                modifier = Modifier.testTag("protocol_details_toggle"),
+                onClick = onToggle,
+            ) {
+                Text(if (expanded) "접기" else "보기")
+            }
+        }
         Spacer(Modifier.height(4.dp))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }

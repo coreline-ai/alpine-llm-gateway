@@ -1,9 +1,14 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <jni.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/un.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -29,6 +34,11 @@ Java_dev_alpine_runtime_android_internal_NativePtyBridge_nativeOpen(
         close(master);
         return NULL;
     }
+    struct stat slave_stat;
+    if (stat(slave_path, &slave_stat) != 0) {
+        close(master);
+        return NULL;
+    }
     int read_fd = duplicate_cloexec(master);
     int write_fd = duplicate_cloexec(master);
     /* TIOCSWINSZ is conventionally issued on the PTY master. Keep a dedicated
@@ -51,7 +61,7 @@ Java_dev_alpine_runtime_android_internal_NativePtyBridge_nativeOpen(
         env,
         descriptor_class,
         "<init>",
-        "(IIILjava/lang/String;)V"
+        "(IIIJLjava/lang/String;)V"
     );
     if (constructor == NULL) goto failure;
     jstring path = (*env)->NewStringUTF(env, slave_path);
@@ -63,6 +73,7 @@ Java_dev_alpine_runtime_android_internal_NativePtyBridge_nativeOpen(
         read_fd,
         write_fd,
         control_fd,
+        (jlong) slave_stat.st_rdev,
         path
     );
     if (descriptor == NULL || (*env)->ExceptionCheck(env)) goto failure;
@@ -99,6 +110,104 @@ Java_dev_alpine_runtime_android_internal_NativePtyBridge_nativeResize(
     return ioctl(fd, TIOCSWINSZ, &size) == 0 ? JNI_TRUE : JNI_FALSE;
 }
 
+JNIEXPORT jboolean JNICALL
+Java_dev_alpine_runtime_android_internal_NativePtyBridge_nativeResizeAndRequestProbeRelay(
+    JNIEnv *env,
+    jobject instance,
+    jint fd,
+    jint columns,
+    jint rows,
+    jstring relay_socket_path
+) {
+    (void) env;
+    (void) instance;
+    if (fd < 0 || columns <= 0 || rows <= 0 || columns > 1000 || rows > 1000 ||
+        relay_socket_path == NULL) {
+        return JNI_FALSE;
+    }
+    struct winsize size = {
+        .ws_row = (unsigned short) rows,
+        .ws_col = (unsigned short) columns,
+        .ws_xpixel = 0,
+        .ws_ypixel = 0,
+    };
+    if (ioctl(fd, TIOCSWINSZ, &size) != 0) return JNI_FALSE;
+
+    const char *path = (*env)->GetStringUTFChars(env, relay_socket_path, NULL);
+    if (path == NULL) return JNI_FALSE;
+    size_t path_length = strlen(path);
+    if (path_length == 0 || path_length >= sizeof(((struct sockaddr_un *) 0)->sun_path)) {
+        (*env)->ReleaseStringUTFChars(env, relay_socket_path, path);
+        return JNI_FALSE;
+    }
+    int socket_fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    if (socket_fd < 0) {
+        (*env)->ReleaseStringUTFChars(env, relay_socket_path, path);
+        return JNI_FALSE;
+    }
+    struct sockaddr_un address;
+    memset(&address, 0, sizeof(address));
+    address.sun_family = AF_UNIX;
+    memcpy(address.sun_path, path, path_length + 1);
+    int connected = connect(socket_fd, (struct sockaddr *) &address, sizeof(address)) == 0;
+    unsigned char request = 0x52; /* "R": request an already-owned relay. */
+    unsigned char response = 0;
+    int relayed = connected &&
+        write(socket_fd, &request, sizeof(request)) == (ssize_t) sizeof(request) &&
+        read(socket_fd, &response, sizeof(response)) == (ssize_t) sizeof(response) &&
+        response == 0x41; /* "A": supervisor delivered to its PRoot child. */
+    close(socket_fd);
+    (*env)->ReleaseStringUTFChars(env, relay_socket_path, path);
+    return relayed ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_dev_alpine_runtime_android_internal_NativePtyBridge_nativeRequestProbeVirtualResize(
+    JNIEnv *env,
+    jobject instance,
+    jint columns,
+    jint rows,
+    jstring relay_socket_path
+) {
+    (void) instance;
+    if (columns <= 0 || rows <= 0 || columns > 1000 || rows > 1000 ||
+        relay_socket_path == NULL) {
+        return JNI_FALSE;
+    }
+    const char *path = (*env)->GetStringUTFChars(env, relay_socket_path, NULL);
+    if (path == NULL) return JNI_FALSE;
+    size_t path_length = strlen(path);
+    if (path_length == 0 || path_length >= sizeof(((struct sockaddr_un *) 0)->sun_path)) {
+        (*env)->ReleaseStringUTFChars(env, relay_socket_path, path);
+        return JNI_FALSE;
+    }
+    int socket_fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    if (socket_fd < 0) {
+        (*env)->ReleaseStringUTFChars(env, relay_socket_path, path);
+        return JNI_FALSE;
+    }
+    struct sockaddr_un address;
+    memset(&address, 0, sizeof(address));
+    address.sun_family = AF_UNIX;
+    memcpy(address.sun_path, path, path_length + 1);
+    int connected = connect(socket_fd, (struct sockaddr *) &address, sizeof(address)) == 0;
+    unsigned char request[5] = {
+        0x56, /* V: Probe-only virtual winsize frame. */
+        (unsigned char) (((unsigned int) columns >> 8) & 0xff),
+        (unsigned char) ((unsigned int) columns & 0xff),
+        (unsigned char) (((unsigned int) rows >> 8) & 0xff),
+        (unsigned char) ((unsigned int) rows & 0xff),
+    };
+    unsigned char response = 0;
+    int relayed = connected &&
+        write(socket_fd, request, sizeof(request)) == (ssize_t) sizeof(request) &&
+        read(socket_fd, &response, sizeof(response)) == (ssize_t) sizeof(response) &&
+        response == 0x41; /* A: direct PRoot control pipe acknowledged. */
+    close(socket_fd);
+    (*env)->ReleaseStringUTFChars(env, relay_socket_path, path);
+    return relayed ? JNI_TRUE : JNI_FALSE;
+}
+
 static jlong read_terminal_size(int fd) {
     struct winsize size;
     if (fd < 0 || !isatty(fd) || ioctl(fd, TIOCGWINSZ, &size) != 0) return 0;
@@ -114,90 +223,4 @@ Java_dev_alpine_runtime_android_internal_NativePtyBridge_nativeReadSize(
     (void) env;
     (void) instance;
     return read_terminal_size(fd);
-}
-
-static jboolean resize_process_terminal_fd(int pid, int fd, int columns, int rows) {
-    if (pid <= 1 || fd < 0 || fd > 255 || columns <= 0 || rows <= 0 ||
-        columns > 1000 || rows > 1000) {
-        return JNI_FALSE;
-    }
-    char path[64];
-    int path_length = snprintf(path, sizeof(path), "/proc/%d/fd/%d", pid, fd);
-    if (path_length <= 0 || (size_t) path_length >= sizeof(path)) return JNI_FALSE;
-    int terminal_fd = open(path, O_RDWR | O_NOCTTY | O_CLOEXEC);
-    if (terminal_fd < 0) return JNI_FALSE;
-    struct winsize size = {
-        .ws_row = (unsigned short) rows,
-        .ws_col = (unsigned short) columns,
-        .ws_xpixel = 0,
-        .ws_ypixel = 0,
-    };
-    jboolean result =
-        isatty(terminal_fd) && ioctl(terminal_fd, TIOCSWINSZ, &size) == 0
-            ? JNI_TRUE
-            : JNI_FALSE;
-    close(terminal_fd);
-    return result;
-}
-
-JNIEXPORT jboolean JNICALL
-Java_dev_alpine_runtime_android_internal_NativePtyBridge_nativeResizeProcessTerminal(
-    JNIEnv *env,
-    jobject instance,
-    jint pid,
-    jint columns,
-    jint rows
-) {
-    (void) env;
-    (void) instance;
-    return resize_process_terminal_fd(pid, 0, columns, rows);
-}
-
-JNIEXPORT jboolean JNICALL
-Java_dev_alpine_runtime_android_internal_NativePtyBridge_nativeResizeProcessTerminalFd(
-    JNIEnv *env,
-    jobject instance,
-    jint pid,
-    jint fd,
-    jint columns,
-    jint rows
-) {
-    (void) env;
-    (void) instance;
-    return resize_process_terminal_fd(pid, fd, columns, rows);
-}
-
-static jlong read_process_terminal_size(int pid, int fd) {
-    if (pid <= 1 || fd < 0 || fd > 255) return 0;
-    char path[64];
-    int path_length = snprintf(path, sizeof(path), "/proc/%d/fd/%d", pid, fd);
-    if (path_length <= 0 || (size_t) path_length >= sizeof(path)) return 0;
-    int terminal_fd = open(path, O_RDWR | O_NOCTTY | O_CLOEXEC);
-    if (terminal_fd < 0) return 0;
-    jlong result = read_terminal_size(terminal_fd);
-    close(terminal_fd);
-    return result;
-}
-
-JNIEXPORT jlong JNICALL
-Java_dev_alpine_runtime_android_internal_NativePtyBridge_nativeReadProcessTerminalSize(
-    JNIEnv *env,
-    jobject instance,
-    jint pid
-) {
-    (void) env;
-    (void) instance;
-    return read_process_terminal_size(pid, 0);
-}
-
-JNIEXPORT jlong JNICALL
-Java_dev_alpine_runtime_android_internal_NativePtyBridge_nativeReadProcessTerminalSizeFd(
-    JNIEnv *env,
-    jobject instance,
-    jint pid,
-    jint fd
-) {
-    (void) env;
-    (void) instance;
-    return read_process_terminal_size(pid, fd);
 }

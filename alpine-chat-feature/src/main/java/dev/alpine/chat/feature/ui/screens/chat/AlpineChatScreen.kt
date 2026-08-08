@@ -72,8 +72,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -112,6 +114,7 @@ fun AlpineChatScreen(
     onDraftChange: (String) -> Unit,
     onSend: (String) -> Unit,
     onStop: () -> Unit,
+    onStopConversation: ((String) -> Unit)? = null,
     failure: ChatFailure? = null,
     onDismissFailure: () -> Unit = {},
     onRetry: () -> Unit = {},
@@ -136,6 +139,14 @@ fun AlpineChatScreen(
                     onSelect = onSelectConversation,
                     onRename = onRenameConversation,
                     onDelete = onDeleteConversation,
+                    onStop = { conversationId ->
+                        if (onStopConversation != null) {
+                            onStopConversation(conversationId)
+                        } else {
+                            onSelectConversation(conversationId)
+                            onStop()
+                        }
+                    },
                     onClose = {
                         historyVisible = false
                         scope.launch { drawerState.close() }
@@ -152,7 +163,7 @@ fun AlpineChatScreen(
             topBar = {
                 ChatToolbar(
                     title = state.conversationTitle,
-                    activeGenerationCount = state.activeGenerationCount,
+                    backgroundGenerationCount = state.backgroundGenerationCount,
                     newChatEnabled = !state.isLoadingConversations,
                     onHistory = {
                         historyVisible = true
@@ -169,6 +180,7 @@ fun AlpineChatScreen(
                         enabled = state.selectedProfileId != null &&
                             !state.isLoadingConversations,
                         streaming = state.isStreaming,
+                        generationCapacityAvailable = state.generationCapacityAvailable,
                         onValueChange = onDraftChange,
                         onSend = onSend,
                         onStop = onStop,
@@ -254,7 +266,7 @@ fun AlpineChatScreen(
 @Composable
 private fun ChatToolbar(
     title: String,
-    activeGenerationCount: Int,
+    backgroundGenerationCount: Int,
     newChatEnabled: Boolean,
     onHistory: () -> Unit,
     onNewChat: () -> Unit,
@@ -278,7 +290,7 @@ private fun ChatToolbar(
                     modifier = Modifier
                         .size(48.dp)
                         .testTag("conversation_history")
-                        .semantics { contentDescription = "Conversation history" },
+                        .semantics { contentDescription = "대화 기록 열기" },
                 ) {
                     Icon(Icons.Outlined.History, contentDescription = null)
                 }
@@ -291,12 +303,14 @@ private fun ChatToolbar(
                         style = MaterialTheme.typography.titleLarge,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.semantics { heading() },
                     )
-                    if (activeGenerationCount > 1) {
+                    if (backgroundGenerationCount > 0) {
                         Text(
-                            text = "$activeGenerationCount chats generating",
+                            text = "다른 대화 ${backgroundGenerationCount}개 생성 중",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.testTag("background_generation_count"),
                         )
                     }
                 }
@@ -306,7 +320,7 @@ private fun ChatToolbar(
                     modifier = Modifier
                         .size(48.dp)
                         .testTag("new_chat")
-                        .semantics { contentDescription = "Start new chat" },
+                        .semantics { contentDescription = "새 대화 시작" },
                 ) {
                     Icon(Icons.Outlined.AddComment, contentDescription = null)
                 }
@@ -315,7 +329,7 @@ private fun ChatToolbar(
                     modifier = Modifier
                         .size(48.dp)
                         .testTag("manage_providers")
-                        .semantics { contentDescription = "Manage LLM connections" },
+                        .semantics { contentDescription = "LLM 연결 관리" },
                 ) {
                     Icon(Icons.Outlined.Hub, contentDescription = null)
                 }
@@ -347,9 +361,9 @@ private fun ConnectionNotice() {
             )
             Spacer(Modifier.size(10.dp))
             Column {
-                Text("No connected LLM", style = MaterialTheme.typography.titleSmall)
+                Text("연결된 LLM 없음", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "Connect an OAuth provider, then choose a model.",
+                    "OAuth Provider를 연결한 뒤 모델을 선택하세요.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -394,7 +408,13 @@ private fun ProviderSelector(
                     .clickable(enabled = canOpen) {
                         if (providers.isEmpty()) onManageProviders() else expanded = true
                     }
-                    .semantics { contentDescription = "Connected LLM selector" },
+                    .semantics {
+                        contentDescription = if (selected == null) {
+                            "LLM Provider 선택 및 연결"
+                        } else {
+                            "연결된 LLM 선택. 현재 ${selected.label}, ${selected.model}"
+                        }
+                    },
                 shape = RoundedCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.onSurface,
@@ -412,13 +432,13 @@ private fun ProviderSelector(
                     Spacer(Modifier.size(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            text = selected?.label ?: "LLM connection",
+                            text = selected?.label ?: "LLM 연결",
                             style = MaterialTheme.typography.labelLarge,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            text = selected?.model ?: "Choose a Provider",
+                            text = selected?.model ?: "Provider 선택",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -438,7 +458,7 @@ private fun ProviderSelector(
             ) {
                 if (providers.isEmpty()) {
                     DropdownMenuItem(
-                        text = { Text("Manage LLM connections") },
+                        text = { Text("LLM 연결 관리") },
                         onClick = {
                             expanded = false
                             onManageProviders()
@@ -459,7 +479,7 @@ private fun ProviderSelector(
                             },
                             trailingIcon = {
                                 if (provider.profileId == selectedProfileId) {
-                                    AssistChip(onClick = {}, label = { Text("Active") })
+                                    AssistChip(onClick = {}, label = { Text("사용 중") })
                                 }
                             },
                         )
@@ -494,9 +514,9 @@ private fun ModelQuickSwitcher(
     ) {
         Text(
             text = if (streaming) {
-                "Next message model · current response continues unchanged"
+                "다음 메시지 모델 · 현재 답변은 그대로 계속됨"
             } else {
-                "Quick model switch"
+                "빠른 모델 변경"
             },
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -515,7 +535,7 @@ private fun ModelQuickSwitcher(
                     label = { Text(model, maxLines = 1) },
                     modifier = Modifier
                         .testTag("quick_model_$model")
-                        .semantics { contentDescription = "Use model $model" },
+                        .semantics { contentDescription = "$model 모델 사용" },
                 )
             }
         }
@@ -554,15 +574,15 @@ private fun EmptyChatState(
                 )
                 Spacer(Modifier.height(18.dp))
                 Text(
-                    text = if (hasProvider) "Start a conversation" else "Connect an LLM to start",
+                    text = if (hasProvider) "대화를 시작하세요" else "먼저 LLM을 연결하세요",
                     style = MaterialTheme.typography.headlineSmall,
                 )
                 Spacer(Modifier.height(10.dp))
                 Text(
                     text = if (hasProvider) {
-                        "Your selected provider and model will be shown on every response."
+                        "선택한 Provider와 모델이 각 답변에 표시됩니다."
                     } else {
-                        "Connect Codex, Claude, Gemini, or Grok, then choose a model."
+                        "Codex, Claude, Gemini 또는 Grok을 연결한 뒤 모델을 선택하세요."
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.90f),
@@ -573,7 +593,7 @@ private fun EmptyChatState(
                         onClick = onManageProviders,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text("Manage LLM connections")
+                        Text("LLM 연결 관리")
                     }
                 }
             }
@@ -643,7 +663,7 @@ private fun FailureAction(
                 onClick = onDismiss,
                 modifier = Modifier
                     .size(48.dp)
-                    .semantics { contentDescription = "Dismiss error" },
+                    .semantics { contentDescription = "오류 안내 닫기" },
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Close,
@@ -690,6 +710,19 @@ private fun StatusMessage(message: String) {
 private fun MessageBubble(message: ChatMessage) {
     val isUser = message.role == ChatRole.USER
     val isError = message.role == ChatRole.ERROR || message.state == ChatMessageState.FAILED
+    val displayText = message.displayText()
+    val statusLabel = message.statusLabel()
+    val accessibilityStateLabel = when (message.state) {
+        ChatMessageState.COMPLETE -> null
+        ChatMessageState.STREAMING -> "생성 중"
+        ChatMessageState.CANCELLED -> "중지됨"
+        ChatMessageState.FAILED -> "실패"
+    }
+    val senderLabel = when (message.role) {
+        ChatRole.USER -> "사용자 메시지"
+        ChatRole.ASSISTANT -> "AI 답변"
+        ChatRole.ERROR -> "오류 메시지"
+    }
     val bubbleColor = when {
         isUser -> MaterialTheme.colorScheme.primaryContainer
         isError -> MaterialTheme.colorScheme.errorContainer
@@ -728,6 +761,12 @@ private fun MessageBubble(message: ChatMessage) {
                 )
             }
             Surface(
+                modifier = Modifier
+                    .testTag("message_${message.id}")
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = senderLabel
+                        accessibilityStateLabel?.let { stateDescription = it }
+                    },
                 shape = RoundedCornerShape(
                     topStart = 20.dp,
                     topEnd = 20.dp,
@@ -743,7 +782,6 @@ private fun MessageBubble(message: ChatMessage) {
                 ),
             ) {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                    val displayText = message.displayText()
                     if (!isUser && !isError && displayText.isNotBlank()) {
                         ChatMarkdown(source = displayText)
                     } else {
@@ -752,7 +790,7 @@ private fun MessageBubble(message: ChatMessage) {
                             style = MaterialTheme.typography.bodyLarge,
                         )
                     }
-                    message.statusLabel()?.let { status ->
+                    statusLabel?.let { status ->
                         Spacer(Modifier.height(5.dp))
                         Text(
                             text = status,
@@ -772,6 +810,7 @@ private fun ChatComposer(
     value: String,
     enabled: Boolean,
     streaming: Boolean,
+    generationCapacityAvailable: Boolean,
     onValueChange: (String) -> Unit,
     onSend: (String) -> Unit,
     onStop: () -> Unit,
@@ -794,14 +833,17 @@ private fun ChatComposer(
                 onValueChange = onValueChange,
                 modifier = Modifier
                     .weight(1f)
-                    .testTag("message_input"),
+                    .testTag("message_input")
+                    .semantics { contentDescription = "메시지 입력" },
                 enabled = enabled,
                 placeholder = {
                     Text(
                         when {
-                            !enabled -> "Connect an LLM first"
-                            streaming -> "Type your next message while this response finishes"
-                            else -> "Message your LLM"
+                            !enabled -> "먼저 LLM을 연결하세요"
+                            streaming -> "현재 답변 중에도 다음 메시지를 입력할 수 있습니다"
+                            !generationCapacityAvailable ->
+                                "다른 답변이 끝나면 이 메시지를 전송할 수 있습니다"
+                            else -> "LLM에 메시지 보내기"
                         },
                     )
                 },
@@ -826,7 +868,12 @@ private fun ChatComposer(
                 ),
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(
                     onSend = {
-                        if (enabled && !streaming && value.isNotBlank()) {
+                        if (
+                            enabled &&
+                            !streaming &&
+                            generationCapacityAvailable &&
+                            value.isNotBlank()
+                        ) {
                             onSend(value)
                         }
                     },
@@ -838,25 +885,25 @@ private fun ChatComposer(
                     modifier = Modifier
                         .size(48.dp)
                         .testTag("stop_button")
-                        .semantics { contentDescription = "Stop generating" },
+                        .semantics { contentDescription = "답변 생성 중지" },
                 ) {
                     Icon(Icons.Outlined.StopCircle, contentDescription = null)
                 }
             } else {
                 IconButton(
                     onClick = {
-                        if (enabled && value.isNotBlank()) {
+                        if (enabled && generationCapacityAvailable && value.isNotBlank()) {
                             onSend(value)
                         }
                     },
-                    enabled = enabled && value.isNotBlank(),
+                    enabled = enabled && generationCapacityAvailable && value.isNotBlank(),
                     colors = IconButtonDefaults.iconButtonColors(
                         disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     ),
                     modifier = Modifier
                         .size(48.dp)
                         .testTag("send_button")
-                        .semantics { contentDescription = "Send message" },
+                        .semantics { contentDescription = "메시지 전송" },
                 ) {
                     Icon(Icons.AutoMirrored.Outlined.Send, contentDescription = null)
                 }

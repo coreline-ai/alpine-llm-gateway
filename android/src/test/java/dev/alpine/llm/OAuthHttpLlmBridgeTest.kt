@@ -87,12 +87,13 @@ class OAuthHttpLlmBridgeTest {
 
     @Test
     fun accountMetadataIsAddedOnlyAtCredentialBoundary() = runBlocking {
+        val accountHeader = "X-Provider-Account-Id"
         var captured: ProviderHttpRequest? = null
         val adapter = object : OAuthProviderHttpAdapter {
             override fun createRequest(requestJson: String) = ProviderHttpRequest(
-                url = CodexOAuthContract.RESPONSES_ENDPOINT,
+                url = "https://provider.example.test/v1/responses",
                 bodyJson = requestJson,
-                credentialAccountIdHeader = CodexResponsesOAuthAdapter.ACCOUNT_ID_HEADER,
+                credentialAccountIdHeader = accountHeader,
             )
         }
         val bridge = OAuthHttpLlmBridge(adapter) { request ->
@@ -104,23 +105,24 @@ class OAuthHttpLlmBridgeTest {
 
         assertEquals(
             "account-123",
-            captured?.headers?.get(CodexResponsesOAuthAdapter.ACCOUNT_ID_HEADER),
+            captured?.headers?.get(accountHeader),
         )
         assertFalse(
             adapter.createRequest("{}").headers.containsKey(
-                CodexResponsesOAuthAdapter.ACCOUNT_ID_HEADER,
+                accountHeader,
             ),
         )
     }
 
     @Test
     fun unsafeAccountMetadataIsRejectedBeforeTransport() {
+        val accountHeader = "X-Provider-Account-Id"
         val bridge = OAuthHttpLlmBridge(
             adapter = object : OAuthProviderHttpAdapter {
                 override fun createRequest(requestJson: String) = ProviderHttpRequest(
-                    url = CodexOAuthContract.RESPONSES_ENDPOINT,
+                    url = "https://provider.example.test/v1/responses",
                     bodyJson = requestJson,
-                    credentialAccountIdHeader = CodexResponsesOAuthAdapter.ACCOUNT_ID_HEADER,
+                    credentialAccountIdHeader = accountHeader,
                 )
             },
             transport = OAuthHttpTransport { error("transport must not run") },
@@ -136,7 +138,7 @@ class OAuthHttpLlmBridgeTest {
     }
 
     @Test
-    fun nonSuccessfulStreamMapsStatusAndSafeErrorBodyWithoutCollectingEvents() = runBlocking {
+    fun nonSuccessfulStreamMapsStatusAndRedactsErrorBodyWithoutCollectingEvents() = runBlocking {
         val adapter = OpenAiCompatibleOAuthAdapter(
             completionEndpoint = "https://provider.example.com/v1/chat/completions",
         )
@@ -155,8 +157,35 @@ class OAuthHttpLlmBridgeTest {
         val result = bridge.stream("""{"model":"test","messages":[]}""", OAuthCredential("secret"))
 
         assertEquals(429, result.statusCode)
-        assertEquals("""{"error":{"code":"rate_limit"}}""", result.errorBodyJson)
+        assertTrue(requireNotNull(result.errorBodyJson).contains("provider_error"))
+        assertFalse(requireNotNull(result.errorBodyJson).contains("rate_limit"))
         assertTrue(result.events.toList().isEmpty())
+    }
+
+    @Test
+    fun openAiCompatibleErrorsAndInvalidSuccessBodiesAreAlwaysRedacted() {
+        val adapter = OpenAiCompatibleOAuthAdapter(
+            completionEndpoint = "https://provider.example.com/v1/chat/completions",
+        )
+
+        for (status in listOf(401, 403, 404, 429, 500, 502, 503, 504)) {
+            val result = adapter.createResult(
+                ProviderHttpResponse(
+                    status,
+                    """{"error":{"message":"provider-secret-$status"}}""",
+                ),
+            )
+            assertEquals(status, result.statusCode)
+            assertTrue(result.bodyJson.contains("provider_error"))
+            assertFalse(result.bodyJson.contains("provider-secret"))
+        }
+
+        val invalid = adapter.createResult(
+            ProviderHttpResponse(200, "provider-secret-not-json"),
+        )
+        assertEquals(502, invalid.statusCode)
+        assertTrue(invalid.bodyJson.contains("invalid_provider_response"))
+        assertFalse(invalid.bodyJson.contains("provider-secret"))
     }
 
     @Test

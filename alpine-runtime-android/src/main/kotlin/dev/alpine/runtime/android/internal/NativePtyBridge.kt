@@ -23,28 +23,36 @@ internal object NativePtyBridge {
     fun resize(fd: Int, columns: Int, rows: Int): Boolean =
         loaded && runCatching { nativeResize(fd, columns, rows) }.getOrDefault(false)
 
+    /**
+     * Probe-only resize request for the direct PRoot tracer child. The PRoot
+     * diagnostic artifact owns all guest-side routing through its session
+     * supervisor socket; product code must use [resize] and continue to
+     * advertise INITIAL_SIZE_ONLY.
+     */
+    fun resizeAndRequestProbeRelay(
+        fd: Int,
+        columns: Int,
+        rows: Int,
+        relaySocketPath: String,
+    ): Boolean = loaded && relaySocketPath.isNotBlank() && relaySocketPath.length < 100 && runCatching {
+        nativeResizeAndRequestProbeRelay(fd, columns, rows, relaySocketPath)
+    }.getOrDefault(false)
+
+    /**
+     * Probe-only virtual-winsize request. Unlike the older relay experiment,
+     * this deliberately does not call host PTY TIOCSWINSZ. The native bridge
+     * sends only validated dimensions to the debug-gated private supervisor.
+     */
+    fun requestProbeVirtualResize(
+        columns: Int,
+        rows: Int,
+        relaySocketPath: String,
+    ): Boolean = loaded && relaySocketPath.isNotBlank() && relaySocketPath.length < 100 && runCatching {
+        nativeRequestProbeVirtualResize(columns, rows, relaySocketPath)
+    }.getOrDefault(false)
+
     fun readSize(fd: Int): NativePtySize? =
         if (!loaded) null else decodeSize(runCatching { nativeReadSize(fd) }.getOrDefault(0L))
-
-    fun resizeProcessTerminal(pid: Int, columns: Int, rows: Int): Boolean =
-        loaded && runCatching {
-            nativeResizeProcessTerminal(pid, columns, rows)
-        }.getOrDefault(false)
-
-    fun resizeProcessTerminalFd(pid: Int, fd: Int, columns: Int, rows: Int): Boolean =
-        loaded && runCatching {
-            nativeResizeProcessTerminalFd(pid, fd, columns, rows)
-        }.getOrDefault(false)
-
-    fun readProcessTerminalSize(pid: Int): NativePtySize? =
-        if (!loaded) null else decodeSize(
-            runCatching { nativeReadProcessTerminalSize(pid) }.getOrDefault(0L),
-        )
-
-    fun readProcessTerminalSizeFd(pid: Int, fd: Int): NativePtySize? =
-        if (!loaded) null else decodeSize(
-            runCatching { nativeReadProcessTerminalSizeFd(pid, fd) }.getOrDefault(0L),
-        )
 
     private fun decodeSize(encoded: Long): NativePtySize? {
         val rows = (encoded ushr 32).toInt()
@@ -58,20 +66,18 @@ internal object NativePtyBridge {
 
     private external fun nativeOpen(): NativePtyDescriptor?
     private external fun nativeResize(fd: Int, columns: Int, rows: Int): Boolean
-    private external fun nativeReadSize(fd: Int): Long
-    private external fun nativeResizeProcessTerminal(
-        pid: Int,
-        columns: Int,
-        rows: Int,
-    ): Boolean
-    private external fun nativeResizeProcessTerminalFd(
-        pid: Int,
+    private external fun nativeResizeAndRequestProbeRelay(
         fd: Int,
         columns: Int,
         rows: Int,
+        relaySocketPath: String,
     ): Boolean
-    private external fun nativeReadProcessTerminalSize(pid: Int): Long
-    private external fun nativeReadProcessTerminalSizeFd(pid: Int, fd: Int): Long
+    private external fun nativeRequestProbeVirtualResize(
+        columns: Int,
+        rows: Int,
+        relaySocketPath: String,
+    ): Boolean
+    private external fun nativeReadSize(fd: Int): Long
 }
 
 internal data class NativePtySize(val columns: Int, val rows: Int)
@@ -80,6 +86,8 @@ internal class NativePtyDescriptor(
     readFd: Int,
     writeFd: Int,
     val controlFd: Int,
+    /** Kernel device identity of the slave PTY, used only by the dev Probe. */
+    val slaveDeviceId: Long,
     val slavePath: String,
 ) : AutoCloseable {
     private val closed = AtomicBoolean(false)

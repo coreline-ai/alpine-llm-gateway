@@ -86,6 +86,31 @@ class OAuthTokenStoreInstrumentedTest {
         }
     }
 
+    @Test
+    fun pendingTransactionCanBeDetectedAndDiscardedWithoutReadingItsSecrets() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val providerId = "pending-${System.nanoTime()}"
+        val store = OAuthTokenStore(context)
+
+        try {
+            assertFalse(store.hasTransaction(providerId))
+            store.saveTransaction(
+                providerId,
+                OAuthTokenStore.Transaction(
+                    state = "pending-state",
+                    verifier = "pending-verifier",
+                    createdAtMs = System.currentTimeMillis(),
+                ),
+            )
+            assertTrue(store.hasTransaction(providerId))
+            store.clearTransaction(providerId)
+            assertFalse(store.hasTransaction(providerId))
+            assertNull(store.loadTransaction(providerId))
+        } finally {
+            store.delete(providerId)
+        }
+    }
+
     private fun waitForFileContents(file: File): String {
         repeat(50) {
             if (file.isFile && file.length() > 0L) return file.readText()

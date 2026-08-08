@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.alpine.chat.feature.ui.theme.AlpineChatTheme
+import dev.alpine.chat.feature.ui.theme.AlpineDesignTokens
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -28,7 +29,7 @@ class ThemeInstrumentedTest {
     fun alpineLightThemeUsesBrandPrimaryWhenDynamicColorIsOff() {
         assertThemePrimary(
             darkTheme = false,
-            expectedArgb = 0xFF2855D9.toInt(),
+            expectedArgb = AlpineDesignTokens.Acid.toArgb(),
         )
     }
 
@@ -36,7 +37,7 @@ class ThemeInstrumentedTest {
     fun alpineDarkThemeUsesAccessibleBrandPrimaryWhenDynamicColorIsOff() {
         assertThemePrimary(
             darkTheme = true,
-            expectedArgb = 0xFFB8C4FF.toInt(),
+            expectedArgb = AlpineDesignTokens.Acid.toArgb(),
         )
     }
 

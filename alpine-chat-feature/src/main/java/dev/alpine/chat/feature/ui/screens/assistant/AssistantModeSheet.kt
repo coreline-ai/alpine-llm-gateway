@@ -39,6 +39,7 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
@@ -84,7 +85,10 @@ fun AssistantModeControl(
             .padding(horizontal = 4.dp, vertical = 6.dp)
             .heightIn(min = 48.dp)
             .testTag("assistant_mode_selector")
-            .semantics { contentDescription = "Choose assistant skill and response style" },
+            .semantics {
+                contentDescription =
+                    "응답 설정. 현재 ${selectedSkill.title}, ${selectedPersona.title}"
+            },
     )
 
     if (sheetVisible) {
@@ -126,19 +130,38 @@ private fun AssistantModeSheet(
                 .verticalScroll(rememberScrollState())
                 .padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
         ) {
-            Text("Assistant mode", style = MaterialTheme.typography.headlineSmall)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "응답 설정",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.semantics { heading() },
+                )
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .testTag("assistant_mode_close")
+                        .semantics { contentDescription = "응답 설정 닫기" },
+                ) {
+                    Text("닫기")
+                }
+            }
             Text(
                 text = if (streaming) {
-                    "Changes apply to the next message. The current response continues unchanged."
+                    "변경 내용은 다음 메시지부터 적용되며 현재 답변은 그대로 계속됩니다."
                 } else {
-                    "Choose one skill and one response style for this conversation."
+                    "이 대화에 사용할 기본 스킬과 응답 페르소나를 하나씩 선택하세요."
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp, bottom = 16.dp),
             )
 
-            SectionTitle("Basic skill")
+            SectionTitle("기본 스킬")
             AssistantCatalog.skills.forEach { skill ->
                 SelectionRow(
                     title = skill.title,
@@ -150,7 +173,7 @@ private fun AssistantModeSheet(
             }
 
             Spacer(Modifier.height(16.dp))
-            SectionTitle("Response persona")
+            SectionTitle("응답 페르소나")
             AssistantCatalog.personas.forEach { persona ->
                 SelectionRow(
                     title = persona.title,
@@ -180,9 +203,9 @@ private fun AssistantModeSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                    Text("Use as default for new chats")
+                    Text("새 대화의 기본값으로 사용")
                     Text(
-                        "Current app default: ${AssistantCatalog.skill(defaultSkillId).title} · " +
+                        "현재 앱 기본값: ${AssistantCatalog.skill(defaultSkillId).title} · " +
                             AssistantCatalog.persona(defaultPersonaId).title,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -197,7 +220,7 @@ private fun AssistantModeSheet(
                 onClick = { onReset(useAsDefault) },
                 modifier = Modifier.testTag("assistant_mode_reset"),
             ) {
-                Text("Reset to General assistant · Balanced")
+                Text("General assistant · Balanced로 초기화")
             }
         }
     }
@@ -208,7 +231,9 @@ private fun SectionTitle(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(vertical = 6.dp),
+        modifier = Modifier
+            .padding(vertical = 6.dp)
+            .semantics { heading() },
     )
 }
 

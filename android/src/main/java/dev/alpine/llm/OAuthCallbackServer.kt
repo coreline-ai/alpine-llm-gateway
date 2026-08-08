@@ -110,13 +110,10 @@ class OAuthCallbackServer(
         }
         if (method != "GET") return
 
-        val params = uri.rawQuery.orEmpty().split("&")
-            .filter { it.isNotEmpty() }
-            .associate {
-                val pair = it.split("=", limit = 2)
-                URLDecoder.decode(pair[0], "UTF-8") to
-                    URLDecoder.decode(pair.getOrElse(1) { "" }, "UTF-8")
-            }
+        val params = parseQuery(uri.rawQuery.orEmpty())
+        require(!(params.containsKey("code") && params.containsKey("error"))) {
+            "OAuth callback must not contain both code and error"
+        }
         // Receiving the callback is not the same as completing sign-in: state
         // validation, token exchange, and encrypted persistence still happen
         // in OAuthManager after this response is sent.
@@ -176,6 +173,25 @@ class OAuthCallbackServer(
         return bytes.toByteArray().toString(StandardCharsets.ISO_8859_1)
     }
 
+    private fun parseQuery(rawQuery: String): Map<String, String> {
+        if (rawQuery.isEmpty()) return emptyMap()
+        val encodedParameters = rawQuery.split("&").filter { it.isNotEmpty() }
+        require(encodedParameters.size <= DEFAULT_MAX_QUERY_PARAMETERS) {
+            "OAuth callback has too many query parameters"
+        }
+        val parameters = linkedMapOf<String, String>()
+        encodedParameters.forEach { encoded ->
+            val pair = encoded.split("=", limit = 2)
+            val name = URLDecoder.decode(pair[0], "UTF-8")
+            val value = URLDecoder.decode(pair.getOrElse(1) { "" }, "UTF-8")
+            require(name !in parameters) {
+                "OAuth callback contains duplicate query parameters"
+            }
+            parameters[name] = value
+        }
+        return parameters
+    }
+
     private companion object {
         const val LOOPBACK = "127.0.0.1"
         const val DEFAULT_READ_TIMEOUT_MS = 5_000
@@ -183,5 +199,6 @@ class OAuthCallbackServer(
         const val DEFAULT_MAX_HEADER_LINE_BYTES = 8 * 1024
         const val DEFAULT_MAX_HEADER_BYTES = 32 * 1024
         const val DEFAULT_MAX_HEADER_COUNT = 64
+        const val DEFAULT_MAX_QUERY_PARAMETERS = 32
     }
 }

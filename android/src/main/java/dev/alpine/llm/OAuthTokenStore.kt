@@ -117,6 +117,13 @@ class OAuthTokenStore(context: Context) {
         }
     }
 
+    /**
+     * Reports only whether encrypted transaction material exists. Callers use this to discard
+     * orphaned authorization state after process death without exposing state or PKCE values.
+     */
+    fun hasTransaction(providerId: String): Boolean =
+        prefs.contains(transactionKey(providerId))
+
     fun clearTransaction(providerId: String) {
         prefs.edit().remove(transactionKey(providerId)).apply()
     }

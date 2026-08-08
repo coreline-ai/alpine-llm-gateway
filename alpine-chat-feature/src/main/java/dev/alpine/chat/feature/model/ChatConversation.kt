@@ -64,7 +64,7 @@ data class ChatConversation(
     }
 
     companion object {
-        const val DEFAULT_TITLE = "New chat"
+        const val DEFAULT_TITLE = "새 대화"
     }
 }
 

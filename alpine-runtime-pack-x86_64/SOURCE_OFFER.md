@@ -12,8 +12,9 @@ The exact checksums and build parameters are recorded in
 `runtime/alpine-3.21.3-x86_64.lock.json`. The machine-readable component notice is
 `src/main/resources/META-INF/alpine-runtime/x86_64/sbom.spdx.json`.
 
-The packaged executable uses the pinned PRoot revision plus
-`scripts/runtime/patches/proot-android-winsize.patch`, applied by the reproducible build script.
+The packaged executable is built from the pinned PRoot source revision without local PRoot
+patches. The reproducible build script only applies Android toolchain and linker settings to its
+disposable build copy.
 
 This pack remains experimental until the x86_64 emulator device gate passes. Downstream
 distributors must preserve the GPL/LGPL notices and provide corresponding source under the

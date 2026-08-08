@@ -1,6 +1,8 @@
 package dev.alpine.runtime.android.internal
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.os.Build
 import dev.alpine.runtime.android.AndroidRuntimeConfiguration
 import dev.alpine.runtime.api.AlpineRuntimeManager
@@ -54,11 +56,35 @@ internal class AndroidAlpineRuntimeManager(
             maxNativeArtifactBytes = configuration.maxNativeArtifactBytes,
         ),
     )
+    private val ttyDiagnosticFile: File? = resolveTtyDiagnosticFile(appContext, configuration)
+    private val ttyDiagnosticGuestHelper: File? = resolveTtyDiagnosticGuestHelper(
+        appContext,
+        configuration,
+        ttyDiagnosticFile,
+    )
+    private val ttyDiagnosticSessionLauncher: File? = resolveTtyDiagnosticSessionLauncher(
+        appContext,
+        configuration,
+        ttyDiagnosticFile,
+    )
     private val launcher = ProotProcessLauncher(
         cacheDirectory = appContext.cacheDir,
         environmentContributors = configuration.environmentContributors,
         processListener = configuration.processListener,
         maxOutputBytes = configuration.maxOutputBytes,
+        ttyDiagnosticFile = ttyDiagnosticFile,
+        ttyDiagnosticGuestHelper = ttyDiagnosticGuestHelper,
+        ttyDiagnosticSessionLauncher = ttyDiagnosticSessionLauncher,
+        ttyDiagnosticDisableProotSeccomp =
+            configuration.disableProotSeccompForTtyDiagnostic && ttyDiagnosticFile != null,
+        ttyDiagnosticVirtualResize =
+            configuration.ttyDiagnosticVirtualResize && ttyDiagnosticFile != null,
+        ttyDiagnosticVirtualResizeNoWrite =
+            configuration.ttyDiagnosticVirtualResizeNoWrite && ttyDiagnosticFile != null,
+        ttyDiagnosticVirtualResizeNoRequest =
+            configuration.ttyDiagnosticVirtualResizeNoRequest && ttyDiagnosticFile != null,
+        ttyDiagnosticDisablePrimaryTraceeForeground =
+            configuration.ttyDiagnosticDisablePrimaryTraceeForeground && ttyDiagnosticFile != null,
         clock = clock,
     )
     private val dnsConfigurator = AndroidDnsConfigurator(appContext)
@@ -67,6 +93,46 @@ internal class AndroidAlpineRuntimeManager(
     @Volatile private var state: RuntimeState = stateFromInspection(installer.inspect())
     @Volatile private var activeSession: AndroidRuntimeSession? = null
     @Volatile private var lastInstallRequest = RuntimeInstallRequest()
+
+    private fun resolveTtyDiagnosticFile(
+        appContext: Context,
+        configuration: AndroidRuntimeConfiguration,
+    ): File? {
+        if (!configuration.enableTtyIoctlDiagnostics) return null
+        val debuggable = appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        if (!debuggable) return null
+        val manifestEnabled = runCatching {
+            @Suppress("DEPRECATION")
+            appContext.packageManager.getApplicationInfo(
+                appContext.packageName,
+                PackageManager.GET_META_DATA,
+            ).metaData?.getBoolean(TTY_DIAGNOSTIC_MANIFEST_KEY) == true
+        }.getOrDefault(false)
+        if (!manifestEnabled) return null
+        return File(appContext.cacheDir, TTY_DIAGNOSTIC_FILE_NAME)
+    }
+
+    private fun resolveTtyDiagnosticGuestHelper(
+        appContext: Context,
+        configuration: AndroidRuntimeConfiguration,
+        diagnosticFile: File?,
+    ): File? {
+        if (diagnosticFile == null) return null
+        val fileName = configuration.ttyDiagnosticGuestHelperFileName ?: return null
+        return File(appContext.applicationInfo.nativeLibraryDir, fileName)
+            .takeIf { it.isFile && it.canExecute() && it.length() in 1..configuration.maxNativeArtifactBytes }
+    }
+
+    private fun resolveTtyDiagnosticSessionLauncher(
+        appContext: Context,
+        configuration: AndroidRuntimeConfiguration,
+        diagnosticFile: File?,
+    ): File? {
+        if (diagnosticFile == null) return null
+        val fileName = configuration.ttyDiagnosticSessionLauncherFileName ?: return null
+        return File(appContext.applicationInfo.nativeLibraryDir, fileName)
+            .takeIf { it.isFile && it.canExecute() && it.length() in 1..configuration.maxNativeArtifactBytes }
+    }
 
     override fun currentState(): RuntimeState = state
 
@@ -134,7 +200,13 @@ internal class AndroidAlpineRuntimeManager(
             commandExecutor = commandExecutor,
             clock = clock,
             onStop = ::stopSession,
-            onTerminalEvent = { kind, sessionId -> emit(kind, sessionId) },
+            onTerminalEvent = { kind, sessionId, terminalId, exitCode ->
+                val attributes = linkedMapOf<String, String>().apply {
+                    put("terminal_id", terminalId)
+                    exitCode?.let { put("exit_code", it.toString()) }
+                }
+                emit(kind, sessionId, attributes = attributes)
+            },
         )
         launcher.openSession(session.id)
         activeSession = session
@@ -306,6 +378,9 @@ internal class AndroidAlpineRuntimeManager(
     }
 
     companion object {
+        private const val TTY_DIAGNOSTIC_MANIFEST_KEY =
+            "dev.alpine.runtime.TTY_DIAGNOSTIC_PROBE_ENABLED"
+        private const val TTY_DIAGNOSTIC_FILE_NAME = "proot-tty-diagnostic.log"
         private const val GUEST_WORKSPACE_PATH = "/workspace"
         private val INSTALL_BLOCKED_STATES = setOf(
             RuntimeLifecycleState.INSTALLING,
@@ -325,7 +400,7 @@ private class AndroidRuntimeSession(
     private val commandExecutor: ExecutorService,
     private val clock: () -> Long,
     private val onStop: (String) -> CompletionStage<Void>,
-    private val onTerminalEvent: (RuntimeEventKind, String) -> Unit,
+    private val onTerminalEvent: (RuntimeEventKind, String, String, Int?) -> Unit,
 ) : RuntimeSession {
     @Volatile private var open = true
 
@@ -367,11 +442,13 @@ private class AndroidRuntimeSession(
                     sessionId = id,
                     sessionEnvironment = sessionEnvironment,
                     request = request,
-                    onClosed = { onTerminalEvent(RuntimeEventKind.TERMINAL_CLOSED, id) },
+                    onClosed = { terminalId, exitCode ->
+                        onTerminalEvent(RuntimeEventKind.TERMINAL_CLOSED, id, terminalId, exitCode)
+                    },
                 )
             }.fold(
                 onSuccess = { terminal ->
-                    onTerminalEvent(RuntimeEventKind.TERMINAL_OPENED, id)
+                    onTerminalEvent(RuntimeEventKind.TERMINAL_OPENED, id, terminal.id, null)
                     future.complete(terminal)
                 },
                 onFailure = { error ->

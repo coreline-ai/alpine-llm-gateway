@@ -5,17 +5,17 @@ import org.json.JSONObject
 import java.security.MessageDigest
 
 /**
- * OpenAI chat-completion JSON to the Codex account Responses protocol.
+ * OpenAI chat-completion JSON to an application-owner-approved Responses endpoint.
  *
- * The endpoint is deliberately fixed so a Codex account token cannot be sent
- * to a user-configured relay. Authorization and account headers are injected
- * later by [OAuthHttpLlmBridge].
+ * It deliberately carries no consumer endpoint, first-party CLI header, originator,
+ * account header, or private protocol option. The selected profile must supply the
+ * approved HTTPS endpoint and the credential boundary adds authorization later.
  */
 class CodexResponsesOAuthAdapter(
-    private val clientVersion: String = DEFAULT_CLIENT_VERSION,
+    private val responsesEndpoint: String,
 ) : OAuthStreamingProviderHttpAdapter {
     init {
-        require(CLIENT_VERSION.matches(clientVersion)) { "invalid Codex clientVersion" }
+        ProviderAdapterJson.requireHttps(responsesEndpoint, "responsesEndpoint")
     }
 
     override fun createRequest(requestJson: String): ProviderHttpRequest =
@@ -160,11 +160,6 @@ class CodexResponsesOAuthAdapter(
             .put("stream", stream)
             .put("store", false)
             .put("parallel_tool_calls", true)
-            .put("include", JSONArray().put("reasoning.encrypted_content"))
-            .put(
-                "reasoning",
-                JSONObject().put("effort", "low").put("summary", "auto"),
-            )
             .put("input", responsesInput)
         if (instructions.isNotEmpty()) body.put("instructions", instructions.joinToString("\n\n"))
         if (input.tools.isNotEmpty()) {
@@ -181,15 +176,8 @@ class CodexResponsesOAuthAdapter(
             body.put("tool_choice", responsesToolChoice(input.toolChoice))
         }
         return ProviderHttpRequest(
-            url = CodexOAuthContract.RESPONSES_ENDPOINT,
+            url = responsesEndpoint,
             bodyJson = body.toString(),
-            headers = mapOf(
-                "Version" to clientVersion,
-                "Openai-Beta" to "responses=experimental",
-                "User-Agent" to "codex_cli_rs/$clientVersion (Android; arm64)",
-                "Originator" to "codex_cli_rs",
-            ),
-            credentialAccountIdHeader = ACCOUNT_ID_HEADER,
         )
     }
 
@@ -330,10 +318,7 @@ class CodexResponsesOAuthAdapter(
     private data class ResponsesIds(val callId: String, val itemId: String)
 
     companion object {
-        const val DEFAULT_CLIENT_VERSION = "0.144.1"
-        const val ACCOUNT_ID_HEADER = "Chatgpt-Account-Id"
         private const val PROVIDER_NAME = "codex"
         private const val MAX_RESPONSE_ID_LENGTH = 64
-        private val CLIENT_VERSION = Regex("[A-Za-z0-9._-]{1,32}")
     }
 }

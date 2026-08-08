@@ -30,6 +30,59 @@ data class AndroidRuntimeConfiguration @JvmOverloads constructor(
     val maxRootfsExtractedBytes: Long = 512L * 1024 * 1024,
     val maxRootfsEntries: Int = 100_000,
     val maxNativeArtifactBytes: Long = 64L * 1024 * 1024,
+    /**
+     * Probe-only switch for a PRoot ioctl topology investigation.
+     *
+     * The Android adapter additionally requires a debuggable app and a matching
+     * manifest opt-in before a record file is created. Production hosts keep
+     * this false and never package the diagnostic PRoot launcher.
+     */
+    val enableTtyIoctlDiagnostics: Boolean = false,
+    /**
+     * Probe-only PRoot execution-mode isolation. When enabled together with the
+     * debug-gated tty diagnostic, the host PRoot process runs without its
+     * seccomp acceleration path. This is not guest-controlled and must never
+     * be enabled by a product host.
+     */
+    val disableProotSeccompForTtyDiagnostic: Boolean = false,
+    /**
+     * Optional Probe-only executable packaged in the app native-library directory.
+     * It is considered only with [enableTtyIoctlDiagnostics], a debuggable app,
+     * and the diagnostic manifest opt-in; release hosts leave this unset.
+     */
+    val ttyDiagnosticGuestHelperFileName: String? = null,
+    /**
+     * Probe-only direct session leader that execs the diagnostic PRoot tracer
+     * without a `setsid` wrapper PID. It is valid only with the debug-only
+     * diagnostic gate and must never be configured by a product host.
+     */
+    val ttyDiagnosticSessionLauncherFileName: String? = null,
+    /**
+     * Enables the Probe-only virtual winsize control experiment. The matching
+     * session launcher and PRoot artifact are debug-gated and never package
+     * into product hosts. This changes only diagnostic resize routing; it is
+     * not a production dynamic-resize capability.
+     */
+    val ttyDiagnosticVirtualResize: Boolean = false,
+    /**
+     * Probe-only negative control for the virtual-winsize experiment. The
+     * supervisor validates and acknowledges its bounded request but does not
+     * write the private memfd. It is valid only with the virtual diagnostic
+     * experiment and is never a product terminal setting.
+     */
+    val ttyDiagnosticVirtualResizeNoWrite: Boolean = false,
+    /**
+     * Probe-only control that does not invoke the virtual-winsize transport.
+     * It distinguishes a session-lifecycle failure from a control-request
+     * failure and is never a product terminal setting.
+     */
+    val ttyDiagnosticVirtualResizeNoRequest: Boolean = false,
+    /**
+     * Probe-only topology control. It leaves the direct PRoot process group
+     * as the session launcher's foreground group instead of moving the first
+     * traced guest into a separate foreground group. Never a product setting.
+     */
+    val ttyDiagnosticDisablePrimaryTraceeForeground: Boolean = false,
 ) {
     init {
         requireDirectoryName(runtimeDirectoryName, "runtimeDirectoryName")
@@ -39,6 +92,31 @@ data class AndroidRuntimeConfiguration @JvmOverloads constructor(
         require(maxRootfsExtractedBytes > 0) { "maxRootfsExtractedBytes must be positive" }
         require(maxRootfsEntries > 0) { "maxRootfsEntries must be positive" }
         require(maxNativeArtifactBytes > 0) { "maxNativeArtifactBytes must be positive" }
+        require(!disableProotSeccompForTtyDiagnostic || enableTtyIoctlDiagnostics) {
+            "disableProotSeccompForTtyDiagnostic requires enableTtyIoctlDiagnostics"
+        }
+        require(!ttyDiagnosticVirtualResize || enableTtyIoctlDiagnostics) {
+            "ttyDiagnosticVirtualResize requires enableTtyIoctlDiagnostics"
+        }
+        require(!ttyDiagnosticVirtualResizeNoWrite || ttyDiagnosticVirtualResize) {
+            "ttyDiagnosticVirtualResizeNoWrite requires ttyDiagnosticVirtualResize"
+        }
+        require(!ttyDiagnosticVirtualResizeNoRequest || ttyDiagnosticVirtualResize) {
+            "ttyDiagnosticVirtualResizeNoRequest requires ttyDiagnosticVirtualResize"
+        }
+        require(!ttyDiagnosticDisablePrimaryTraceeForeground || enableTtyIoctlDiagnostics) {
+            "ttyDiagnosticDisablePrimaryTraceeForeground requires enableTtyIoctlDiagnostics"
+        }
+        ttyDiagnosticGuestHelperFileName?.let { fileName ->
+            require(fileName.matches(SAFE_NATIVE_LIBRARY_FILE_NAME)) {
+                "ttyDiagnosticGuestHelperFileName must be a native library filename"
+            }
+        }
+        ttyDiagnosticSessionLauncherFileName?.let { fileName ->
+            require(fileName.matches(SAFE_NATIVE_LIBRARY_FILE_NAME)) {
+                "ttyDiagnosticSessionLauncherFileName must be a native library filename"
+            }
+        }
     }
 
     private fun requireDirectoryName(value: String, label: String) {
@@ -46,6 +124,10 @@ data class AndroidRuntimeConfiguration @JvmOverloads constructor(
         require('/' !in value && '\\' !in value && value != "." && value != "..") {
             "$label must be a single directory name"
         }
+    }
+
+    private companion object {
+        val SAFE_NATIVE_LIBRARY_FILE_NAME = Regex("lib[A-Za-z0-9_.-]+\\.so")
     }
 }
 

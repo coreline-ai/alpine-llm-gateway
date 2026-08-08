@@ -8,12 +8,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
@@ -66,9 +71,10 @@ fun RuntimeDashboard(
     onReset: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showResetConfirmation by remember { mutableStateOf(false) }
     val actions = state.actionAvailability()
     val presentation = state.runtimeState.toPresentation()
-    val primaryEnabled = actions.install || actions.start || actions.stop || actions.health
+    val primaryEnabled = actions.install || actions.start || actions.stop || actions.repair || actions.health
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -94,6 +100,11 @@ fun RuntimeDashboard(
                 }
                 RuntimeStateBadge(state.runtimeState)
             }
+            RuntimeStatusRail(
+                label = presentation.label,
+                message = state.runtimeState.lifecycle.statusGuidance(),
+                error = state.lastErrorCode != null,
+            )
             state.runtimeState.progressPercent?.let { progress ->
                 LinearProgressIndicator(
                     progress = { progress / 100f },
@@ -126,6 +137,7 @@ fun RuntimeDashboard(
                         actions.install -> onInstall
                         actions.start -> onStart
                         actions.stop -> onStop
+                        actions.repair -> onRepair
                         else -> onHealth
                     },
                     enabled = primaryEnabled,
@@ -140,6 +152,7 @@ fun RuntimeDashboard(
                             actions.install -> "설치"
                             actions.start -> "시작"
                             actions.stop -> "종료"
+                            actions.repair -> "복구"
                             else -> "상태 확인"
                         },
                     )
@@ -164,24 +177,10 @@ fun RuntimeDashboard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 OutlinedButton(
-                    onClick = onRepair,
-                    enabled = actions.repair,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    ),
-                    border = BorderStroke(
-                        1.25.dp,
-                        if (actions.repair) MaterialTheme.colorScheme.outline
-                        else MaterialTheme.colorScheme.outlineVariant,
-                    ),
-                    modifier = Modifier.weight(1f),
-                ) { Text("복구") }
-                OutlinedButton(
-                    onClick = onReset,
+                    onClick = { showResetConfirmation = true },
                     enabled = actions.reset,
                     colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        contentColor = MaterialTheme.colorScheme.error,
                         disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     ),
                     border = BorderStroke(
@@ -189,11 +188,64 @@ fun RuntimeDashboard(
                         if (actions.reset) MaterialTheme.colorScheme.outline
                         else MaterialTheme.colorScheme.outlineVariant,
                     ),
-                    modifier = Modifier.weight(1f),
-                ) { Text("초기화") }
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Runtime 초기화") }
             }
         }
     }
+    if (showResetConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showResetConfirmation = false },
+            title = { Text("Runtime을 초기화할까요?") },
+            text = { Text("설치된 Alpine 실행 환경을 제거합니다. Workspace 보존 정책은 현재 Runtime 설정을 따릅니다.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showResetConfirmation = false
+                        onReset()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError,
+                    ),
+                ) { Text("초기화") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showResetConfirmation = false }) { Text("취소") }
+            },
+        )
+    }
+}
+
+@Composable
+private fun RuntimeStatusRail(
+    label: String,
+    message: String,
+    error: Boolean,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = if (error) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = if (error) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(1.25.dp, MaterialTheme.colorScheme.outline),
+    ) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Text(label, style = MaterialTheme.typography.labelLarge)
+            Text(message, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+private fun RuntimeLifecycleState.statusGuidance(): String = when (this) {
+    RuntimeLifecycleState.NOT_INSTALLED -> "설치한 뒤 Alpine 작업과 터미널을 사용할 수 있습니다."
+    RuntimeLifecycleState.INSTALLING -> "설치가 끝날 때까지 앱을 종료하지 마세요."
+    RuntimeLifecycleState.READY -> "Runtime을 시작하면 터미널과 Gateway를 사용할 수 있습니다."
+    RuntimeLifecycleState.STARTING -> "Alpine session과 Host Bridge를 준비하고 있습니다."
+    RuntimeLifecycleState.RUNNING -> "터미널과 허용된 Linux 도구를 사용할 수 있습니다."
+    RuntimeLifecycleState.STOPPING -> "실행 중인 session을 안전하게 정리하고 있습니다."
+    RuntimeLifecycleState.REPAIR_REQUIRED -> "복구를 실행한 뒤 상태를 다시 확인하세요."
+    RuntimeLifecycleState.FAILED -> "오류 원인을 정리한 뒤 복구를 실행하세요."
 }
 
 internal fun RuntimeErrorCode.userMessage(): String = when (this) {

@@ -23,6 +23,8 @@ class Settings:
     request_timeout_seconds: float = 120.0
     max_prompt_chars: int = 120_000
     max_concurrent_requests: int = 4
+    max_provider_event_bytes: int = 1 * 1024 * 1024
+    max_provider_stream_bytes: int = 32 * 1024 * 1024
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -48,6 +50,12 @@ class Settings:
             max_concurrent_requests=int(
                 os.getenv("MAX_CONCURRENT_REQUESTS", "4")
             ),
+            max_provider_event_bytes=int(
+                os.getenv("MAX_PROVIDER_EVENT_BYTES", str(1 * 1024 * 1024))
+            ),
+            max_provider_stream_bytes=int(
+                os.getenv("MAX_PROVIDER_STREAM_BYTES", str(32 * 1024 * 1024))
+            ),
         )
         settings.validate()
         return settings
@@ -62,6 +70,12 @@ class Settings:
             raise ValueError("request limits must be positive")
         if self.max_concurrent_requests not in range(1, 33):
             raise ValueError("MAX_CONCURRENT_REQUESTS must be between 1 and 32")
+        if self.max_provider_event_bytes <= 0 or self.max_provider_stream_bytes <= 0:
+            raise ValueError("Provider stream limits must be positive")
+        if self.max_provider_event_bytes > self.max_provider_stream_bytes:
+            raise ValueError(
+                "MAX_PROVIDER_EVENT_BYTES must not exceed MAX_PROVIDER_STREAM_BYTES"
+            )
 
     def models_for(self, provider: str) -> tuple[str, ...]:
         return {

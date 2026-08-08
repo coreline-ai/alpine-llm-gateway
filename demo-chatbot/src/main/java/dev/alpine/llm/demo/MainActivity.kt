@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
                     onSelectConversation = viewModel::selectConversation,
                     onRenameConversation = viewModel::renameConversation,
                     onDeleteConversation = viewModel::deleteConversation,
+                    onStopConversation = viewModel::stopStreaming,
                     onManageProviders = ::openProviderProfiles,
                     onDraftChange = viewModel::updateDraft,
                     onSend = directChat::send,

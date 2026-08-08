@@ -6,9 +6,7 @@ import dev.alpine.chat.feature.backend.ChatBackendDelta
 import dev.alpine.chat.feature.backend.ChatBackendException
 import dev.alpine.chat.feature.backend.ChatBackendFailureCode
 import dev.alpine.chat.feature.backend.ChatBackendStreamResult
-import dev.alpine.llm.AnthropicOAuthContract
 import dev.alpine.llm.AnthropicMessagesOAuthAdapter
-import dev.alpine.llm.CodexOAuthContract
 import dev.alpine.llm.CodexResponsesOAuthAdapter
 import dev.alpine.llm.GeminiGenerateContentOAuthAdapter
 import dev.alpine.llm.GeminiOAuthContract
@@ -28,7 +26,6 @@ import dev.alpine.llm.ProviderCircuitOpenException
 import dev.alpine.llm.ProviderRetryPolicy
 import dev.alpine.llm.ProviderStreamException
 import dev.alpine.llm.ResilientOAuthHttpTransport
-import dev.alpine.llm.XaiOAuthContract
 import dev.alpine.chat.provider.android.model.ProviderProfile
 import dev.alpine.chat.provider.android.model.ProviderType
 import java.io.IOException
@@ -55,7 +52,6 @@ object ProviderSessionFactory {
         val adapter = when (profile.type) {
             ProviderType.ANTHROPIC -> AnthropicMessagesOAuthAdapter(
                 messagesEndpoint = profile.inferenceEndpoint,
-                anthropicBeta = profile.anthropicBeta,
             )
             ProviderType.GEMINI -> GeminiGenerateContentOAuthAdapter(
                 endpointTemplate = profile.inferenceEndpoint,
@@ -67,7 +63,9 @@ object ProviderSessionFactory {
             ProviderType.OPENAI_COMPATIBLE -> OpenAiCompatibleOAuthAdapter(
                 completionEndpoint = profile.inferenceEndpoint,
             )
-            ProviderType.CODEX -> CodexResponsesOAuthAdapter()
+            ProviderType.CODEX -> CodexResponsesOAuthAdapter(
+                responsesEndpoint = profile.inferenceEndpoint,
+            )
             ProviderType.XAI -> OpenAiCompatibleOAuthAdapter(
                 completionEndpoint = profile.inferenceEndpoint,
             )
@@ -82,26 +80,8 @@ object ProviderSessionFactory {
     }
 
     private fun oauthConfig(profile: ProviderProfile): OAuthProviderConfig {
-        if (profile.type == ProviderType.ANTHROPIC) {
-            return AnthropicOAuthContract.providerConfig(
-                providerId = profile.id,
-                clientId = profile.clientId,
-            )
-        }
         if (profile.type == ProviderType.GEMINI) {
             return GeminiOAuthContract.providerConfig(
-                providerId = profile.id,
-                clientId = profile.clientId,
-            )
-        }
-        if (profile.type == ProviderType.CODEX) {
-            return CodexOAuthContract.providerConfig(
-                providerId = profile.id,
-                clientId = profile.clientId,
-            )
-        }
-        if (profile.type == ProviderType.XAI) {
-            return XaiOAuthContract.providerConfig(
                 providerId = profile.id,
                 clientId = profile.clientId,
             )
@@ -113,11 +93,7 @@ object ProviderSessionFactory {
             clientId = profile.clientId,
             scopes = profile.scopes,
             callbackPort = profile.callbackPort,
-            extraAuthorizationParams = if (profile.type == ProviderType.GEMINI) {
-                mapOf("access_type" to "offline", "prompt" to "consent")
-            } else {
-                emptyMap()
-            },
+            extraAuthorizationParams = emptyMap(),
             tokenRequestEncoding = OAuthTokenRequestEncoding.FORM_URLENCODED,
             tokenRequestAdapter = dev.alpine.llm.StandardOAuthTokenRequestAdapter,
         )

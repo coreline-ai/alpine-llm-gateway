@@ -41,3 +41,19 @@ fun AlpineChatTheme(
         )
     }
 }
+
+/**
+ * Stable product shell used by Alpine-owned Android screens.
+ *
+ * SDK consumers may keep using [AlpineChatTheme] with their own dark/dynamic
+ * preferences. Product Activities use this wrapper so a navigation hop does
+ * not unexpectedly switch to a system-generated palette.
+ */
+@Composable
+fun AlpineProductTheme(content: @Composable () -> Unit) {
+    AlpineChatTheme(
+        darkTheme = false,
+        dynamicColor = false,
+        content = content,
+    )
+}

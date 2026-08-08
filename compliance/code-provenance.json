@@ -38,28 +38,20 @@
       "notes": "The build sequence and flags overlap with the OpenMinis PRoot build and require provenance review."
     },
     {
-      "path": "scripts/runtime/patches/proot-android-winsize.patch",
-      "classification": "THIRD_PARTY_PATCHED",
-      "candidate_classification": "THIRD_PARTY_PATCHED",
-      "review_status": "SOURCE_OFFER_REQUIRED",
-      "origin": "PROJECT_PATCH_AGAINST_OPENMINIS_PROOT",
-      "notes": "Patch context contains third-party PRoot source and must ship with the PRoot source snapshot."
-    },
-    {
       "path": "alpine-runtime-pack-bundled/src/main/jniLibs/arm64-v8a/libproot.so",
       "classification": "GENERATED",
       "candidate_classification": "GENERATED",
       "review_status": "SOURCE_BUNDLE_REQUIRED",
-      "origin": "OPENMINIS_PROOT_PLUS_TALLOC_PLUS_LOCAL_PATCH",
-      "notes": "Executable payload launched through ProcessBuilder; talloc is statically linked."
+      "origin": "OPENMINIS_PROOT_PLUS_TALLOC_UNPATCHED",
+      "notes": "Executable payload launched through ProcessBuilder; talloc is statically linked; no local PRoot patch is applied."
     },
     {
       "path": "alpine-runtime-pack-x86_64/src/main/jniLibs/x86_64/libproot.so",
       "classification": "GENERATED",
       "candidate_classification": "GENERATED",
       "review_status": "SOURCE_BUNDLE_REQUIRED",
-      "origin": "OPENMINIS_PROOT_PLUS_TALLOC_PLUS_LOCAL_PATCH",
-      "notes": "Experimental x86_64 executable payload."
+      "origin": "OPENMINIS_PROOT_PLUS_TALLOC_UNPATCHED",
+      "notes": "Experimental x86_64 executable payload; no local PRoot patch is applied."
     },
     {
       "path": "alpine-runtime-pack-bundled/src/main/assets/alpine-minirootfs.tar.gz.asset",

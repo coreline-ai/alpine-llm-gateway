@@ -38,6 +38,26 @@ class AppPrivateWorkspaceStore @JvmOverloads constructor(
     override fun move(source: WorkspacePath, target: WorkspacePath, replace: Boolean) =
         delegate.move(source, target, replace)
     override fun delete(path: WorkspacePath) = delegate.delete(path)
+
+    companion object {
+        /**
+         * Opens a caller-owned app-private directory, for example the same `/workspace` bind
+         * mount used by Alpine Runtime. The directory must remain inside app-private storage.
+         */
+        @JvmStatic
+        fun forDirectory(
+            context: Context,
+            directory: File,
+            limits: WorkspaceLimits = WorkspaceLimits(),
+        ): WorkspaceStore {
+            val filesRoot = context.filesDir.canonicalFile
+            val requested = directory.canonicalFile
+            require(requested.toPath().startsWith(filesRoot.toPath())) {
+                "workspace directory must be app-private"
+            }
+            return AtomicFileWorkspaceStore(requested, limits)
+        }
+    }
 }
 
 internal class AtomicFileWorkspaceStore(

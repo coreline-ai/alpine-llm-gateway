@@ -14,8 +14,7 @@
 
 - Repository: `https://github.com/OpenMinis/proot.git`
 - Commit: `8cf13e997cdc9472997aae19df8050c073c9a86c`
-- Local patch: `scripts/runtime/patches/proot-android-winsize.patch`
-- Patch SHA-256: `20726d1ccf9bb8c952a6039d5158168dad58ec62bcf7cbf73bc3170b8c4a9a27`
+- Local PRoot patches: none
 - Source-declared license: `GPL-2.0-or-later`
 - Combined PRoot+talloc binary conclusion: `NOASSERTION`, review required
 - License text: `licenses/PRoot-GPL-2.0-or-later.txt`

@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "colors": {
+    "paper": "#F4F3ED",
+    "ink": "#10120F",
+    "acid": "#B9F227",
+    "slate": "#31372F",
+    "warning": "#FFE5A3",
+    "muted": "#4E534C",
+    "outline_soft": "#A9ACA3",
+    "surface_raised": "#FFFEF8"
+  },
+  "spacing_dp": {
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "xxl": 32
+  },
+  "radius_dp": {
+    "extra_small": 10,
+    "small": 14,
+    "medium": 18,
+    "large": 24,
+    "extra_large": 30
+  },
+  "readme_screenshot": {
+    "source_width_px": 1080,
+    "source_height_px": 2340,
+    "preview_width": 260,
+    "preview_height": 563,
+    "count": 10
+  }
+}

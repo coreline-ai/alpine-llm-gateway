@@ -66,6 +66,8 @@ data class ChatUiState(
     val defaultPersonaId: String = AssistantSelection.DEFAULT_PERSONA_ID,
     val isStreaming: Boolean = false,
     val activeGenerationCount: Int = 0,
+    val backgroundGenerationCount: Int = 0,
+    val generationCapacityAvailable: Boolean = true,
     val isLoadingConversations: Boolean = false,
     val statusMessage: String? = null,
     val storageWarning: String? = null,
@@ -408,7 +410,15 @@ class ChatViewModel(
     }
 
     fun stopStreaming() {
-        activeJobs[snapshot.activeConversationId]?.cancel()
+        stopStreaming(snapshot.activeConversationId)
+    }
+
+    /** Stops only the requested conversation so background generations remain independent. */
+    fun stopStreaming(conversationId: String) {
+        val job = activeJobs[conversationId] ?: return
+        runtimeStates[conversationId] = RuntimeState(statusMessage = "Stopping…")
+        publish()
+        job.cancel()
     }
 
     fun flushPersistence() {
@@ -824,6 +834,8 @@ class ChatViewModel(
 
     private fun projectState(): ChatUiState {
         val active = snapshot.activeConversation
+        val activeIsStreaming = activeJobs.containsKey(active.id)
+        val backgroundGenerationCount = activeJobs.size - if (activeIsStreaming) 1 else 0
         val selectedOption = providerOptions.firstOrNull { it.profileId == active.selectedProfileId }
         val selectedModel = active.selectedModel
             ?.takeIf { model -> selectedOption?.modelOptions?.contains(model) == true }
@@ -850,13 +862,20 @@ class ChatViewModel(
             selectedPersonaId = active.selectedPersonaId,
             defaultSkillId = defaultAssistantSelection.skillId,
             defaultPersonaId = defaultAssistantSelection.personaId,
-            isStreaming = activeJobs.containsKey(active.id),
+            isStreaming = activeIsStreaming,
             activeGenerationCount = activeJobs.size,
+            backgroundGenerationCount = backgroundGenerationCount,
+            generationCapacityAvailable = activeJobs.size < MAX_CONCURRENT_GENERATIONS,
             isLoadingConversations = isLoading,
             statusMessage = when {
                 isLoading -> "Restoring conversations…"
                 providerOptions.isEmpty() -> "Connect an LLM to start chatting."
-                else -> runtime?.statusMessage
+                runtime?.statusMessage != null -> runtime.statusMessage
+                !activeIsStreaming && activeJobs.size >= MAX_CONCURRENT_GENERATIONS ->
+                    "동시에 최대 ${MAX_CONCURRENT_GENERATIONS}개 대화까지 답변을 생성할 수 있습니다."
+                backgroundGenerationCount > 0 ->
+                    "다른 대화 ${backgroundGenerationCount}개에서 답변을 생성하고 있습니다."
+                else -> null
             },
             storageWarning = storageWarning,
             failure = runtime?.failureContext?.failure,

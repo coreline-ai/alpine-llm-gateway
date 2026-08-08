@@ -1,0 +1,530 @@
+--- a/src/tracee/event.c
++++ b/src/tracee/event.c
+@@ -27,6 +27,8 @@
+ #include <sys/wait.h>   /* waitpid(2), */
+ #include <sys/utsname.h> /* uname(2), */
+ #include <unistd.h>     /* fork(2), chdir(2), getpid(2), */
++#include <fcntl.h>      /* O_*, open(2), */
++#include <sys/ioctl.h>  /* struct winsize, */
+ #include <string.h>     /* strcmp(3), */
+ #include <errno.h>      /* errno(3), */
+ #include <stdbool.h>    /* bool, true, false, */
+@@ -52,6 +54,140 @@
+ 
+ static bool seccomp_after_ptrace_enter = false;
+ 
++/*
++ * Probe-only signal topology diagnostic. The records are fixed literals and
++ * deliberately carry no tracee PID, command, path, terminal bytes, or user
++ * content. In the tracee-foreground experiment PRoot itself is background,
++ * so recording source-level foreground assignment and tracee reinjection
++ * distinguishes physical terminal delivery from any tracer-side relay.
++ */
++static int tty_signal_diagnostic_fd = -1;
++
++/*
++ * Relay22 is Probe-only. The session supervisor stores a fixed four-byte
++ * (columns, rows) frame in a PRoot-private memfd. The tracer reads that
++ * snapshot only while translating guest TIOCGWINSZ; it never resizes the host
++ * PTY or emits a post-launch signal.
++ */
++static int tty_virtual_winsize_fd = -1;
++
++static void record_tty_virtual_winsize_stage(const char *stage)
++{
++	static const char ready_record[] =
++		"schema=1 event=SIGWINCH stage=virtual_winsize_fd_ready\n";
++	static const char applied_record[] =
++		"schema=1 event=SIGWINCH stage=virtual_winsize_applied\n";
++
++	if (tty_signal_diagnostic_fd < 0)
++		return;
++	if (strcmp(stage, "ready") == 0)
++		(void) write(tty_signal_diagnostic_fd, ready_record, sizeof(ready_record) - 1);
++	else if (strcmp(stage, "applied") == 0)
++		(void) write(tty_signal_diagnostic_fd, applied_record, sizeof(applied_record) - 1);
++}
++
++static void initialize_tty_virtual_winsize()
++{
++	const char *value = getenv("PROOT_TTY_VIRTUAL_WINSIZE_FD");
++	char *end = NULL;
++	long parsed_fd;
++	int flags;
++
++	if (tty_virtual_winsize_fd >= 0 || value == NULL || value[0] == '\0')
++		return;
++	errno = 0;
++	parsed_fd = strtol(value, &end, 10);
++	if (errno != 0 || end == value || *end != '\0' || parsed_fd < 3 || parsed_fd > 1024)
++		return;
++	flags = fcntl((int) parsed_fd, F_GETFD);
++	if (flags < 0 || fcntl((int) parsed_fd, F_SETFD, flags | FD_CLOEXEC) != 0)
++		return;
++	tty_virtual_winsize_fd = (int) parsed_fd;
++	record_tty_virtual_winsize_stage("ready");
++}
++
++bool proot_tty_virtual_winsize(struct winsize *size)
++{
++	unsigned char frame[4];
++	unsigned int columns;
++	unsigned int rows;
++
++	if (size == NULL || tty_virtual_winsize_fd < 0 ||
++		pread(tty_virtual_winsize_fd, frame, sizeof(frame), 0) != (ssize_t) sizeof(frame))
++		return false;
++	columns = ((unsigned int) frame[0] << 8) | frame[1];
++	rows = ((unsigned int) frame[2] << 8) | frame[3];
++	if (columns == 0 || rows == 0 || columns > 1000 || rows > 1000)
++		return false;
++	size->ws_col = (unsigned short) columns;
++	size->ws_row = (unsigned short) rows;
++	size->ws_xpixel = 0;
++	size->ws_ypixel = 0;
++	record_tty_virtual_winsize_stage("applied");
++	return true;
++}
++
++static void record_tty_signal_diagnostic(
++	int signum,
++	siginfo_t *siginfo UNUSED,
++	void *ucontext UNUSED
++)
++{
++	static const char host_record[] =
++		"schema=1 event=SIGWINCH stage=host_received\n";
++
++	if (signum == SIGWINCH && tty_signal_diagnostic_fd >= 0)
++		(void) write(tty_signal_diagnostic_fd, host_record, sizeof(host_record) - 1);
++}
++
++static void record_tty_signal_tracee_stage(const char *stage)
++{
++	static const char stopped_record[] =
++		"schema=1 event=SIGWINCH stage=tracee_stopped\n";
++	static const char restarted_record[] =
++		"schema=1 event=SIGWINCH stage=tracee_restarted\n";
++	static const char foreground_assigned_record[] =
++		"schema=1 event=SIGWINCH stage=primary_tracee_foreground_assigned\n";
++	static const char foreground_verified_record[] =
++		"schema=1 event=SIGWINCH stage=primary_tracee_foreground_verified\n";
++	static const char foreground_mismatch_record[] =
++		"schema=1 event=SIGWINCH stage=primary_tracee_foreground_mismatch\n";
++	static const char foreground_unavailable_record[] =
++		"schema=1 event=SIGWINCH stage=primary_tracee_foreground_unavailable\n";
++
++	if (tty_signal_diagnostic_fd < 0)
++		return;
++	if (strcmp(stage, "tracee_stopped") == 0)
++		(void) write(tty_signal_diagnostic_fd, stopped_record, sizeof(stopped_record) - 1);
++	else if (strcmp(stage, "tracee_restarted") == 0)
++		(void) write(tty_signal_diagnostic_fd, restarted_record, sizeof(restarted_record) - 1);
++	else if (strcmp(stage, "primary_tracee_foreground_assigned") == 0)
++		(void) write(tty_signal_diagnostic_fd, foreground_assigned_record, sizeof(foreground_assigned_record) - 1);
++	else if (strcmp(stage, "primary_tracee_foreground_verified") == 0)
++		(void) write(tty_signal_diagnostic_fd, foreground_verified_record, sizeof(foreground_verified_record) - 1);
++	else if (strcmp(stage, "primary_tracee_foreground_mismatch") == 0)
++		(void) write(tty_signal_diagnostic_fd, foreground_mismatch_record, sizeof(foreground_mismatch_record) - 1);
++	else if (strcmp(stage, "primary_tracee_foreground_unavailable") == 0)
++		(void) write(tty_signal_diagnostic_fd, foreground_unavailable_record, sizeof(foreground_unavailable_record) - 1);
++}
++
++static void initialize_tty_signal_diagnostic()
++{
++	const char *path = getenv("PROOT_TTY_DIAGNOSTIC_FILE");
++
++	if (tty_signal_diagnostic_fd >= 0)
++		return;
++	if (path != NULL && path[0] != '\0')
++		tty_signal_diagnostic_fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
++}
++
++static bool use_primary_tracee_foreground_group()
++{
++	const char *value = getenv("PROOT_TTY_PRIMARY_FOREGROUND");
++
++	return value != NULL && strcmp(value, "1") == 0;
++}
++
+ /**
+  * Start @tracee->exe with the given @argv[].  This function
+  * returns -errno if an error occurred, otherwise 0.
+@@ -61,6 +197,7 @@
+ 	char *const default_argv[] = { "-sh", NULL };
+ 	long status;
+ 	pid_t pid;
++	bool primary_tracee_foreground = use_primary_tracee_foreground_group();
+ 
+ 	/* Set pokedata workaround stub addr if needed. */
+ 	mem_prepare_before_first_execve(tracee);
+@@ -69,6 +206,19 @@
+ 	 * translated until they are closed. */
+ 	if (tracee->verbose > 0)
+ 		list_open_fd(tracee);
++
++	/*
++	 * Android may start the native launcher with SIGWINCH ignored. An ignored
++	 * disposition survives exec and an interactive guest shell cannot reliably
++	 * install a WINCH trap afterwards. Restore default before fork so only the
++	 * tracee inherits it; event_loop() installs the tracer's handler later.
++	 */
++	if (primary_tracee_foreground && signal(SIGWINCH, SIG_DFL) == SIG_ERR) {
++		note(tracee, ERROR, SYSTEM, "signal(SIGWINCH)");
++		return -errno;
++	}
++	if (primary_tracee_foreground)
++		initialize_tty_signal_diagnostic();
+ 
+ 	pid = fork();
+ 	switch(pid) {
+@@ -97,6 +247,10 @@
+ 		if (getenv("PROOT_NO_SECCOMP") == NULL)
+ 			(void) enable_syscall_filtering(tracee);
+ 
++		/* The Probe-only parent owns this descriptor; guests never inherit its name. */
++		if (getenv("PROOT_TTY_VIRTUAL_WINSIZE_FD") != NULL)
++			unsetenv("PROOT_TTY_VIRTUAL_WINSIZE_FD");
++
+ 		/* Now process is ptraced, so the current rootfs is already the
+ 		 * guest rootfs.  Note: Valgrind can't handle execve(2) on
+ 		 * "foreign" binaries (ENOEXEC) but can handle execvp(3) on such
+@@ -105,6 +259,30 @@
+ 		return -errno;
+ 
+ 	default: /* parent */
++		/*
++		 * Probe-only source-level terminal topology: move the first ptraced
++		 * guest tracee into its own foreground group while PRoot is still the
++		 * current foreground group. Subsequent TIOCSWINSZ delivery is therefore
++		 * addressed by the kernel to the guest group, not to the tracer. No host
++		 * PID lookup, direct tracee kill, group broadcast, or polling is used.
++		 */
++		if (primary_tracee_foreground) {
++			if (setpgid(pid, pid) != 0 || tcsetpgrp(STDIN_FILENO, pid) != 0) {
++				record_tty_signal_tracee_stage("primary_tracee_foreground_unavailable");
++				note(tracee, ERROR, SYSTEM, "primary tracee foreground group");
++				return -errno;
++			}
++			record_tty_signal_tracee_stage("primary_tracee_foreground_assigned");
++			/* A successful tcsetpgrp call is not sufficient evidence: verify the
++			 * physical controlling terminal and tracee group before interpreting
++			 * a missing SIGWINCH as a PRoot ptrace failure. Fixed diagnostics only. */
++			if (getpgid(pid) != pid || tcgetpgrp(STDIN_FILENO) != pid) {
++				record_tty_signal_tracee_stage("primary_tracee_foreground_mismatch");
++				note(tracee, ERROR, SYSTEM, "primary tracee foreground verification");
++				return -EINVAL;
++			}
++			record_tty_signal_tracee_stage("primary_tracee_foreground_verified");
++		}
+ 		/* We know the pid of the first tracee now.  */
+ 		tracee->pid = pid;
+ 		return 0;
+@@ -277,6 +455,8 @@
+ 	if (status < 0)
+ 		note(NULL, WARNING, SYSTEM, "sigfillset()");
+ 
++	initialize_tty_signal_diagnostic();
++	initialize_tty_virtual_winsize();
+ 	/* Handle all signals.  */
+ 	for (signum = 0; signum < SIGRTMAX; signum++) {
+ 		switch (signum) {
+@@ -308,6 +488,10 @@
+ 			 * they are related to tty and job control.  */
+ 			continue;
+ 
++		case SIGWINCH:
++			signal_action.sa_sigaction = record_tty_signal_diagnostic;
++			break;
++
+ 		default:
+ 			/* Ignore all other signals, including
+ 			 * terminating ones (^C for instance). */
+@@ -320,6 +504,15 @@
+ 			note(NULL, WARNING, SYSTEM, "sigaction(%d)", signum);
+ 	}
+ 
++	/* Verify the Probe-only host recorder without sending a signal to a guest. */
++	if (getenv("PROOT_TTY_DIAGNOSTIC_WINCH_SELF_TEST") != NULL &&
++		tty_signal_diagnostic_fd >= 0) {
++		static const char self_test_record[] =
++			"schema=1 event=SIGWINCH stage=host_self_test_dispatched\n";
++		(void) write(tty_signal_diagnostic_fd, self_test_record, sizeof(self_test_record) - 1);
++		(void) raise(SIGWINCH);
++	}
++
+ 	while (1) {
+ 		int tracee_status;
+ 		Tracee *tracee;
+@@ -421,6 +614,8 @@
+ 		/* Don't use WSTOPSIG() to extract the signal
+ 		 * since it clears the PTRACE_EVENT_* bits. */
+ 		signal = (tracee_status & 0xfff00) >> 8;
++		if (signal == SIGWINCH)
++			record_tty_signal_tracee_stage("tracee_stopped");
+ 
+ 		switch (signal) {
+ 			static bool deliver_sigtrap = false;
+@@ -717,6 +912,8 @@
+ 	status = ptrace(tracee->restart_how, tracee->pid, NULL, signal);
+ 	if (status < 0)
+ 		return false; /* The process likely died in a syscall.  */
++	if (signal == SIGWINCH)
++		record_tty_signal_tracee_stage("tracee_restarted");
+ 
+ 	tracee->last_restart_how = tracee->restart_how;
+ 	tracee->restart_how = 0;
+--- a/src/tracee/event.h
++++ b/src/tracee/event.h
+@@ -24,6 +24,7 @@
+ #define TRACEE_EVENT_H
+ 
+ #include <stdbool.h>
++#include <sys/ioctl.h>
+ 
+ #include "tracee/tracee.h"
+ 
+@@ -32,5 +33,6 @@
+ extern int handle_tracee_event(Tracee *tracee, int tracee_status);
+ extern bool restart_tracee(Tracee *tracee, int signal);
+ extern bool seccomp_event_happens_after_enter_sigtrap();
++extern bool proot_tty_virtual_winsize(struct winsize *size);
+ 
+ #endif /* TRACEE_EVENT_H */
+--- a/src/syscall/exit.c
++++ b/src/syscall/exit.c
+@@ -24,7 +24,13 @@
+ #include <sys/utsname.h> /* struct utsname, */
+ #include <linux/net.h>   /* SYS_*, */
+ #include <linux/ioctl.h> /* _IOW, */
++#include <fcntl.h>       /* O_*, */
++#include <stdio.h>       /* snprintf(3), */
++#include <stdlib.h>      /* getenv(3), strtoull(3), */
+ #include <string.h>      /* strlen(3), */
++#include <sys/ioctl.h>   /* TIOCGWINSZ, */
++#include <sys/stat.h>    /* fstat(2), */
++#include <unistd.h>      /* close(2), write(2), */
+ 
+ #include "cli/note.h"
+ #include "syscall/syscall.h"
+@@ -35,6 +41,7 @@
+ #include "syscall/rlimit.h"
+ #include "execve/execve.h"
+ #include "tracee/tracee.h"
++#include "tracee/event.h"
+ #include "tracee/reg.h"
+ #include "tracee/mem.h"
+ #include "tracee/abi.h"
+@@ -45,7 +52,148 @@
+ #include "ptrace/wait.h"
+ #include "extension/extension.h"
+ #include "arch.h"
++
++static void record_active_tty_tracee_group(Tracee *tracee);
++
++/*
++ * Phase-1 diagnostic only.  It is compiled into a Probe-exclusive PRoot
++ * artifact, never the production launcher.  The record intentionally omits
++ * tracee PID, command, path, terminal bytes, and all user-controlled text.
++ */
++static void record_tty_winsize_diagnostic(
++	Tracee *tracee,
++	word_t syscall_result,
++	const char *event,
++	const char *stage,
++	int read_size_before_result
++)
++{
++	const char *record_path;
++	const char *expected_text;
++	char *end = NULL;
++	char proc_fd_path[64];
++	char proc_comm_path[64];
++	char comm[64];
++	char record[340];
++	struct stat fd_stat;
++	struct winsize size = {0};
++	unsigned long long expected_rdev;
++	unsigned long long fd_rdev = 0;
++	int fd;
++	int inspected_fd = -1;
++	int fd_is_tty = 0;
++	int same_rdev = 0;
++	const char *tracee_kind = "other";
++	int rows = 0;
++	int columns = 0;
++	int output_fd;
++	int length;
++
++	record_path = getenv("PROOT_TTY_DIAGNOSTIC_FILE");
++	expected_text = getenv("PROOT_TTY_DIAGNOSTIC_EXPECTED_RDEV");
++	if (record_path == NULL || expected_text == NULL || record_path[0] == '\0')
++		return;
++
++	errno = 0;
++	expected_rdev = strtoull(expected_text, &end, 10);
++	if (errno != 0 || end == expected_text || *end != '\0')
++		return;
++
++	fd = (int) peek_reg(tracee, ORIGINAL, SYSARG_1);
++	if (fd >= 0 && fd <= 1048576 &&
++		snprintf(proc_fd_path, sizeof(proc_fd_path), "/proc/%d/fd/%d", tracee->pid, fd) > 0) {
++		inspected_fd = open(proc_fd_path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
++		if (inspected_fd >= 0) {
++			fd_is_tty = isatty(inspected_fd) ? 1 : 0;
++			if (fstat(inspected_fd, &fd_stat) == 0) {
++				fd_rdev = (unsigned long long) fd_stat.st_rdev;
++				same_rdev = fd_rdev == expected_rdev ? 1 : 0;
++			}
++			close(inspected_fd);
++		}
++	}
++	if (snprintf(proc_comm_path, sizeof(proc_comm_path), "/proc/%d/comm", tracee->pid) > 0) {
++		int comm_fd = open(proc_comm_path, O_RDONLY | O_CLOEXEC);
++		if (comm_fd >= 0) {
++			ssize_t comm_length = read(comm_fd, comm, sizeof(comm) - 1);
++			close(comm_fd);
++			if (comm_length > 0) {
++				comm[comm_length] = '\0';
++				if (strncmp(comm, "stty", 4) == 0)
++					tracee_kind = "busybox";
++				else if (strncmp(comm, "tty-winsize-pro", 15) == 0)
++					tracee_kind = "tty_helper";
++			}
++		}
++	}
++
++	if ((read_size_before_result || (long) syscall_result == 0) &&
++		read_data(tracee, &size, peek_reg(tracee, ORIGINAL, SYSARG_3), sizeof(size)) == 0) {
++		rows = (int) size.ws_row;
++		columns = (int) size.ws_col;
++	}
++
++	length = snprintf(
++		record,
++		sizeof(record),
++		"schema=1 event=%s stage=%s tracee_kind=%s fd_is_tty=%d fd_rdev=%llu expected_rdev=%llu same_rdev=%d rows=%d columns=%d result=%ld\n",
++		event,
++		stage,
++		tracee_kind,
++		fd_is_tty,
++		fd_rdev,
++		expected_rdev,
++		same_rdev,
++		rows,
++		columns,
++		(long) syscall_result
++	);
++	if (length <= 0 || (size_t) length >= sizeof(record))
++		return;
+ 
++	if (fd_is_tty && same_rdev)
++		record_active_tty_tracee_group(tracee);
++
++	output_fd = open(record_path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
++	if (output_fd < 0)
++		return;
++	(void) write(output_fd, record, (size_t) length);
++	close(output_fd);
++}
++
++/*
++ * Probe-only physical job-control observation. PRoot virtualizes process
++ * groups for the guest, so /proc/self/stat cannot prove whether the tracee
++ * that actually issued a tty ioctl belongs to the host tty foreground group.
++ * Persist fixed enum-like stages only; never a PID, pgrp, command, or path.
++ */
++static void record_active_tty_tracee_group(Tracee *tracee)
++{
++	const char *record_path = getenv("PROOT_TTY_DIAGNOSTIC_FILE");
++	static int last_state = -1;
++	static const char foreground_record[] =
++		"schema=1 event=SIGWINCH stage=active_tty_tracee_foreground\n";
++	static const char background_record[] =
++		"schema=1 event=SIGWINCH stage=active_tty_tracee_background\n";
++	int state;
++	int output_fd;
++
++	if (record_path == NULL || record_path[0] == '\0')
++		return;
++	state = getpgid(tracee->pid) == tcgetpgrp(STDIN_FILENO) ? 1 : 0;
++	if (state == last_state)
++		return;
++	last_state = state;
++	output_fd = open(record_path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
++	if (output_fd < 0)
++		return;
++	if (state == 1)
++		(void) write(output_fd, foreground_record, sizeof(foreground_record) - 1);
++	else
++		(void) write(output_fd, background_record, sizeof(background_record) - 1);
++	close(output_fd);
++}
++
+ /**
+  * Translate the output arguments of the current @tracee's syscall in
+  * the @tracee->pid process area. This function sets the result of
+@@ -544,12 +692,25 @@
+ 		status = handle_statx_syscall(tracee, false);
+ 		break;
+ 
+-	case PR_ioctl:
+-		if (peek_reg(tracee, ORIGINAL, SYSARG_2) == _IOW(0x94, 9, int) /* FICLONE */ &&
++	case PR_ioctl: {
++		word_t ioctl_request = peek_reg(tracee, ORIGINAL, SYSARG_2);
++		if (ioctl_request == TIOCGWINSZ) {
++			record_tty_winsize_diagnostic(
++				tracee, syscall_result, "TIOCGWINSZ", "before_extensions", 0
++			);
++		}
++		else if (ioctl_request == TIOCSWINSZ) {
++			record_tty_winsize_diagnostic(
++				tracee, syscall_result, "TIOCSWINSZ", "before_extensions", 1
++			);
++		}
++
++		if (ioctl_request == _IOW(0x94, 9, int) /* FICLONE */ &&
+ 				(int) peek_reg(tracee, CURRENT, SYSARG_RESULT) == -EACCES) {
+ 			poke_reg(tracee, SYSARG_RESULT, -EOPNOTSUPP);
+ 		}
+ 		goto end;
++	}
+ 
+ 	default:
+ 		goto end;
+@@ -561,4 +722,35 @@
+ 	status = notify_extensions(tracee, SYSCALL_EXIT_END, 0, 0);
+ 	if (status < 0)
+ 		poke_reg(tracee, SYSARG_RESULT, (word_t) status);
++	/* Probe-only virtual dimensions: preserve the host PTY and replace only a
++	 * successful guest TIOCGWINSZ result after extension handling. */
++	if (get_sysnum(tracee, ORIGINAL) == PR_ioctl &&
++		peek_reg(tracee, ORIGINAL, SYSARG_2) == TIOCGWINSZ &&
++		(long) peek_reg(tracee, CURRENT, SYSARG_RESULT) == 0) {
++		struct winsize virtual_size;
++		if (proot_tty_virtual_winsize(&virtual_size))
++			(void) write_data(tracee, peek_reg(tracee, ORIGINAL, SYSARG_3),
++				&virtual_size, sizeof(virtual_size));
++	}
++	if (get_sysnum(tracee, ORIGINAL) == PR_ioctl) {
++		word_t ioctl_request = peek_reg(tracee, ORIGINAL, SYSARG_2);
++		if (ioctl_request == TIOCGWINSZ) {
++			record_tty_winsize_diagnostic(
++				tracee,
++				peek_reg(tracee, CURRENT, SYSARG_RESULT),
++				"TIOCGWINSZ",
++				"after_extensions",
++				0
++			);
++		}
++		else if (ioctl_request == TIOCSWINSZ) {
++			record_tty_winsize_diagnostic(
++				tracee,
++				peek_reg(tracee, CURRENT, SYSARG_RESULT),
++				"TIOCSWINSZ",
++				"after_extensions",
++				1
++			);
++		}
++	}
+ }

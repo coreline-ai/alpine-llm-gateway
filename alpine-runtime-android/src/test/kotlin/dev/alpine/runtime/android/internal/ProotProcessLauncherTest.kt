@@ -48,7 +48,11 @@ class ProotProcessLauncherTest {
                 sessionEnvironment = emptyMap(),
                 request = RuntimeCommandRequest(
                     executable = "/bin/sh",
-                    environment = mapOf("PROOT_LOADER" to "/untrusted/loader"),
+                    environment = mapOf(
+                        "PROOT_LOADER" to "/untrusted/loader",
+                        "PROOT_TTY_DIAGNOSTIC_FILE" to "/untrusted/diagnostic",
+                        "PROOT_NO_SECCOMP" to "1",
+                    ),
                 ),
             )
         }
@@ -114,11 +118,17 @@ class ProotProcessLauncherTest {
         launcher.openSession("session")
         val output = StringBuilder()
         val received = CountDownLatch(1)
+        val closed = CountDownLatch(1)
+        var observedExitCode: Int? = null
         val terminal = launcher.openTerminal(
             runtime,
             "session",
             emptyMap(),
             RuntimeTerminalRequest(),
+            onClosed = { _, exitCode ->
+                observedExitCode = exitCode
+                closed.countDown()
+            },
         )
         terminal.addOutputListener { bytes ->
             output.append(bytes.toString(Charsets.UTF_8))
@@ -138,7 +148,9 @@ class ProotProcessLauncherTest {
             (resizeError.cause as RuntimeOperationException).errorCode,
         )
         terminal.closeAsync().toCompletableFuture().join()
+        assertTrue(closed.await(3, TimeUnit.SECONDS))
         assertFalse(terminal.isOpen)
+        assertTrue(observedExitCode != null)
         assertTrue(launcher.listProcesses("session").isEmpty())
     }
 }

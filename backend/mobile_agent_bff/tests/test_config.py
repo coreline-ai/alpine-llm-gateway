@@ -32,3 +32,12 @@ def test_provider_models_are_fail_closed_by_default() -> None:
     assert value.models_for("openai") == ()
     assert value.models_for("anthropic") == ()
     assert value.models_for("xai") == ()
+
+
+def test_provider_stream_limits_are_bounded_and_ordered() -> None:
+    settings(max_provider_event_bytes=8, max_provider_stream_bytes=16).validate()
+
+    with pytest.raises(ValueError):
+        settings(max_provider_event_bytes=0).validate()
+    with pytest.raises(ValueError):
+        settings(max_provider_event_bytes=17, max_provider_stream_bytes=16).validate()

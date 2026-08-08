@@ -29,6 +29,22 @@ COMMON = load_script("compliance_common_test", "compliance_common.py")
 
 
 class LicenseComplianceTests(unittest.TestCase):
+    def test_native_source_bundle_requires_explicitly_unpatched_proot_locks(self):
+        locks = [
+            json.loads((ROOT / "runtime/alpine-3.21.3-arm64.lock.json").read_text()),
+            json.loads((ROOT / "runtime/alpine-3.21.3-x86_64.lock.json").read_text()),
+        ]
+
+        summary = BUNDLE.verify_project_build_inputs(locks)
+        self.assertEqual([], summary["patches"])
+
+        patched = copy.deepcopy(locks)
+        patched[0]["proot"]["patches"] = [
+            {"path": "scripts/runtime/patches/retired.patch", "sha256": "0" * 64}
+        ]
+        with self.assertRaises(AssertionError):
+            BUNDLE.verify_project_build_inputs(patched)
+
     def test_repository_compliance_is_valid_but_external_release_stays_closed(self):
         report = VERIFY.verify()
         self.assertEqual("INTERNAL_ONLY", report["distribution_mode"])
@@ -112,7 +128,6 @@ class LicenseComplianceTests(unittest.TestCase):
             "sources/talloc/talloc-2.4.2/talloc.c": b"talloc source\n",
             "build-input/talloc-standalone/replace.h": b"replace source\n",
             "scripts/runtime/build-proot-android.sh": b"#!/bin/sh\n",
-            "scripts/runtime/patches/proot-android-winsize.patch": b"patch\n",
         }
         sums = "".join(
             f"{hashlib.sha256(payload).hexdigest()}  {name}\n"

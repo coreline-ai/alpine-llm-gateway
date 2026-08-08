@@ -3,7 +3,8 @@
     <application
         android:name=".RuntimeSampleApplication"
         android:allowBackup="false"
-        android:label="Alpine XML Sample"
+        android:icon="@drawable/ic_dev_xml_sample"
+        android:label="[SAMPLE] Alpine XML"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
         <activity

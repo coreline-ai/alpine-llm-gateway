@@ -15,6 +15,8 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 
 /**
@@ -197,6 +199,22 @@ class OpenAiCompatibleOAuthAdapter(
     override fun createStreamRequest(requestJson: String): ProviderHttpRequest =
         request(requestJson, stream = true)
 
+    override fun createResult(response: ProviderHttpResponse): HostLlmResult {
+        if (response.statusCode !in 200..299) {
+            return ProviderAdapterJson.redactedError(PROVIDER_NAME, response.statusCode)
+        }
+        return runCatching {
+            val value = JSONObject(response.bodyJson)
+            if (value.has("error")) {
+                ProviderAdapterJson.invalidResponse(PROVIDER_NAME)
+            } else {
+                HostLlmResult(response.bodyJson, response.statusCode)
+            }
+        }.getOrElse {
+            ProviderAdapterJson.invalidResponse(PROVIDER_NAME)
+        }
+    }
+
     override fun createStreamEvent(event: ProviderSseEvent): HostLlmStreamEvent? {
         if (event.data == "[DONE]") return null
         return runCatching {
@@ -246,6 +264,10 @@ class OpenAiCompatibleOAuthAdapter(
             .put(JSONObject().put("role", "system").put("content", system))
         for (index in 0 until source.length()) messages.put(source.get(index))
         body.put("messages", messages)
+    }
+
+    private companion object {
+        const val PROVIDER_NAME = "openai-compatible"
     }
 }
 
@@ -312,6 +334,9 @@ class UrlConnectionOAuthHttpTransport(
                     errorBodyJson = body,
                     headers = headers,
                 )
+            }
+            if (!isEventStreamContentType(connection.contentType)) {
+                throw ProviderStreamException("Provider stream content type is invalid")
             }
             val input = connection.inputStream
             openingCancellation.dispose()
@@ -419,6 +444,10 @@ internal object SseEventParser {
                 if (totalBytes > maxTotalBytes) {
                     throw ProviderStreamException("Provider SSE response exceeds limit")
                 }
+                eventBytes += consumed.toInt()
+                if (eventBytes > maxEventBytes) {
+                    throw ProviderStreamException("Provider SSE event exceeds limit")
+                }
             }
             if (line == null) {
                 emitPending()
@@ -436,13 +465,7 @@ internal object SseEventParser {
             val value = rawValue.removePrefix(" ")
             when (field) {
                 "event" -> eventName = value
-                "data" -> {
-                    eventBytes += value.toByteArray(StandardCharsets.UTF_8).size
-                    if (eventBytes > maxEventBytes) {
-                        throw ProviderStreamException("Provider SSE event exceeds limit")
-                    }
-                    dataLines += value
-                }
+                "data" -> dataLines += value
             }
         }
     }
@@ -469,6 +492,17 @@ internal object SseEventParser {
 
     private fun decodeLine(bytes: ByteArray): String {
         val length = if (bytes.lastOrNull() == '\r'.code.toByte()) bytes.size - 1 else bytes.size
-        return String(bytes, 0, length, StandardCharsets.UTF_8)
+        return try {
+            StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(bytes, 0, length))
+                .toString()
+        } catch (_: Exception) {
+            throw ProviderStreamException("Provider SSE contains invalid UTF-8")
+        }
     }
 }
+
+internal fun isEventStreamContentType(value: String?): Boolean =
+    value?.substringBefore(';')?.trim()?.equals("text/event-stream", ignoreCase = true) == true
