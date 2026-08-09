@@ -13,7 +13,6 @@
     <img alt="Version 0.3.0" src="https://img.shields.io/badge/version-0.3.0-B9F227?style=flat-square&labelColor=10120F">
     <img alt="Android API 26+" src="https://img.shields.io/badge/Android-API%2026%2B-3DDC84?style=flat-square&logo=android&logoColor=white">
     <img alt="Kotlin 2.2.21" src="https://img.shields.io/badge/Kotlin-2.2.21-7F52FF?style=flat-square&logo=kotlin&logoColor=white">
-    <a href="apps/mobile_agent/README.md"><img alt="MobileAgent Flutter Android and iOS" src="https://img.shields.io/badge/MobileAgent-Flutter%20Android%20%26%20iOS-02569B?style=flat-square&logo=flutter&logoColor=white"></a>
     <img alt="OAuth 2.0 with PKCE" src="https://img.shields.io/badge/auth-OAuth%202.0%20%2B%20PKCE-4F46E5?style=flat-square">
     <img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white">
     <img alt="Alpine 3.21.3" src="https://img.shields.io/badge/Alpine-3.21.3-0D597F?style=flat-square&logo=alpinelinux&logoColor=white">
@@ -42,9 +41,8 @@
 | **Alpine AI Workspace** | 빠른 채팅과 Alpine 작업 모드를 한 Android 앱에서 제공 | `:integrated-app` |
 | **재사용 Android SDK** | 채팅, OAuth Provider, Runtime, Bridge, 터미널, Workspace를 선택 조립 | 19개 AAR/JAR 모듈 |
 | **Python Gateway** | Alpine 안에서 Provider 차이를 숨기는 dependency-free gateway와 `llmctl` | `alpine_llm/` |
-| **MobileAgent 제품 경로** | 별도 Flutter Android/iOS 앱과 OIDC/BFF 기반 Provider 호출 | `apps/mobile_agent/`, `backend/mobile_agent_bff/` |
 
-`integrated-app`, `demo-chatbot`, `apps/mobile_agent`는 **서로 다른 앱**입니다. 이 README의 화면은 Android 통합 제품인 `dev.alpine.integrated`를 기준으로 합니다.
+`integrated-app`과 `demo-chatbot`은 **서로 다른 Android 앱**입니다. 이 README의 화면은 Android 통합 제품인 `dev.alpine.integrated`를 기준으로 합니다.
 
 ### 핵심 특징
 
@@ -61,7 +59,7 @@
 <a id="screens"></a>
 ## 📱 앱 화면
 
-실제 Android 실기기에서 캡처한 **공개 가능한 핵심 화면 17개**입니다. `Alpine AI Workspace` 15개와 별도 Flutter 제품인 `MobileAgent` 2개를 포함합니다. 2026-08-09에 첫 실행 안내, Provider 빈 상태, Alpine Gateway 준비 상태, Runtime 설치 대시보드, terminal 명령 패널과 MobileAgent OAuth 랜딩을 추가했습니다. OAuth 계정·client ID·token·기기 serial·실사용 terminal 출력은 포함하지 않았습니다.
+실제 Android 실기기에서 캡처한 **공개 가능한 핵심 화면 15개**입니다. 2026-08-09에 첫 실행 안내, Provider 빈 상태, Alpine Gateway 준비 상태, Runtime 설치 대시보드와 terminal 명령 패널을 추가했습니다. OAuth 계정·client ID·token·기기 serial·실사용 terminal 출력은 포함하지 않았습니다.
 
 캡처는 각 기기의 원본 비율을 보존합니다. Samsung 기준 `1080 × 2340` 10개와 PD20 기준 `1080 × 2160` 7개이며, 이미지를 누르면 원본을 볼 수 있습니다.
 
@@ -102,16 +100,8 @@
   </tr>
 </table>
 
-### MobileAgent Flutter · Android/iOS 공통 OAuth 제품
 
-<table>
-  <tr>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/15-mobileagent-oauth-landing.png"><img src="docs/assets/screenshots/15-mobileagent-oauth-landing.png" width="260" alt="MobileAgent OAuth 설정 전 랜딩"></a><br><strong>MobileAgent OAuth 랜딩</strong><br><sub>시스템 브라우저·PKCE와 설정 필요 상태</sub></td>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/16-mobileagent-provider-grid.png"><img src="docs/assets/screenshots/16-mobileagent-provider-grid.png" width="260" alt="MobileAgent Codex Claude Grok Provider 카드"></a><br><strong>Codex · Claude · Grok</strong><br><sub>MobileAgent BFF를 통한 세 Provider 경로</sub></td>
-  </tr>
-</table>
-
-> **의도적으로 제외한 상태** — 실제 OAuth 브라우저·callback, 계정 정보, public client ID 입력값, token/credential, 사용자 workspace 경로·terminal 출력, 파괴적 package/Runtime 확인 dialog는 저장소 이미지로 남기지 않습니다. MobileAgent의 인증 후 대화·Run Card는 앱 소유 HTTPS issuer/BFF와 승인된 계정이 있어야 하므로 아직 문서용 실캡처를 만들지 않았습니다. 이 갤러리는 모든 사용자별·민감 상태가 아니라, 현재 검토 가능한 제품 핵심 플로우를 보여 줍니다.
+> **의도적으로 제외한 상태** — 실제 OAuth 브라우저·callback, 계정 정보, public client ID 입력값, token/credential, 사용자 workspace 경로·terminal 출력, 파괴적 package/Runtime 확인 dialog는 저장소 이미지로 남기지 않습니다. 이 갤러리는 모든 사용자별·민감 상태가 아니라, 현재 검토 가능한 제품 핵심 플로우를 보여 줍니다.
 </details>
 
 ## 🧭 두 가지 실행 모드
@@ -272,7 +262,7 @@ ANDROID_SERIAL=<device-serial> ./gradlew :integrated-app:connectedDebugAndroidTe
 | 항목 | 상태 | 기준 |
 |---|---|---|
 | Python unit/compile/smoke | ✅ CI PASS | GitHub Actions `Python 3.11` |
-| 결정론 Provider fault matrix | ✅ Local PASS | Python 106/106 + MobileAgent BFF 39/39; status·timeout·malformed/oversized SSE·strict UTF-8·no-retry |
+| 결정론 Provider fault matrix | ✅ Local PASS | Python Gateway 106/106; status·timeout·malformed/oversized SSE·strict UTF-8·no-retry |
 | Android modules·publication matrix | ✅ CI PASS | remote run `30807869557`, commit `3389fcb` |
 | 통합 앱 compile·unit·lint·APK | ✅ Local PASS | 2026-08-09 Alpine fallback viewport·접근성·한글 IME 반영 |
 | Samsung Android regression | ✅ PASS | OAuth core 3/3, Provider 12/12, Runtime Compose 8/8, integrated-app 10/10 |
@@ -315,7 +305,6 @@ Remote CI의 최신 성공은 원격 `main`의 기준선입니다. 현재 로컬
   TUI·dynamic resize·input replay/retry는 지원하지 않습니다.
 - 실제 Provider direct OAuth는 앱 소유 registration과 inference 사용 승인이 필요합니다.
 - Gemini 외 direct Provider는 승인된 model catalog를 번들하지 않으며, 앱 소유자가 입력한 model만 후보로 노출합니다.
-- MobileAgent OIDC/BFF의 실제 staging Provider E2E는 external account/secret이 없어 아직 실행하지 않았습니다.
 - BFF request/cancel/revocation registry는 단일 process memory 구현이며 다중 replica 전 Redis 경계가 필요합니다.
 - Play Asset Delivery 전체 E2E는 signed AAB와 Play test track이 필요합니다.
 - Provider OAuth의 credential-free Activity 재생성·`am force-stop` 복구는 통과했지만, 실제 계정 browser callback 도중 process kill과 Runtime 재부팅·Doze 검증은 승인 창이 필요합니다.

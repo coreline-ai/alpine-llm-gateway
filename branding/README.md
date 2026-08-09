@@ -11,7 +11,6 @@
 
 Generated Android resources are installed in:
 
-- `apps/mobile_agent/android/app/src/main/res`
 - `integrated-app/src/main/res`
 
 The Google Play 512px source PNG is `alpine-fold-play-512.png`.

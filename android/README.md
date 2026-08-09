@@ -148,7 +148,7 @@ Android Host가 원격 URL을 대신 가져오지 않도록 image는 PNG/JPEG/GI
 
 ## Claude·Gemini adapter
 
-Claude 계열은 JSON token 교환과 state echo를 설정하고 Messages API adapter를 연결할 수 있습니다. `AnthropicOAuthContract`는 reference-only endpoint, scope, `localhost:54545/callback`, 96-byte PKCE와 OAuth beta를 제공합니다. Client ID는 번들하지 않으며 호출 앱이 사용 권한이 있는 registration을 명시적으로 전달해야 합니다. MobileAgent release는 이 direct contract가 아니라 BFF의 공식 Anthropic API 경로를 사용합니다.
+Claude 계열은 JSON token 교환과 state echo를 설정하고 Messages API adapter를 연결할 수 있습니다. `AnthropicOAuthContract`는 reference-only endpoint, scope, `localhost:54545/callback`, 96-byte PKCE와 OAuth beta를 제공합니다. Client ID는 번들하지 않으며 호출 앱이 사용 권한이 있는 registration을 명시적으로 전달해야 합니다.
 
 ```kotlin
 val claudeOAuthConfig = AnthropicOAuthContract.providerConfig(

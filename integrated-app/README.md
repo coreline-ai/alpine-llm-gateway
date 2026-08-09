@@ -8,7 +8,7 @@
 `dev.alpine.integrated`는 재사용 Chat·Provider·Runtime·Bridge SDK를 한 Android 앱에 조립하는 제품 통합 Host다. 검정·아이보리·라임 디자인 시스템을 사용하며 시스템 dynamic color와 무관하게 동일한 제품 팔레트를 유지한다.
 
 > [!IMPORTANT]
-> 이 앱은 `apps/mobile_agent` Flutter 앱과 `demo-chatbot` compatibility 앱과 별도 package·저장소·token 경계를 가진다. 자동으로 profile이나 OAuth token을 공유하지 않는다.
+> 이 앱은 `demo-chatbot` compatibility 앱과 별도 package·OAuth token 경계를 가진다. 자동으로 profile이나 OAuth token을 공유하지 않는다.
 
 ## 📱 실제 화면
 

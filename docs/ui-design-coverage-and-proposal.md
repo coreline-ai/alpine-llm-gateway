@@ -4,11 +4,9 @@
 
 ## 목적
 
-`Alpine AI Workspace` Android 통합 앱과 별도 Flutter 제품 `MobileAgent`의 제품 화면·진단 화면·문서용 캡처 범위를 구분한다. 이 문서는 디자인 정본, 현재 구현 상태, README 캡처 계약과 남은 시각 QA를 함께 관리한다.
+`Alpine AI Workspace` Android 통합 앱의 제품 화면·진단 화면·문서용 캡처 범위를 관리한다. 이 문서는 디자인 정본, 현재 구현 상태, README 캡처 계약과 남은 시각 QA를 함께 관리한다.
 
 ## 디자인 정본
-
-두 제품은 같은 시각 계보를 사용하지만 package·OAuth token·배포 경계는 공유하지 않는다.
 
 | 역할 | Token |
 |---|---|
@@ -19,7 +17,7 @@
 | Warning | `#FFE5A3` |
 | Raised surface | `#FFFEF8` |
 
-정본은 [`docs/design/alpine-product-tokens.json`](design/alpine-product-tokens.json)이다. Android Compose는 `alpine-chat-feature` theme·designsystem을, Flutter `MobileAgent`는 동일한 ink/paper/acid/slate 값을 사용한다. `scripts/verify-ui-design-contract.py`가 token drift와 README 캡처 계약을 검사한다.
+정본은 [`docs/design/alpine-product-tokens.json`](design/alpine-product-tokens.json)이다. Android Compose는 `alpine-chat-feature` theme·designsystem을 사용하며, `scripts/verify-ui-design-contract.py`가 token drift와 README 캡처 계약을 검사한다.
 
 ## 현재 제품 화면 상태
 
@@ -33,19 +31,16 @@
 | Alpine Runtime dashboard | `alpine-runtime-ui-compose/.../RuntimeDashboard.kt` | 설치·상태·복구 action | 적용됨 |
 | Linux terminal | `RuntimeTerminalPanel.kt` | dark output·명령 bar·중단/종료 control | 적용됨 · full-screen TUI/dynamic resize는 미지원 |
 | Package·workspace | `RuntimePackagePanel.kt`, `RuntimeWorkspacePanel.kt` | allowlist·승인·bounded workspace 작업 | 적용됨 |
-| MobileAgent OAuth landing | `apps/mobile_agent/.../mobile_agent_app.dart` | OAuth 2.0 + PKCE, native system browser | 적용됨 · PD20 캡처 확인 |
-| MobileAgent authenticated chat/Run Card | Flutter `_ChatWorkspace` | BFF SSE·Stop·대화 vault 구현 | UI 실캡처 `NOT_RUN` — 앱 소유 HTTPS issuer/BFF와 승인 계정 필요 |
 | Probe·sample 앱 | `*-probe`, `sample`, `demo-chatbot` | 진단/예제 | 제품 디자인 범위 밖 |
 
 ## README 실제 화면 캡처
 
-루트 [`README.md`](../README.md#screens)는 사용자 정보가 없는 **17개 실제 Android PNG**를 참조한다.
+루트 [`README.md`](../README.md#screens)는 사용자 정보가 없는 **15개 실제 Android PNG**를 참조한다.
 
 | 구분 | 개수 | 해상도 | 포함 화면 |
 |---|---:|---|---|
 | Alpine AI Workspace 기존 실기기 캡처 | 10 | `1080 × 2340` | 빠른 채팅, History, Assistant, Provider, Gateway, Runtime, package |
 | Alpine AI Workspace 2026-08-09 PD20 캡처 | 5 | `1080 × 2160` | first-run guide, Provider 빈 상태, Gateway 준비, Runtime 설치, terminal 명령 패널 |
-| MobileAgent Flutter 2026-08-09 PD20 캡처 | 2 | `1080 × 2160` | OAuth 설정 전 랜딩, Codex·Claude·Grok Provider grid |
 
 원본 이미지는 `docs/assets/screenshots/`에 둔다. README는 `width="260"`만 지정해 기기별 실제 세로 비율을 보존한다. 캡처 해상도 허용 목록·파일 수·경로·중복 참조는 `scripts/verify-ui-design-contract.py`로 CI에서 검사한다.
 
@@ -56,7 +51,6 @@
 - 실제 OAuth browser/callback, account, client ID, authorization code, token, credential
 - 사용자 workspace 경로·파일명·terminal 출력·shell history
 - destructive Runtime/package action의 개인화된 결과
-- MobileAgent 인증 후 chat·Run Card: 외부 issuer/BFF·계정 승인이 없는 상태에서는 `NOT_RUN`
 
 따라서 README 갤러리는 모든 상태의 덤프가 아니라, 현재 검토 가능한 **핵심 공개 플로우**다.
 
@@ -64,20 +58,15 @@
 
 | 우선순위 | 작업 | 완료 기준 |
 |---:|---|---|
-| P0 | 실제 Provider OAuth E2E 후 MobileAgent chat·Run Card 재캡처 | 인증된 계정·token·prompt를 노출하지 않은 안전한 fixture 또는 redacted staging 화면 |
 | P0 | TalkBack·VoiceOver 수동 검사 | 모드 전환, Provider, History, terminal control의 label·focus 순서 기록 |
-| P1 | compact/medium·dark/light·200% text scale golden | Android/Flutter 모두 overflow·IME·inset 회귀 없음 |
+| P1 | compact/medium·dark/light·200% text scale golden | Android overflow·IME·inset 회귀 없음 |
 | P1 | terminal 10분 렌더링/frame 계측 | full-screen TUI가 아닌 현재 `INITIAL_SIZE_ONLY` 계약 안에서 증거 수집 |
-| P2 | README mobile screen capture automation | 외부 credential 없이 재현 가능한 Android/iOS fixture 확정 |
 
 ## 검증 명령
 
 ```bash
 python3 scripts/verify-ui-design-contract.py
 
-cd apps/mobile_agent
-flutter analyze
-flutter test
 ```
 
 기기 캡처는 현재 자동 CI가 아니라 민감정보를 제거한 수동 실기기 절차다. 해상도·파일 참조·README 미리보기 계약만 CI가 강제한다.

@@ -1,7 +1,6 @@
 # Provider OAuth·inference 경계
 
-이 문서는 `dev.alpine.integrated`의 Android 직접 Provider 경로와 별도 MobileAgent
-OIDC/BFF 제품 경로를 구분한다. 둘은 package, 저장소, OAuth token을 공유하지 않는다.
+이 문서는 `dev.alpine.integrated`의 Android 직접 Provider OAuth 경로를 설명한다.
 
 ## 현재 제품 규칙
 
@@ -42,7 +41,7 @@ OIDC/BFF 제품 경로를 구분한다. 둘은 package, 저장소, OAuth token�
 아래 verifier는 integrated product source와 빌드된 debug APK를 함께 검사한다.
 
 ```bash
-python3.11 scripts/verify-mobile-oauth-release.py --integrated-product
+python3.11 scripts/verify-integrated-oauth-release.py --require-default-roots
 ```
 
 검사 대상은 다음과 같다.
@@ -54,11 +53,6 @@ python3.11 scripts/verify-mobile-oauth-release.py --integrated-product
 GitHub Actions에도 동일 검사를 연결했지만, 현재 변경은 아직 push하지 않았으므로 원격 CI 결과는
 `NOT_RUN`이다.
 
-## 별도 MobileAgent OIDC/BFF 경로
-
-`apps/mobile_agent` 제품은 MobileAgent OIDC Authorization Code + PKCE로 사용자 인증을 한 뒤
-server-side BFF가 Provider 공식 API credential을 보관하는 별도 구조다. Android integrated app의
-direct Provider token과 Alpine Guest capability는 BFF secret boundary로 이동하지 않는다.
 
 ## 실제 계정 E2E 전제
 

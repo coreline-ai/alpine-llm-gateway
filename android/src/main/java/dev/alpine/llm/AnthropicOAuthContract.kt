@@ -5,7 +5,7 @@ package dev.alpine.llm
  *
  * No consumer authorization endpoint, third-party public client registration, scope or beta
  * header is bundled. A host must supply and verify its own approved OAuth contract before
- * enabling direct inference. MobileAgent production traffic uses its server-side BFF path.
+ * enabling direct inference.
  */
 object AnthropicOAuthContract {
     const val AUTHORIZATION_ENDPOINT_PLACEHOLDER = "https://provider.example.com/oauth/authorize"
