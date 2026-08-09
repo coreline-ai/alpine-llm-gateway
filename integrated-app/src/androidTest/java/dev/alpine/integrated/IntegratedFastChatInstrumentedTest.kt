@@ -3,6 +3,7 @@ package dev.alpine.integrated
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.CompositionLocalProvider
@@ -75,10 +76,11 @@ class IntegratedFastChatInstrumentedTest {
         get() = InstrumentationRegistry.getInstrumentation()
     private val context
         get() = instrumentation.targetContext
-    private var currentActivity: Activity? = null
+    private var currentActivity: IntegratedMainActivity? = null
 
     @Before
     fun resetState() {
+        wakeScreenForUiTest()
         clearState()
         IntegratedModeGuideStore(context).markCompleted()
         ProviderDependencies.installSessionFactoryForTests(null)
@@ -89,11 +91,20 @@ class IntegratedFastChatInstrumentedTest {
     fun cleanup() {
         ProviderDependencies.installSessionFactoryForTests(null)
         IntegratedAlpineDependencies.installRouterFactoryForTests(null)
-        currentActivity?.let { activity ->
-            instrumentation.runOnMainSync { activity.finish() }
-        }
-        currentActivity = null
+        closeCurrentActivity()
         clearState()
+    }
+
+    /**
+     * Samsung's screen saver can leave the activity resumed behind DreamActivity, making Compose
+     * assertions time out before the app receives a frame. Wake only; never dismiss Keyguard or
+     * alter device security settings, so a locked device still requires user interaction.
+     */
+    private fun wakeScreenForUiTest() {
+        runCatching {
+            instrumentation.uiAutomation.executeShellCommand("input keyevent KEYCODE_WAKEUP").close()
+        }
+        instrumentation.waitForIdleSync()
     }
 
     @Test
@@ -109,11 +120,14 @@ class IntegratedFastChatInstrumentedTest {
         compose.onNodeWithTag("chat_screen").assertIsDisplayed()
         compose.onNodeWithTag("mode_fast_chat").assertIsSelected()
         compose.onNodeWithTag("manage_providers").performClick()
+        waitForProviderListScreen()
         compose.onNodeWithTag("provider_list_screen").assertIsDisplayed()
         compose.onNodeWithText("로그인").performClick()
         compose.waitUntil(5_000) { scenario.authorizeCount.get() == 1 }
         compose.onNode(hasContentDescription("뒤로")).performClick()
 
+        waitForChatScreen()
+        waitForDisplayedText(profile.label)
         compose.onNodeWithText(profile.label).assertIsDisplayed()
         compose.onNodeWithTag("quick_model_gemini-3.5-flash").performClick()
         compose.waitUntil(5_000) {
@@ -427,19 +441,24 @@ class IntegratedFastChatInstrumentedTest {
     }
 
     private fun launch() {
+        // `createEmptyComposeRule` intentionally does not own an activity.  Wait for a prior
+        // test's activity to finish before launching another one, otherwise Samsung can briefly
+        // retain a stale composition and the next assertion sees no registered Compose root.
+        finishLingeringIntegratedActivities()
         val activity = instrumentation.startActivitySync(
             Intent(context, IntegratedMainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-        )
+        ) as IntegratedMainActivity
         currentActivity = activity
+        waitForActivityStage(activity, Stage.RESUMED)
         instrumentation.waitForIdleSync()
         waitForChatScreen()
     }
 
     private fun closeCurrentActivity() {
-        val activity = checkNotNull(currentActivity)
-        instrumentation.runOnMainSync { activity.finish() }
-        instrumentation.waitForIdleSync()
+        val activity = currentActivity ?: return
+        finishActivities(listOf(activity))
+        waitForNoIntegratedActivities()
         currentActivity = null
     }
 
@@ -464,6 +483,71 @@ class IntegratedFastChatInstrumentedTest {
                 true
             }.getOrDefault(false)
         }
+    }
+
+    private fun waitForProviderListScreen() {
+        // The provider manager is a separate Compose Activity.  API 26 can report the original
+        // activity as stopped before the replacement Composition has registered with this empty
+        // Compose rule, so a direct assertion is a test-race rather than a product failure.
+        compose.waitUntil(10_000) {
+            runCatching {
+                compose.onNodeWithTag("provider_list_screen").assertExists()
+                true
+            }.getOrDefault(false)
+        }
+    }
+
+    private fun finishLingeringIntegratedActivities() {
+        val activities = integratedActivities()
+        if (activities.isEmpty()) return
+        finishActivities(activities)
+        waitForNoIntegratedActivities()
+    }
+
+    private fun finishActivities(activities: List<IntegratedMainActivity>) {
+        instrumentation.runOnMainSync {
+            activities.forEach { activity ->
+                if (!activity.isFinishing && !activity.isDestroyed) {
+                    activity.finish()
+                }
+            }
+        }
+        instrumentation.waitForIdleSync()
+    }
+
+    private fun waitForActivityStage(activity: IntegratedMainActivity, stage: Stage) {
+        waitForCondition("${activity::class.java.simpleName} reaches $stage") {
+            activitiesInStage(stage).any { it === activity }
+        }
+    }
+
+    private fun waitForNoIntegratedActivities() {
+        waitForCondition("all IntegratedMainActivity instances finish") {
+            integratedActivities().isEmpty()
+        }
+    }
+
+    private fun integratedActivities(): List<IntegratedMainActivity> =
+        ACTIVE_ACTIVITY_STAGES.flatMap(::activitiesInStage).distinct()
+
+    private fun activitiesInStage(stage: Stage): List<IntegratedMainActivity> {
+        var activities = emptyList<IntegratedMainActivity>()
+        instrumentation.runOnMainSync {
+            activities = ActivityLifecycleMonitorRegistry.getInstance()
+                .getActivitiesInStage(stage)
+                .filterIsInstance<IntegratedMainActivity>()
+        }
+        return activities
+    }
+
+    private fun waitForCondition(description: String, predicate: () -> Boolean) {
+        val deadline = SystemClock.elapsedRealtime() + ACTIVITY_LIFECYCLE_TIMEOUT_MS
+        while (SystemClock.elapsedRealtime() < deadline) {
+            if (predicate()) return
+            instrumentation.waitForIdleSync()
+            SystemClock.sleep(ACTIVITY_LIFECYCLE_POLL_MS)
+        }
+        check(predicate()) { "Timed out while waiting for $description" }
     }
 
     private fun waitForDisplayedText(text: String) {
@@ -538,6 +622,18 @@ class IntegratedFastChatInstrumentedTest {
             createdAtMs = 1L,
         )
 }
+
+private val ACTIVE_ACTIVITY_STAGES = listOf(
+    Stage.CREATED,
+    Stage.STARTED,
+    Stage.RESUMED,
+    Stage.PAUSED,
+    Stage.STOPPED,
+    Stage.RESTARTED,
+)
+
+private const val ACTIVITY_LIFECYCLE_TIMEOUT_MS = 5_000L
+private const val ACTIVITY_LIFECYCLE_POLL_MS = 25L
 
 private class IntegratedProviderScenario(
     startSignedOut: Boolean,

@@ -13,6 +13,7 @@ android {
         applicationId = "dev.alpine.llm.runtimeprobe"
         minSdk = 26
         targetSdk = 36
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 1
         versionName = "0.1-probe"
         ndk { abiFilters += setOf("arm64-v8a", "x86_64") }
@@ -49,6 +50,8 @@ dependencies {
     implementation(project(":alpine-runtime-pack-x86_64"))
 
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
 }
 
 val ttyDiagnosticProot = layout.projectDirectory.file(

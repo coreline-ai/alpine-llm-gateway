@@ -76,8 +76,9 @@ PRoot executable을 writable app home으로 복사해 실행하지 않는다. bu
 arm64/x86_64 Alpine package inventory도 각각 포함된다. native source 생성 성공만으로 rootfs package
 source mirror나 프로젝트 라이선스 gate가 자동 완료되지는 않는다.
 
-2026-08-07의 `distribution/release-readiness.json` 기준 release-blocking gate는 7개이며
-GitHub remote CI 기준선만 `READY`, 다음 6개는 `BLOCKED`다.
+현재 deliverable의 `distribution/release-readiness.json` 기준 release-blocking gate는 7개 모두
+`BLOCKED`다. 과거 GitHub remote CI 성공은 이전 baseline만 증명하며, 현재 local HEAD/worktree의
+commit·Push·해당 SHA workflow success 증거가 없으면 `GITHUB_CURRENT_HEAD_CI_NOT_VERIFIED`로 유지한다.
 
 1. 저장소 소유자가 프로젝트 전체 라이선스를 명시한다.
 2. 고정 PRoot/talloc native source와 Alpine package-level exact source mirror를 release에 연결한다.
@@ -85,6 +86,7 @@ GitHub remote CI 기준선만 `READY`, 다음 6개는 `BLOCKED`다.
 4. signed AAB와 Play test track을 준비해 delivery E2E를 실행한다.
 5. Samsung reboot·Doze·process-kill 검증의 파괴적 테스트 승인 창을 확보한다.
 6. Maven/App Store 배포 위치, 서명 key owner와 최종 책임자를 확정한다.
+7. clean commit을 명시적으로 Push하고 해당 SHA의 GitHub Actions Python·Android job 성공을 기록한다.
 
 원격 CI의 최신 성공 기준선과 현재 로컬 변경의 차이는
 [`distribution/GITHUB_CI_STATUS.md`](../distribution/GITHUB_CI_STATUS.md)를 따른다.

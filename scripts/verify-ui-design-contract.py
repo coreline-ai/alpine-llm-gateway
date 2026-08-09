@@ -7,6 +7,7 @@ import json
 import re
 import struct
 import sys
+import zlib
 from pathlib import Path
 
 
@@ -32,6 +33,13 @@ def fail(message: str) -> None:
     raise AssertionError(message)
 
 
+def path_label(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
 def normalize_hex(value: str) -> str:
     value = value.upper()
     if not re.fullmatch(r"#[0-9A-F]{6}", value):
@@ -42,8 +50,73 @@ def normalize_hex(value: str) -> str:
 def png_dimensions(path: Path) -> tuple[int, int]:
     data = path.read_bytes()[:24]
     if len(data) != 24 or data[:8] != b"\x89PNG\r\n\x1a\n":
-        fail(f"not a PNG file: {path.relative_to(ROOT)}")
+        fail(f"not a PNG file: {path_label(path)}")
     return struct.unpack(">II", data[16:24])
+
+
+def png_chunk_types(path: Path, max_file_bytes: int) -> list[str]:
+    """Return validated PNG chunk names without decoding image pixels.
+
+    README screenshots are intentionally public artifacts.  PNG text/EXIF/time
+    chunks can carry capture metadata unrelated to the visible image, so the
+    caller validates an explicit allowlist rather than merely trusting a PNG
+    signature and dimensions.
+    """
+
+    if max_file_bytes <= 0:
+        fail("PNG maximum file size must be positive")
+    if path.stat().st_size > max_file_bytes:
+        fail(f"PNG screenshot exceeds size limit: {path_label(path)}")
+    data = path.read_bytes()
+    if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n":
+        fail(f"not a PNG file: {path_label(path)}")
+
+    offset = 8
+    types: list[str] = []
+    while offset < len(data):
+        if offset + 12 > len(data):
+            fail(f"truncated PNG chunk: {path_label(path)}")
+        length = struct.unpack_from(">I", data, offset)[0]
+        chunk_start = offset + 8
+        chunk_end = chunk_start + length
+        crc_end = chunk_end + 4
+        if crc_end > len(data):
+            fail(f"invalid PNG chunk length: {path_label(path)}")
+        raw_type = data[offset + 4:chunk_start]
+        try:
+            chunk_type = raw_type.decode("ascii")
+        except UnicodeDecodeError as error:
+            raise AssertionError(f"non-ASCII PNG chunk type: {path_label(path)}") from error
+        expected_crc = struct.unpack_from(">I", data, chunk_end)[0]
+        actual_crc = zlib.crc32(data[offset + 4:chunk_end]) & 0xFFFFFFFF
+        if actual_crc != expected_crc:
+            fail(f"PNG chunk CRC mismatch: {path_label(path)}:{chunk_type}")
+        types.append(chunk_type)
+        offset = crc_end
+        if chunk_type == "IEND":
+            if offset != len(data):
+                fail(f"trailing data after PNG IEND: {path_label(path)}")
+            break
+
+    if not types or types[0] != "IHDR" or types[-1] != "IEND":
+        fail(f"invalid PNG chunk boundary: {path_label(path)}")
+    return types
+
+
+def verify_png_chunk_contract(
+    path: Path,
+    allowed_chunk_types: set[str],
+    max_file_bytes: int,
+) -> None:
+    types = png_chunk_types(path, max_file_bytes)
+    if types.count("IHDR") != 1 or types.count("IEND") != 1 or "IDAT" not in types:
+        fail(f"invalid PNG required chunks: {path_label(path)}")
+    unexpected = sorted(set(types) - allowed_chunk_types)
+    if unexpected:
+        fail(
+            f"PNG screenshot metadata/unknown chunk is not allowed: "
+            f"{path_label(path)}:{','.join(unexpected)}"
+        )
 
 
 def verify_tokens(tokens: dict[str, object]) -> None:
@@ -102,6 +175,19 @@ def verify_screenshots(tokens: dict[str, object]) -> None:
         if width <= 0 or height <= 0:
             fail("allowed screenshot dimensions must be positive")
         allowed_dimensions.add((width, height))
+    allowed_chunks_raw = contract.get("allowed_png_chunks")
+    if not isinstance(allowed_chunks_raw, list) or not allowed_chunks_raw:
+        fail("readme_screenshot.allowed_png_chunks must be a non-empty list")
+    allowed_chunks: set[str] = set()
+    for chunk in allowed_chunks_raw:
+        if not isinstance(chunk, str) or not re.fullmatch(r"[A-Za-z]{4}", chunk):
+            fail("each allowed PNG chunk must be a four-letter ASCII string")
+        allowed_chunks.add(chunk)
+    if not {"IHDR", "IDAT", "IEND"}.issubset(allowed_chunks):
+        fail("allowed PNG chunks must include IHDR, IDAT, and IEND")
+    max_file_bytes = int(contract.get("max_file_bytes", 0))
+    if max_file_bytes <= 0:
+        fail("readme_screenshot.max_file_bytes must be positive")
     screenshots = sorted(SCREENSHOT_DIR.glob("*.png"))
     if len(screenshots) != int(contract["count"]):
         fail(f"expected {contract['count']} screenshots, found {len(screenshots)}")
@@ -112,6 +198,7 @@ def verify_screenshots(tokens: dict[str, object]) -> None:
                 f"screenshot size mismatch: {screenshot.name} "
                 f"allowed={sorted(allowed_dimensions)} actual={actual}"
             )
+        verify_png_chunk_contract(screenshot, allowed_chunks, max_file_bytes)
 
     readme = README.read_text(encoding="utf-8")
     try:

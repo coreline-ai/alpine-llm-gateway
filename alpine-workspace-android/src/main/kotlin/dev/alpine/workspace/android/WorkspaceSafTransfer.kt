@@ -16,6 +16,14 @@ import java.io.ByteArrayOutputStream
 class WorkspaceSafTransfer(private val resolver: ContentResolver) {
     data class ImportedDocument(val name: String, val bytes: ByteArray)
 
+    companion object {
+        /**
+         * Conservative API-level ceiling for callers that do not have a narrower workspace
+         * policy.  Consumers should still pass their own [WorkspaceLimits] value explicitly.
+         */
+        const val DEFAULT_MAX_EXPORT_BYTES: Long = 16L * 1024L * 1024L
+    }
+
     fun readImport(uri: Uri, maxBytes: Long): ImportedDocument {
         if (maxBytes <= 0) fail(WorkspaceErrorCode.LIMIT_EXCEEDED)
         val bytes = externalIo {
@@ -26,7 +34,21 @@ class WorkspaceSafTransfer(private val resolver: ContentResolver) {
         return ImportedDocument(safeDisplayName(uri), bytes)
     }
 
-    fun writeExport(bytes: ByteArray, uri: Uri) {
+    /**
+     * Writes only to the explicitly chosen SAF destination after enforcing a bounded payload.
+     *
+     * The size check deliberately runs before [ContentResolver.openOutputStream] so an oversized
+     * request cannot create or truncate a provider document.  SAF providers do not offer a
+     * portable atomic-replace primitive; app-private atomic staging is handled separately by
+     * [WorkspaceShareFilePublisher].
+     */
+    @JvmOverloads
+    fun writeExport(
+        bytes: ByteArray,
+        uri: Uri,
+        maxBytes: Long = DEFAULT_MAX_EXPORT_BYTES,
+    ) {
+        if (maxBytes <= 0 || bytes.size.toLong() > maxBytes) fail(WorkspaceErrorCode.LIMIT_EXCEEDED)
         externalIo {
             resolver.openOutputStream(uri, "w")?.use { output ->
                 output.write(bytes)

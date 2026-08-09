@@ -1,14 +1,18 @@
 package dev.alpine.chat.provider.android.ui
 
 import android.app.Activity
+import android.content.Intent
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -23,7 +27,9 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import androidx.test.core.app.ActivityScenario
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
+import androidx.test.runner.lifecycle.Stage
 import dev.alpine.chat.feature.backend.ChatBackendStreamResult
 import dev.alpine.chat.feature.ui.theme.AlpineProductTheme
 import dev.alpine.chat.provider.android.model.ProviderProfile
@@ -46,38 +52,51 @@ class ProviderScreensInstrumentedTest {
     @get:Rule
     val compose = createEmptyComposeRule()
 
-    private lateinit var scenario: ActivityScenario<ProviderTestActivity>
+    private val instrumentation
+        get() = InstrumentationRegistry.getInstrumentation()
+    private val context
+        get() = instrumentation.targetContext
+    private var currentActivity: ProviderTestActivity? = null
 
     @Before
     fun launchHostActivity() {
-        scenario = ActivityScenario.launch(ProviderTestActivity::class.java)
+        // createEmptyComposeRule does not own an Activity.  Samsung can briefly retain the
+        // previous test Activity's composition when ActivityScenario launches a new host, so
+        // launch synchronously and wait for RESUMED before registering this test's content.
+        finishLingeringProviderTestActivities()
+        currentActivity = instrumentation.startActivitySync(
+            Intent(context, ProviderTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as ProviderTestActivity
+        waitForActivityStage(checkNotNull(currentActivity), Stage.RESUMED)
+        instrumentation.waitForIdleSync()
     }
 
     @After
     fun closeHostActivity() {
-        scenario.close()
+        currentActivity?.let { activity -> finishActivities(listOf(activity)) }
+        waitForNoProviderTestActivities()
+        currentActivity = null
     }
 
     @Test
     fun emptyStateChooserRemainsReachableAtTwoHundredPercentFont() {
         var selected: ProviderType? = null
-        scenario.onActivity { activity ->
-            activity.setContent {
-                CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
-                    AlpineProductTheme {
-                        ProviderProfilesScreen(
-                            connections = emptyList(),
-                            authorizingProfileId = null,
-                            deleteCandidate = null,
-                            onBack = {},
-                            onAddProvider = { selected = it },
-                            onEdit = {},
-                            onConnectionAction = {},
-                            onDelete = {},
-                            onConfirmDelete = {},
-                            onDismissDelete = {},
-                        )
-                    }
+        render {
+            CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
+                AlpineProductTheme {
+                    ProviderProfilesScreen(
+                        connections = emptyList(),
+                        authorizingProfileId = null,
+                        deleteCandidate = null,
+                        onBack = {},
+                        onAddProvider = { selected = it },
+                        onEdit = {},
+                        onConnectionAction = {},
+                        onDelete = {},
+                        onConfirmDelete = {},
+                        onDismissDelete = {},
+                    )
                 }
             }
         }
@@ -98,22 +117,20 @@ class ProviderScreensInstrumentedTest {
             connection("signed-out", ProviderConnectionState.SIGNED_OUT),
             connection("reauth", ProviderConnectionState.REAUTHENTICATION_REQUIRED),
         )
-        scenario.onActivity { activity ->
-            activity.setContent {
-                AlpineProductTheme {
-                    ProviderProfilesScreen(
-                        connections = connections,
-                        authorizingProfileId = null,
-                        deleteCandidate = null,
-                        onBack = {},
-                        onAddProvider = {},
-                        onEdit = {},
-                        onConnectionAction = {},
-                        onDelete = {},
-                        onConfirmDelete = {},
-                        onDismissDelete = {},
-                    )
-                }
+        render {
+            AlpineProductTheme {
+                ProviderProfilesScreen(
+                    connections = connections,
+                    authorizingProfileId = null,
+                    deleteCandidate = null,
+                    onBack = {},
+                    onAddProvider = {},
+                    onEdit = {},
+                    onConnectionAction = {},
+                    onDelete = {},
+                    onConfirmDelete = {},
+                    onDismissDelete = {},
+                )
             }
         }
 
@@ -129,23 +146,21 @@ class ProviderScreensInstrumentedTest {
     fun authorizingCardOwnsProgressAndCancellation() {
         var cancelCount = 0
         val active = connection("authorizing", ProviderConnectionState.SIGNED_OUT)
-        scenario.onActivity { activity ->
-            activity.setContent {
-                AlpineProductTheme {
-                    ProviderProfilesScreen(
-                        connections = listOf(active),
-                        authorizingProfileId = active.profile.id,
-                        deleteCandidate = null,
-                        onBack = {},
-                        onAddProvider = {},
-                        onEdit = {},
-                        onConnectionAction = {},
-                        onDelete = {},
-                        onConfirmDelete = {},
-                        onDismissDelete = {},
-                        onCancelAuthorization = { cancelCount += 1 },
-                    )
-                }
+        render {
+            AlpineProductTheme {
+                ProviderProfilesScreen(
+                    connections = listOf(active),
+                    authorizingProfileId = active.profile.id,
+                    deleteCandidate = null,
+                    onBack = {},
+                    onAddProvider = {},
+                    onEdit = {},
+                    onConnectionAction = {},
+                    onDelete = {},
+                    onConfirmDelete = {},
+                    onDismissDelete = {},
+                    onCancelAuthorization = { cancelCount += 1 },
+                )
             }
         }
 
@@ -160,27 +175,25 @@ class ProviderScreensInstrumentedTest {
     @Test
     fun connectionIssueShowsOnlyStableCodeAndFixedGuidance() {
         val failed = connection("failed", ProviderConnectionState.SIGNED_OUT)
-        scenario.onActivity { activity ->
-            activity.setContent {
-                AlpineProductTheme {
-                    ProviderProfilesScreen(
-                        connections = listOf(failed),
-                        authorizingProfileId = null,
-                        deleteCandidate = null,
-                        onBack = {},
-                        onAddProvider = {},
-                        onEdit = {},
-                        onConnectionAction = {},
-                        onDelete = {},
-                        onConfirmDelete = {},
-                        onDismissDelete = {},
-                        connectionIssues = mapOf(
-                            failed.profile.id to ProviderConnectionIssue.from(
-                                OAuthException("must-not-be-visible", OAuthFailureKind.NETWORK),
-                            ),
+        render {
+            AlpineProductTheme {
+                ProviderProfilesScreen(
+                    connections = listOf(failed),
+                    authorizingProfileId = null,
+                    deleteCandidate = null,
+                    onBack = {},
+                    onAddProvider = {},
+                    onEdit = {},
+                    onConnectionAction = {},
+                    onDelete = {},
+                    onConfirmDelete = {},
+                    onDismissDelete = {},
+                    connectionIssues = mapOf(
+                        failed.profile.id to ProviderConnectionIssue.from(
+                            OAuthException("must-not-be-visible", OAuthFailureKind.NETWORK),
                         ),
-                    )
-                }
+                    ),
+                )
             }
         }
 
@@ -196,20 +209,18 @@ class ProviderScreensInstrumentedTest {
         val profile = ProviderProfile.draft(ProviderType.GEMINI, "Google Gemini").copy(
             clientId = "owned-public-client-id",
         )
-        scenario.onActivity { activity ->
-            activity.setContent {
-                CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
-                    AlpineProductTheme {
-                        ProviderEditScreen(
-                            initialProfile = profile,
-                            isEditing = false,
-                            onBack = {},
-                            onSave = { _, selectedAction ->
-                                action = selectedAction
-                                emptyMap()
-                            },
-                        )
-                    }
+        render {
+            CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
+                AlpineProductTheme {
+                    ProviderEditScreen(
+                        initialProfile = profile,
+                        isEditing = false,
+                        onBack = {},
+                        onSave = { _, selectedAction ->
+                            action = selectedAction
+                            emptyMap()
+                        },
+                    )
                 }
             }
         }
@@ -224,16 +235,14 @@ class ProviderScreensInstrumentedTest {
     fun unchangedEditorBackDoesNotRequireDiscardConfirmation() {
         var backCount = 0
         val profile = ProviderProfile.draft(ProviderType.GEMINI, "Google Gemini")
-        scenario.onActivity { activity ->
-            activity.setContent {
-                AlpineProductTheme {
-                    ProviderEditScreen(
-                        initialProfile = profile,
-                        isEditing = false,
-                        onBack = { backCount += 1 },
-                        onSave = { _, _ -> emptyMap() },
-                    )
-                }
+        render {
+            AlpineProductTheme {
+                ProviderEditScreen(
+                    initialProfile = profile,
+                    isEditing = false,
+                    onBack = { backCount += 1 },
+                    onSave = { _, _ -> emptyMap() },
+                )
             }
         }
 
@@ -252,22 +261,20 @@ class ProviderScreensInstrumentedTest {
             label = longLabel,
             model = longModel,
         )
-        scenario.onActivity { activity ->
-            activity.setContent {
-                AlpineProductTheme {
-                    ProviderProfilesScreen(
-                        connections = listOf(active),
-                        authorizingProfileId = null,
-                        deleteCandidate = null,
-                        onBack = {},
-                        onAddProvider = {},
-                        onEdit = {},
-                        onConnectionAction = {},
-                        onDelete = {},
-                        onConfirmDelete = {},
-                        onDismissDelete = {},
-                    )
-                }
+        render {
+            AlpineProductTheme {
+                ProviderProfilesScreen(
+                    connections = listOf(active),
+                    authorizingProfileId = null,
+                    deleteCandidate = null,
+                    onBack = {},
+                    onAddProvider = {},
+                    onEdit = {},
+                    onConnectionAction = {},
+                    onDelete = {},
+                    onConfirmDelete = {},
+                    onDismissDelete = {},
+                )
             }
         }
 
@@ -296,28 +303,26 @@ class ProviderScreensInstrumentedTest {
             label = "긴 이름을 사용하는 Compact Provider 연결",
             model = "compact-provider-model-with-long-context-version",
         )
-        scenario.onActivity { activity ->
-            activity.setContent {
-                CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
-                    Box(
-                        modifier = Modifier
-                            .width(360.dp)
-                            .height(800.dp),
-                    ) {
-                        AlpineProductTheme {
-                            ProviderProfilesScreen(
-                                connections = listOf(active),
-                                authorizingProfileId = null,
-                                deleteCandidate = null,
-                                onBack = {},
-                                onAddProvider = {},
-                                onEdit = {},
-                                onConnectionAction = {},
-                                onDelete = {},
-                                onConfirmDelete = {},
-                                onDismissDelete = {},
-                            )
-                        }
+        render {
+            CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
+                Box(
+                    modifier = Modifier
+                        .width(360.dp)
+                        .height(800.dp),
+                ) {
+                    AlpineProductTheme {
+                        ProviderProfilesScreen(
+                            connections = listOf(active),
+                            authorizingProfileId = null,
+                            deleteCandidate = null,
+                            onBack = {},
+                            onAddProvider = {},
+                            onEdit = {},
+                            onConnectionAction = {},
+                            onDelete = {},
+                            onConfirmDelete = {},
+                            onDismissDelete = {},
+                        )
                     }
                 }
             }
@@ -332,28 +337,26 @@ class ProviderScreensInstrumentedTest {
     @Test
     fun providerChooserRemainsReachableInCompactLandscapeViewport() {
         var selected: ProviderType? = null
-        scenario.onActivity { activity ->
-            activity.setContent {
-                CompositionLocalProvider(LocalDensity provides Density(1f, 1f)) {
-                    Box(
-                        modifier = Modifier
-                            .width(800.dp)
-                            .height(360.dp),
-                    ) {
-                        AlpineProductTheme {
-                            ProviderProfilesScreen(
-                                connections = emptyList(),
-                                authorizingProfileId = null,
-                                deleteCandidate = null,
-                                onBack = {},
-                                onAddProvider = { selected = it },
-                                onEdit = {},
-                                onConnectionAction = {},
-                                onDelete = {},
-                                onConfirmDelete = {},
-                                onDismissDelete = {},
-                            )
-                        }
+        render {
+            CompositionLocalProvider(LocalDensity provides Density(1f, 1f)) {
+                Box(
+                    modifier = Modifier
+                        .width(800.dp)
+                        .height(360.dp),
+                ) {
+                    AlpineProductTheme {
+                        ProviderProfilesScreen(
+                            connections = emptyList(),
+                            authorizingProfileId = null,
+                            deleteCandidate = null,
+                            onBack = {},
+                            onAddProvider = { selected = it },
+                            onEdit = {},
+                            onConnectionAction = {},
+                            onDelete = {},
+                            onConfirmDelete = {},
+                            onDismissDelete = {},
+                        )
                     }
                 }
             }
@@ -365,6 +368,79 @@ class ProviderScreensInstrumentedTest {
             .assertHeightIsAtLeast(48.dp)
         compose.onNodeWithTag("provider_card_xai").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(ProviderType.XAI, selected) }
+    }
+
+    private fun render(content: @Composable () -> Unit) {
+        val activity = checkNotNull(currentActivity)
+        instrumentation.runOnMainSync {
+            activity.setContent {
+                Box(modifier = Modifier.testTag(PROVIDER_TEST_ROOT_TAG)) {
+                    content()
+                }
+            }
+        }
+        // setContent returns before Compose registers a root with an empty rule on some physical
+        // devices.  Wait for the explicit wrapper instead of letting the first UI assertion race
+        // that registration.
+        compose.waitUntil(ACTIVITY_LIFECYCLE_TIMEOUT_MS) {
+            runCatching {
+                compose.onNodeWithTag(PROVIDER_TEST_ROOT_TAG).assertExists()
+                true
+            }.getOrDefault(false)
+        }
+    }
+
+    private fun finishLingeringProviderTestActivities() {
+        val activities = providerTestActivities()
+        if (activities.isEmpty()) return
+        finishActivities(activities)
+        waitForNoProviderTestActivities()
+    }
+
+    private fun finishActivities(activities: List<ProviderTestActivity>) {
+        instrumentation.runOnMainSync {
+            activities.forEach { activity ->
+                if (!activity.isFinishing && !activity.isDestroyed) {
+                    activity.finish()
+                }
+            }
+        }
+        instrumentation.waitForIdleSync()
+    }
+
+    private fun waitForActivityStage(activity: ProviderTestActivity, stage: Stage) {
+        waitForCondition("ProviderTestActivity reaches $stage") {
+            activitiesInStage(stage).any { it === activity }
+        }
+    }
+
+    private fun waitForNoProviderTestActivities() {
+        waitForCondition("all ProviderTestActivity instances finish") {
+            providerTestActivities().isEmpty()
+        }
+    }
+
+    private fun providerTestActivities(): List<ProviderTestActivity> =
+        ACTIVE_ACTIVITY_STAGES.flatMap(::activitiesInStage).distinct()
+
+    private fun activitiesInStage(stage: Stage): List<ProviderTestActivity> {
+        var activities = emptyList<ProviderTestActivity>()
+        instrumentation.runOnMainSync {
+            activities = ActivityLifecycleMonitorRegistry.getInstance()
+                .getActivitiesInStage(stage)
+                .filterIsInstance<ProviderTestActivity>()
+        }
+        return activities
+    }
+
+    private fun waitForCondition(description: String, predicate: () -> Boolean) {
+        val deadline = SystemClock.elapsedRealtime() + ACTIVITY_LIFECYCLE_TIMEOUT_MS
+        while (SystemClock.elapsedRealtime() < deadline) {
+            if (predicate()) return
+            instrumentation.waitForIdleSync()
+            SystemClock.sleep(ACTIVITY_LIFECYCLE_POLL_MS)
+        }
+        check(predicate()) { "Timed out while waiting for $description" }
     }
 
     private fun connection(
@@ -397,5 +473,18 @@ class ProviderScreensInstrumentedTest {
         return ProviderConnection(profile, state, session)
     }
 }
+
+private val ACTIVE_ACTIVITY_STAGES = listOf(
+    Stage.CREATED,
+    Stage.STARTED,
+    Stage.RESUMED,
+    Stage.PAUSED,
+    Stage.STOPPED,
+    Stage.RESTARTED,
+)
+
+private const val ACTIVITY_LIFECYCLE_TIMEOUT_MS = 5_000L
+private const val ACTIVITY_LIFECYCLE_POLL_MS = 25L
+private const val PROVIDER_TEST_ROOT_TAG = "provider_test_root"
 
 class ProviderTestActivity : ComponentActivity()

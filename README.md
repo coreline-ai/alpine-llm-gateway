@@ -101,7 +101,7 @@
 </table>
 
 
-> **의도적으로 제외한 상태** — 실제 OAuth 브라우저·callback, 계정 정보, public client ID 입력값, token/credential, 사용자 workspace 경로·terminal 출력, 파괴적 package/Runtime 확인 dialog는 저장소 이미지로 남기지 않습니다. 이 갤러리는 모든 사용자별·민감 상태가 아니라, 현재 검토 가능한 제품 핵심 플로우를 보여 줍니다.
+> **의도적으로 제외한 상태** — 실제 OAuth 브라우저·callback, 계정 정보, public client ID 입력값, token/credential, 사용자 workspace 경로·terminal 출력, 파괴적 package/Runtime 확인 dialog는 저장소 이미지로 남기지 않습니다. 이 갤러리는 모든 사용자별·민감 상태가 아니라, 현재 검토 가능한 제품 핵심 플로우를 보여 줍니다. CI는 preview 크기·link·PNG CRC와 허용된 image/color chunk만 검사해 EXIF·text·time metadata가 포함된 screenshot을 거부합니다. 단, visible pixel의 공개 가능 여부는 계속 사람이 검토합니다.
 </details>
 
 ## 🧭 두 가지 실행 모드
@@ -144,7 +144,7 @@ flowchart LR
 4. Alpine Guest에는 token 대신 loopback endpoint와 짧은 TTL capability 파일만 제공합니다.
 5. Host Bridge는 bounded concurrency, timeout, request ID, redacted error와 health metric을 적용합니다.
 6. Python Gateway는 기본 `127.0.0.1` bind, 모델 allowlist, 입력·출력·SSE 크기 제한을 적용합니다.
-7. 패키지 install은 exact allowlist와 사용자 승인 모두를 통과한 이름만 고정 `apk add` 명령으로 실행합니다. delete는 별도 removable allowlist, update는 지정 allowlist package만 고정 argv로 실행하며 whole-system update는 제공하지 않습니다.
+7. 패키지 install/delete/update는 exact allowlist와 사용자 승인 뒤 동일한 고정 `apk --simulate` argv를 먼저 실행합니다. 사전 확인이 실패하거나 timeout이면 실제 mutation은 보내지 않습니다. 통과한 이름만 `apk add`/`del`/지정 `upgrade`로 실행하며 whole-system update·자동 retry는 제공하지 않습니다.
 
 <a id="modules"></a>
 ## 🧩 모듈 구성
@@ -262,39 +262,41 @@ ANDROID_SERIAL=<device-serial> ./gradlew :integrated-app:connectedDebugAndroidTe
 | 항목 | 상태 | 기준 |
 |---|---|---|
 | Python unit/compile/smoke | ✅ CI PASS | GitHub Actions `Python 3.11` |
-| 결정론 Provider fault matrix | ✅ Local PASS | Python Gateway 106/106; status·timeout·malformed/oversized SSE·strict UTF-8·no-retry |
+| 결정론 Provider fault matrix | ✅ Local PASS | Python 114/114; status·timeout·malformed/oversized SSE·strict UTF-8·no-retry |
 | Android modules·publication matrix | ✅ CI PASS | remote run `30807869557`, commit `3389fcb` |
 | 통합 앱 compile·unit·lint·APK | ✅ Local PASS | 2026-08-09 Alpine fallback viewport·접근성·한글 IME 반영 |
-| Samsung Android regression | ✅ PASS | OAuth core 3/3, Provider 12/12, Runtime Compose 8/8, integrated-app 10/10 |
+| Samsung Android regression | ✅ PASS | OAuth core 3/3, Provider 12/12, Runtime Compose 10/10, integrated-app 10/10; test setup은 DreamActivity만 wake하고 Keyguard를 우회하지 않음 |
 | Samsung Demo 전체 회귀 | ✅ 35/35 PASS | Provider·Chat·lifecycle·Markdown·theme |
 | Samsung OAuth lifecycle | ✅ Local PASS | OAuth core 3건 + Provider 12건 + 복구 3건 + credential-free `am force-stop` cold start |
 | Samsung Provider 변경 회귀 | ✅ 25/25 PASS | OAuth 저장소 3건 + Provider 12건 + Integrated 10건 |
 | Integrated APK OAuth/app boundary scan | ✅ Local PASS | production source·APK에서 consumer/CLI fingerprint·known copied registration/API key/private key·demo/probe/sample package를 fail-closed 검사 |
 | arm64 Runtime·PTY·Bridge·Gateway probe | ✅ PASS | Samsung actual PRoot: initial `stty size=28 96`, fail-closed `INITIAL_SIZE_ONLY`/`TERMINAL_RESIZE_UNSUPPORTED`, terminal exit event, Host lifecycle `STARTED:3`/`STOPPED:3`, restart/repair healthy |
+| forkpty direct PTY safety / PRoot signal gap | ⚠️ Fail-closed verified | native shell 3/3: kernel `SIGWINCH`, input, unsafe input rejection, exec/terminate lifecycle PASS; unpatched PRoot: dynamic `stty`/input/repeat/storm/close PASS but guest `SIGWINCH` trap 미수신 → `DYNAMIC` 미승격 |
 | ANSI terminal screen renderer·exit summary | ✅ Local PASS | colour·cursor·clear·alternate screen·CJK·raw output 없는 마지막 종료 code unit regression + integrated compile |
 | Developer tool fixed smoke workflow | ✅ Local PASS | reusable direct argv Python·Git·SSH·Node profile + API/Host regression; actual repository install은 `NOT_RUN` |
-| Runtime Compose package/tool action | ✅ Samsung PASS | 8/8 — terminal accessibility/한글 IME·Enter/Tab/Esc/Ctrl+C external key regression·exit summary·confirmed SIGTERM/SIGKILL, fixed Git smoke, package snapshot/workspace action forwarding |
+| Runtime Compose package/tool action | ✅ Samsung PASS | 10/10 — terminal accessibility/한글 IME·Enter/Tab/Esc/Ctrl+C external key regression·exit summary·confirmed SIGTERM/SIGKILL, fixed Git smoke, package snapshot/workspace action forwarding, simulation failure와 oversized snapshot total의 bounded guidance |
 | Android 12 tablet Runtime Compose | ✅ PASS | 8/8 — scroll container 안에서 package 검토와 workspace import/export/share action이 실제 터치 target으로 노출되고 terminal key regression이 통과 |
-| Foreground-service process lease | ✅ Local PASS | background 4/4 — first start/last stop, nested terminal·command, duplicate close, FGS start-rejection host-policy callback; actual notification cleanup은 `NOT_RUN` |
-| Package metadata snapshot UI | ✅ Local PASS | exact allowlist의 license·download/installed payload·network/estimate boundary; live dependency preflight는 `NOT_RUN` |
-| README UI 갤러리·design contract | ✅ Local PASS | 17개 실제 Android PNG, 원본 기기 해상도 허용 목록·경로·미리보기 너비 검사 |
-| Workspace SAF·share boundary | ✅ Samsung PASS | 5/5 — test `content://` import/export, 이름 정규화, size cap, provider 오류 축소, app-private atomic share file; DocumentsUI full manual flow는 `NOT_RUN` |
-| bounded Gateway 복구·package mutation·workspace diff | ✅ Local PASS | supervisor/package/workspace unit test + 통합 APK build |
+| Foreground-service process lease | ✅ Samsung PASS | background unit 4/4 + Samsung module instrumentation 1/1 — terminal·command의 마지막 `STOPPED` 뒤 FGS state/service와 test-only permission의 app-owned notification 제거 확인; OEM Doze/reboot는 `NOT_RUN` |
+| Package metadata snapshot·simulation | ✅ Local/Samsung PASS | exact allowlist·approval 뒤 fixed `apk --simulate` failure·timeout·transport error는 mutation 없이 `PREFLIGHT_FAILED`; snapshot license·payload estimate는 표시용이며 byte total overflow는 exact total 대신 bounded 안내를 보인다. live index freshness·network·dependency total·disk-full은 `NOT_RUN` |
+| README UI 갤러리·design contract | ✅ Local PASS | 15개 실제 Android PNG, 원본 기기 해상도 허용 목록·경로·미리보기 너비 및 안전 PNG chunk 검사 |
+| Workspace SAF·share boundary | ✅ Samsung PASS | 6/6 — test `content://` import/export, 이름 정규화, export size cap·oversize destination 보존, provider 오류 축소, app-private atomic share file; DocumentsUI full manual flow는 `NOT_RUN` |
+| bounded Gateway 복구·package mutation·workspace diff | ✅ Local PASS | supervisor는 명시적 Stop/owner 변경 때 recovery lease를 즉시 revoke하고, 이미 시작된 restart도 안정 Stop으로 수렴시킨다. prompt·terminal command·Provider dispatch는 재실행하지 않는다. |
 | Gateway process crash·package network/disk-full | ⏳ `NOT_RUN` | 실제 runtime/repository 조건과 destructive matrix 필요 |
 | Android 12 tablet integrated regression | ✅ PASS | fake Provider 기반 integrated-app 10/10 — approval/decline fallback, Korean IME·TalkBack semantics, compact 200% guide, history·mode flow; manual gesture/contrast QA는 `NOT_RUN` |
 | 실제 Provider 계정 OAuth/API E2E | ⏳ `NOT_RUN` | 앱 소유 registration·계정 승인 필요 |
 | x86_64 emulator E2E | ⛔ BLOCKED | 연결된 검증 emulator 없음 |
-| 공개 배포 | ⛔ `NO-GO` | release readiness 10개 gate 중 6개 release blocker BLOCKED |
+| 공개 배포 | ⛔ `NO-GO` | release readiness 10개 gate 중 7개 release blocker BLOCKED — current deliverable의 GitHub remote CI도 미검증 |
 
 Remote CI의 최신 성공은 원격 `main`의 기준선입니다. 현재 로컬 commit 또는 working tree가 Push되지 않았다면 그 변경은 원격 CI로 검증된 것으로 간주하지 않습니다.
 
 ## ⚠️ 현재 제한
 
 - arm64-v8a는 제품 검증 대상이며 x86_64 pack은 emulator E2E 전까지 실험 상태입니다.
-- Probe-only relay21은 initial/active same-PTY guest tracee가 physical foreground group임을 확인했고,
-  PRoot 없는 host PTY control은 `TIOCSWINSZ → SIGWINCH → 이후 input`을 통과했습니다. 그러나 PRoot session은
-  resize 뒤 guest signal과 fixed marker·helper input이 재개되지 않았습니다. 이 evidence는 제품 기능이 아니며,
-  제품 터미널은 실행 중 동적 resize를 계속 `INITIAL_SIZE_ONLY`로 명시합니다.
+- production terminal은 `forkpty()` direct-exec를 우선 사용합니다. Samsung native shell fixture는
+  `TIOCSWINSZ → SIGWINCH → 이후 input`과 child lifecycle을 통과했습니다. 같은 direct topology의 unpatched
+  PRoot는 guest `stty` dynamic/repeat/storm·input·close는 통과했지만 guest foreground shell `SIGWINCH` trap은
+  받지 못했습니다. 이 expected-negative diagnostic은 제품 기능이 아니며, 제품 터미널은 실행 중 동적 resize를
+  계속 `INITIAL_SIZE_ONLY`로 명시합니다. physical rotation과 `vi`/`nano`/`top` full TUI는 `NOT_RUN`입니다.
 
 - Probe-only relay24는 host-master resize와 post-launch signal 없이 private memfd winsize 경로를 검증했지만,
   Samsung에서 PRoot guest read/apply와 이후 input 재개에 실패했습니다. 같은 private request를 validate/ack만
@@ -305,7 +307,6 @@ Remote CI의 최신 성공은 원격 `main`의 기준선입니다. 현재 로컬
   TUI·dynamic resize·input replay/retry는 지원하지 않습니다.
 - 실제 Provider direct OAuth는 앱 소유 registration과 inference 사용 승인이 필요합니다.
 - Gemini 외 direct Provider는 승인된 model catalog를 번들하지 않으며, 앱 소유자가 입력한 model만 후보로 노출합니다.
-- BFF request/cancel/revocation registry는 단일 process memory 구현이며 다중 replica 전 Redis 경계가 필요합니다.
 - Play Asset Delivery 전체 E2E는 signed AAB와 Play test track이 필요합니다.
 - Provider OAuth의 credential-free Activity 재생성·`am force-stop` 복구는 통과했지만, 실제 계정 browser callback 도중 process kill과 Runtime 재부팅·Doze 검증은 승인 창이 필요합니다.
 - Workspace는 app-private bounded text file과 one-shot SAF transfer를 지원합니다. 실제 DocumentsUI에서 선택한 파일을 import → 편집 → 실행 중 terminal과 연결 → export/share하는 수동 사용성 흐름은 Runtime 설치 후 별도 검증이 필요합니다.

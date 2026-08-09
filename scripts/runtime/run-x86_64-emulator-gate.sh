@@ -10,20 +10,20 @@ ALLOW_SKIP="false"
 
 mkdir -p "$(dirname "$REPORT")"
 write_report() {
-  local status="$1" serial="${2:-}" reason="${3:-}" api_level="${4:-}" model="${5:-}"
-  python3 - "$ROOT" "$REPORT" "$status" "$serial" "$reason" "$api_level" "$model" <<'PY'
+  local status="$1" reason="${2:-}" api_level="${3:-}" model="${4:-}"
+  python3 - "$ROOT" "$REPORT" "$status" "$reason" "$api_level" "$model" <<'PY'
 import json
 import sys
 from pathlib import Path
 
-root, output, status, serial, reason, api_level, model = sys.argv[1:]
+root, output, status, reason, api_level, model = sys.argv[1:]
 lock = json.loads((Path(root) / "runtime/alpine-3.21.3-x86_64.lock.json").read_text())
 report = {
-    "schema_version": 2,
+    "schema_version": 3,
     "abi": "x86_64",
     "status": status,
-    "serial": serial,
     "reason": reason,
+    "device_class": "android_emulator",
     "device": {
         "model": model or None,
         "api_level": int(api_level) if api_level.isdigit() else None,
@@ -49,13 +49,13 @@ PY
 }
 
 if [[ ! -x "$ADB" ]]; then
-  write_report "BLOCKED" "" "ADB_NOT_FOUND"
+  write_report "BLOCKED" "ADB_NOT_FOUND"
   exit 2
 fi
 
 SERIAL=""
 if ! DEVICE_LIST="$("$ADB" devices 2>/dev/null)"; then
-  write_report "BLOCKED" "" "ADB_UNAVAILABLE"
+  write_report "BLOCKED" "ADB_UNAVAILABLE"
   exit 2
 fi
 while read -r candidate state; do
@@ -70,7 +70,7 @@ while read -r candidate state; do
 done < <(printf '%s\n' "$DEVICE_LIST" | awk 'NR > 1 {print $1, $2}')
 
 if [[ -z "$SERIAL" ]]; then
-  write_report "SKIP_NO_X86_64_EMULATOR" "" "NO_CONNECTED_X86_64_EMULATOR"
+  write_report "SKIP_NO_X86_64_EMULATOR" "NO_CONNECTED_X86_64_EMULATOR"
   [[ "$ALLOW_SKIP" == "true" ]] && exit 0
   exit 3
 fi
@@ -80,14 +80,14 @@ MODEL="$($ADB -s "$SERIAL" shell getprop ro.product.model 2>/dev/null | tr -d '\
 BOOT_DEADLINE=$((SECONDS + BOOT_TIMEOUT_SECONDS))
 while [[ "$($ADB -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" != "1" ]]; do
   if (( SECONDS >= BOOT_DEADLINE )); then
-    write_report "FAILED" "$SERIAL" "EMULATOR_BOOT_TIMEOUT" "$API_LEVEL" "$MODEL"
+    write_report "FAILED" "EMULATOR_BOOT_TIMEOUT" "$API_LEVEL" "$MODEL"
     exit 1
   fi
   sleep 2
 done
 
 if ! PROBE_RESULT="$($ROOT/scripts/runtime/run-probe-device.sh "$SERIAL" false)"; then
-  write_report "FAILED" "$SERIAL" "RUNTIME_PROBE_FAILED" "$API_LEVEL" "$MODEL"
+  write_report "FAILED" "RUNTIME_PROBE_FAILED" "$API_LEVEL" "$MODEL"
   exit 1
 fi
 if ! printf '%s' "$PROBE_RESULT" | python3 -c '
@@ -103,7 +103,7 @@ assert result.get("terminal_responded") is True
 assert result.get("terminal_prompted") is True
 assert result.get("restart_probe_ok") is True
 '; then
-  write_report "FAILED" "$SERIAL" "RUNTIME_PROBE_DID_NOT_PASS" "$API_LEVEL" "$MODEL"
+  write_report "FAILED" "RUNTIME_PROBE_DID_NOT_PASS" "$API_LEVEL" "$MODEL"
   exit 1
 fi
-write_report "PASSED" "$SERIAL" "" "$API_LEVEL" "$MODEL"
+write_report "PASSED" "" "$API_LEVEL" "$MODEL"

@@ -102,63 +102,87 @@ interface HostLlmBridge {
     }
 }
 
-class OAuthLlmSession(
+/**
+ * Credential operations needed by [OAuthLlmSession].
+ *
+ * This stays internal so the public session constructor continues to require [OAuthManager],
+ * while unit tests can prove that a refreshed credential never causes an inference replay.
+ */
+internal interface OAuthLlmCredentialSource {
+    suspend fun validToken(): OAuthTokenStore.Token?
+
+    suspend fun refreshAfterUnauthorized(
+        rejectedAccessToken: String,
+    ): OAuthTokenStore.Token?
+}
+
+private class OAuthManagerCredentialSource(
     private val oauth: OAuthManager,
+) : OAuthLlmCredentialSource {
+    override suspend fun validToken(): OAuthTokenStore.Token? = oauth.validToken()
+
+    override suspend fun refreshAfterUnauthorized(
+        rejectedAccessToken: String,
+    ): OAuthTokenStore.Token? = oauth.refreshAfterUnauthorized(rejectedAccessToken)
+}
+
+class OAuthLlmSession private constructor(
+    private val credentials: OAuthLlmCredentialSource,
     private val bridge: HostLlmBridge,
 ) {
+    constructor(
+        oauth: OAuthManager,
+        bridge: HostLlmBridge,
+    ) : this(OAuthManagerCredentialSource(oauth), bridge)
+
+    internal companion object {
+        fun forTesting(
+            credentials: OAuthLlmCredentialSource,
+            bridge: HostLlmBridge,
+        ): OAuthLlmSession = OAuthLlmSession(credentials, bridge)
+    }
+
     suspend fun complete(requestJson: String): HostLlmResult {
-        val token = oauth.validToken()
-            ?: throw OAuthRequiredException(oauth)
+        val token = credentials.validToken()
+            ?: throw OAuthRequiredException()
         val first = bridge.complete(
             requestJson,
             OAuthCredential(token.accessToken, token.tokenType, token.metadata["account_id"]),
         )
-        if (first.statusCode != 401) return first
-
-        val refreshed = oauth.refreshAfterUnauthorized(token.accessToken)
-            ?: throw OAuthRequiredException(oauth)
-        val retried = bridge.complete(
-            requestJson,
-            OAuthCredential(
-                refreshed.accessToken,
-                refreshed.tokenType,
-                refreshed.metadata["account_id"],
-            ),
-        )
-        if (retried.statusCode == 401) {
-            oauth.invalidateIfCurrent(refreshed.accessToken)
-            throw OAuthRequiredException(oauth)
-        }
-        return retried
+        return refreshWithoutInferenceReplay(first.statusCode, token.accessToken) { first }
     }
 
     suspend fun stream(requestJson: String): HostLlmStreamResult {
-        val token = oauth.validToken()
-            ?: throw OAuthRequiredException(oauth)
+        val token = credentials.validToken()
+            ?: throw OAuthRequiredException()
         val first = bridge.stream(
             requestJson,
             OAuthCredential(token.accessToken, token.tokenType, token.metadata["account_id"]),
         )
-        if (first.statusCode != 401) return first
+        return refreshWithoutInferenceReplay(first.statusCode, token.accessToken) { first }
+    }
 
-        val refreshed = oauth.refreshAfterUnauthorized(token.accessToken)
-            ?: throw OAuthRequiredException(oauth)
-        val retried = bridge.stream(
-            requestJson,
-            OAuthCredential(
-                refreshed.accessToken,
-                refreshed.tokenType,
-                refreshed.metadata["account_id"],
-            ),
-        )
-        if (retried.statusCode == 401) {
-            oauth.invalidateIfCurrent(refreshed.accessToken)
-            throw OAuthRequiredException(oauth)
+    /**
+     * A 401 can refresh the stored credential for the *next user action*, but never replays this
+     * inference request. The Provider may have accepted a POST even when the client observes an
+     * authentication failure, and current adapters have no verified inference idempotency key.
+     */
+    private suspend fun <T> refreshWithoutInferenceReplay(
+        statusCode: Int,
+        rejectedAccessToken: String,
+        originalResult: () -> T,
+    ): T {
+        if (statusCode != 401) return originalResult()
+        if (credentials.refreshAfterUnauthorized(rejectedAccessToken) == null) {
+            throw OAuthRequiredException()
         }
-        return retried
+        return originalResult()
     }
 }
 
-class OAuthRequiredException(@Suppress("UNUSED_PARAMETER") manager: OAuthManager) : Exception(
+class OAuthRequiredException() : Exception(
     "OAuth login is required before calling the LLM provider",
-)
+) {
+    /** Retained for source/binary compatibility; the session no longer needs the manager value. */
+    constructor(@Suppress("UNUSED_PARAMETER") manager: OAuthManager) : this()
+}

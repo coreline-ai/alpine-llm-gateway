@@ -26,6 +26,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.unit.Density
 import dev.alpine.runtime.api.RuntimeLifecycleState
 import dev.alpine.runtime.api.RuntimePackageCatalog
+import dev.alpine.runtime.api.RuntimePackageInstallOutcome
 import dev.alpine.runtime.api.RuntimePackageMetadata
 import dev.alpine.runtime.api.RuntimeState
 import dev.alpine.runtime.host.RuntimeHostState
@@ -206,6 +207,81 @@ class RuntimeAccessibilityInstrumentedTest {
             .performClick()
         // The modal intentionally repeats the snapshot shown in the background selection summary.
         compose.onAllNodes(hasText("Alpine v3.21 aarch64 APKINDEX", substring = true)).assertCountEquals(2)
+    }
+
+    @Test
+    fun packageSimulationFailureUsesStableGuidanceWithoutProjectingApkOutput() {
+        val state = RuntimeHostState(
+            runtimeState = RuntimeState(RuntimeLifecycleState.RUNNING),
+            sessionActive = true,
+            packageOutcome = RuntimePackageInstallOutcome.PREFLIGHT_FAILED,
+        )
+        compose.setContent {
+            MaterialTheme {
+                RuntimePackagePanel(
+                    state = state,
+                    allowlistedPackages = setOf("git"),
+                    onApprovedInstall = {},
+                )
+            }
+        }
+
+        compose.onNode(hasText("사전 확인 실패")).assertExists()
+        compose.onNode(hasText("실제 설치는 시작하지 않았습니다.", substring = true)).assertExists()
+    }
+
+    @Test
+    fun packageSnapshotOverflowShowsBoundedGuidanceInsteadOfAnExactTotal() {
+        val state = RuntimeHostState(
+            runtimeState = RuntimeState(RuntimeLifecycleState.RUNNING),
+            sessionActive = true,
+        )
+        val catalog = RuntimePackageCatalog(
+            listOf(
+                RuntimePackageMetadata(
+                    packageName = "git",
+                    version = "2.47.3-r0",
+                    licenseExpression = "GPL-2.0-only",
+                    downloadBytes = Long.MAX_VALUE,
+                    installedBytes = Long.MAX_VALUE,
+                    repository = "main",
+                    architecture = "aarch64",
+                    snapshotId = "test snapshot",
+                    sourceUrl = "https://example.test/alpine-index",
+                ),
+                RuntimePackageMetadata(
+                    packageName = "curl",
+                    version = "8.14.1-r2",
+                    licenseExpression = "curl",
+                    downloadBytes = 1,
+                    installedBytes = 1,
+                    repository = "main",
+                    architecture = "aarch64",
+                    snapshotId = "test snapshot",
+                    sourceUrl = "https://example.test/alpine-index",
+                ),
+            ),
+        )
+        compose.setContent {
+            MaterialTheme {
+                ScrollableRuntimeTestContent {
+                    RuntimePackagePanel(
+                        state = state,
+                        allowlistedPackages = setOf("git", "curl"),
+                        onApprovedInstall = {},
+                        packageCatalog = catalog,
+                    )
+                }
+            }
+        }
+
+        compose.onNode(hasTestTag("runtime_package_selection"))
+            .performScrollTo()
+            .performTextInput("git curl")
+        compose.onNode(hasText("합계는 snapshot 표시 범위를 넘었습니다.", substring = true))
+            .performScrollTo()
+            .assertIsDisplayed()
+        compose.onAllNodes(hasText("합계(알려진 항목):", substring = true)).assertCountEquals(0)
     }
 
     @Test

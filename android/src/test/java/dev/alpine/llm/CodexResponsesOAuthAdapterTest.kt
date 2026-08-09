@@ -12,15 +12,17 @@ class CodexResponsesOAuthAdapterTest {
     private val endpoint = "https://provider.example.test/v1/responses"
 
     @Test
-    fun contractUsesStandardLoopbackTokenRequestWithoutClientFingerprints() {
+    fun contractUsesCodexLoopbackAndJsonTokenRequest() {
         val config = CodexOAuthContract.providerConfig("codex-profile", "public-client")
 
         assertEquals(CodexOAuthContract.AUTHORIZATION_ENDPOINT, config.authorizationEndpoint)
         assertEquals(CodexOAuthContract.TOKEN_ENDPOINT, config.tokenEndpoint)
         assertEquals("http://localhost:1455/auth/callback", config.redirectUri())
         assertTrue(config.callbackFallbackPorts.isEmpty())
-        assertEquals(OAuthTokenRequestEncoding.FORM_URLENCODED, config.tokenRequestEncoding)
-        assertTrue(config.extraAuthorizationParams.isEmpty())
+        assertEquals(OAuthTokenRequestEncoding.JSON, config.tokenRequestEncoding)
+        assertEquals("true", config.extraAuthorizationParams["codex_cli_simplified_flow"])
+        assertEquals("codex_cli_rs", config.extraAuthorizationParams["originator"])
+        assertEquals("true", config.extraAuthorizationParams["id_token_add_organizations"])
         val request = mapOf("grant_type" to "authorization_code", "code_verifier" to "verifier")
         assertEquals(
             request,

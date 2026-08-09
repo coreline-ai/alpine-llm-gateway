@@ -71,10 +71,11 @@ dependencies {
 - raw OAuth token은 Linux 환경 변수로 전달하지 않는다. LLM bridge는 loopback URL과 TTL capability file 경로만 기여한다.
 - fallback은 runtime 준비 실패에 한해 사용자 승인 전에만 가능하고 Provider dispatch 이후에는 금지한다.
 - 현재 backend idempotency capability는 `NONE`이다. 검증되지 않은 Provider 요청을 router가 재전송하지 않는다.
-- 패키지 설치는 exact allowlist와 명시적 승인을 모두 통과한 이름만 고정 `apk add` 명령으로 실행한다. delete는 별도 removable allowlist, update는 allowlist의 지정 package만 고정 `apk del`/`apk upgrade` argv로 실행하며 whole-system update와 임의 subcommand를 허용하지 않는다.
+- 패키지 install/delete/update는 exact allowlist와 명시적 승인 뒤 고정 `apk --simulate` argv를 먼저 실행한다. simulation의 non-zero·timeout·transport error는 `PREFLIGHT_FAILED`로 끝나며 mutating argv는 보내지 않는다. 통과한 경우에만 install은 `apk add`, delete는 removable allowlist의 `apk del`, update는 allowlist 지정 package의 `apk upgrade` argv를 실행한다. whole-system update·임의 subcommand·automatic retry는 허용하지 않는다. simulation은 cached index 기반이므로 network/freshness/capacity 보장은 아니다.
 - `RuntimePackageCatalog`은 pack/Host가 주입하는 display-only snapshot이다. license와 direct package
   download/installed payload를 approval UI에 표시할 수 있지만, dependency/index/cache/filesystem overhead와
-  현재 repository solver 결과를 포함하지 않으며 allowlist/argv를 바꾸지 않는다. 통합 앱 기준은
+  현재 repository solver 결과를 포함하지 않으며 allowlist/argv를 바꾸지 않는다. byte total overflow는
+  `totalBytesOverflowed`로 표시해 정확한 capacity value를 숨긴다. 통합 앱 기준은
   [Alpine package catalog snapshot](alpine-package-catalog-20260808.md)이다.
 - Probe는 Native PTY의 실행 중 winsize가 guest `stty`/독립 helper에서 `40×120`으로 보이는 것을 확인했지만,
   PRoot session에서 Android `TIOCSWINSZ` 뒤 guest `SIGWINCH`와 input 재개를 보장하지 못한다. relay21은
@@ -100,7 +101,8 @@ dependencies {
 - workspace adapter는 absolute/traversal/NUL/symlink 경로를 거부하며 bounded read/write와 같은 디렉터리
   atomic move를 사용한다.
 - Android workspace adapter는 persisted SAF permission을 요구하지 않는다. 사용자가 고른 URI를 한 번만
-  bounded transfer하고, share 대상은 app-private cache file을 Host `FileProvider`로 명시적으로 공개한다.
+  bounded transfer하며, export는 caller가 전달한 상한(기본 16 MiB)을 `ContentResolver` write 전에
+  fail-closed로 검사한다. share 대상은 app-private cache file을 Host `FileProvider`로 명시적으로 공개한다.
 
 ## 현재 상태와 다음 단계
 

@@ -40,9 +40,22 @@ class WorkspaceSafTransferInstrumentedTest {
     fun exportWritesOnlyExplicitDestinationUri() {
         val expected = byteArrayOf(1, 2, 3, 4)
 
-        transfer.writeExport(expected, export)
+        transfer.writeExport(expected, export, maxBytes = expected.size.toLong())
 
         assertArrayEquals(expected, resolver.openInputStream(export)!!.use { it.readBytes() })
+    }
+
+    @Test
+    fun exportOverLimitIsRejectedBeforeTheDestinationIsOpenedOrChanged() {
+        val original = byteArrayOf(7, 8)
+        resolver.openOutputStream(export, "w")!!.use { it.write(original) }
+
+        val error = assertThrows(WorkspaceOperationException::class.java) {
+            transfer.writeExport(byteArrayOf(1, 2, 3), export, maxBytes = 2)
+        }
+
+        assertEquals(WorkspaceErrorCode.LIMIT_EXCEEDED, error.errorCode)
+        assertArrayEquals(original, resolver.openInputStream(export)!!.use { it.readBytes() })
     }
 
     @Test

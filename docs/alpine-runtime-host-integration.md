@@ -69,9 +69,12 @@ background start 거부는 안정 상태로 변환해 runtime을 `HOST_BACKGROUN
 WorkManager는 15분 이상 멈춘 상태 전이만 정리하며 Alpine 작업을 시작하거나 replay하지 않는다.
 
 background module의 deterministic lease regression은 첫 start/마지막 stop, terminal과 command가
-겹친 상태, duplicate stop, FGS start rejection의 host-policy callback을 검증한다. 이는 Service의
-실제 notification 표시·제거 또는 OEM background lifecycle 실기기 증거가 아니며, 해당 Samsung
-수동 matrix는 Doze/reboot 승인 전까지 `NOT_RUN`이다.
+겹친 상태, duplicate stop, FGS start rejection의 host-policy callback을 검증한다. 2026-08-09 Samsung에서는
+일회성 module test APK에만 notification permission을 부여해 terminal·command의 마지막 `STOPPED` 뒤
+`ACTIVE → STOPPED`, service 종료와 app-owned foreground notification 제거를 1/1로 확인했다. service는
+controller의 direct `stopService()` 경로에도 `onDestroy()`에서 `stopForeground(STOP_FOREGROUND_REMOVE)`를
+명시 호출한다. test APK와 permission은 검증 직후 제거했으며, 통합 제품의 사용자가 선택한 permission UX와
+OEM Doze/reboot/battery lifecycle은 여전히 `NOT_RUN`이다.
 
 ```kotlin
 val background = RuntimeForegroundServiceController(applicationContext)
@@ -141,10 +144,13 @@ android {
 
 `openTerminal()`은 PRoot guest 셸을 장기 process로 열고 bounded replay buffer, UTF-8 입력,
 Ctrl+C/Ctrl+D, terminate/kill과 process cleanup을 제공한다. guest wrapper가 최초 크기를 `stty`에
-적용하며, Native PTY launcher는 stale launch-time `COLUMNS`/`LINES` hint를 exec 전에 제거한다.
-지원 ABI에서는 `alpine-runtime-android`의 작은 native adapter가 `/dev/ptmx`를
-열고 PRoot를 controlling terminal에 연결하며 최초 창 크기를 적용한다. native PTY를 열 수 없는
-환경에서는 대화형 pipe 셸로 안전하게 fallback한다. 현재 PRoot는 시작 후 Android master의
+적용하며, Native PTY launcher는 stale launch-time `COLUMNS`/`LINES` hint를 exec 전에 제거한다. 두 값은
+Runtime이 kernel PTY 크기를 소유하는 reserved environment이므로 session·command·terminal request가 다시
+주입할 수 없으며, 시도는 `INVALID_REQUEST`로 fail-closed 처리한다.
+지원 ABI에서는 `alpine-runtime-android`의 작은 native adapter가 `forkpty()`로 child slave PTY를
+controlling terminal로 만든 뒤 PRoot를 direct `execve`하고, native child PID의 wait/terminate lifecycle을
+terminal session에 연결한다. native PTY를 열 수 없는 환경에서만 기존 `setsid` 경로와 대화형 pipe 셸로
+안전하게 fallback한다. 현재 PRoot는 시작 후 Android master의
 `TIOCSWINSZ` 변경을 guest `SIGWINCH`로 신뢰성 있게 전달하는 production contract가 없다. Probe는 같은
 PTY에서 guest `stty size=40 120`과 raw helper winsize를 확인했지만 shell `WINCH` trap이 수신되지 않아,
 SDK는 이를 성공으로 가장하지 않고 `resizeSupport=INITIAL_SIZE_ONLY`와
@@ -154,6 +160,14 @@ SDK는 이를 성공으로 가장하지 않고 `resizeSupport=INITIAL_SIZE_ONLY`
 hook 또는 대체 terminal architecture가 guest `stty`, foreground `SIGWINCH`, resize storm 및 대표 TUI를
 실기기에서 통과한 artifact에서만 `DYNAMIC`으로 활성화한다. FIFO ready, Host ioctl, tracee fd 조회는
 승격 근거가 아니다.
+
+2026-08-09 Samsung arm64 direct `forkpty` fixture는 native shell의 initial/dynamic size, kernel
+`SIGWINCH`, post-resize input, unsafe input/dimension rejection, child exec failure reaping과 lifecycle
+process-group termination을 모두 통과했다. 그러나 같은 direct topology의 **unpatched PRoot** fixture는 guest
+`stty` dynamic/repeat/storm 및 input/close를 통과하면서도 guest foreground shell `SIGWINCH` trap은 받지
+못했다. 이 diagnostic은 product `DYNAMIC`을 의미하지 않으며 Probe-only opt-in 외에는 dynamic resize를
+노출하지 않는다. actual physical rotation과 `vi`/`nano`/`top` full TUI acceptance도 `NOT_RUN`이다. 상세
+evidence는 `dev-plan/implement_20260809_082423.md`, architecture decision은 ADR 0006을 따른다.
 
 2026-08-08 Samsung Probe는 PRoot tracee가 `SIGWINCH=SIG_DFL`을 상속하도록 한 뒤에도 Android master
 `TIOCSWINSZ`가 guest signal-stop/ptrace reinjection을 만들지 않음을 기록했다. 별도 native foreground-group
@@ -221,6 +235,19 @@ resize 통과 증거가 아니라 local workaround 후보가 없다는 source bo
 `scripts/verify-proot-terminal-handoff.py`, `dev-plan/implement_20260809_071338.md`에 남기며 runtime은
 계속 `INITIAL_SIZE_ONLY`를 유지한다.
 
+후속 provenance refresh에서는 runtime lock과 일치하는 local read-only OpenMinis checkout으로 revision
+check를 실제 수행했고, arm64 packaged launcher/loader의 checksum·ABI·16 KiB alignment도 toolchain과 bundled
+artifact verifier로 재확인했다. 이는 source/binary 연결 증거이며 physical resize·guest `SIGWINCH`·TUI
+acceptance가 아니므로 runtime capability를 올리지 않는다.
+
+2026-08-09 read-only source candidate 재확인에서 OpenMinis `master`는 packaged runtime lock의 `8cf13e9`와
+동일했다. maintained Termux PRoot의 current `event_loop()`도 tracer의 default signal-ignore policy를 유지하며,
+공개 source/issue에서 Android guest `SIGWINCH` physical acceptance를 만족하는 즉시 이식 가능한 hook을 확인하지
+못했다. 이 비교는 exact cause나 Termux fork의 비호환성을 단정하지 않고, source candidate가 없을 때 product
+binary를 임의로 교체하지 않기 위한 경계다. fork 교체는 별도 provenance·legal·ABI/device acceptance workstream으로
+다루며, 그 전까지 runtime은 `INITIAL_SIZE_ONLY`를 유지한다. 세부 조사 기록은
+`dev-plan/implement_20260809_114746.md`에 있다.
+
 터미널 출력은 SDK controller에서 기본 256 KiB까지만 보존한다. 장기 log는 사용자가 명시한
 workspace 파일로 저장하고 화면 메모리에 무제한 누적하지 않는다.
 
@@ -252,13 +279,17 @@ UI에서 문자열을 그대로 `/bin/sh`에 전달하지 않는다.
 1. `RuntimePackageInstallRequest`가 패키지 이름과 개수를 검증한다.
 2. `RuntimePackageAllowlistPolicy`가 정확한 이름만 허용한다. 빈 allowlist는 모두 거부한다.
 3. Host UI가 패키지·network·저장 공간 사용을 보여주고 `RuntimePackageApproval`을 완료한다.
-4. core는 고정된 `/sbin/apk add --no-progress <validated names>`만 실행한다.
-5. 정책 거부와 사용자 취소는 command를 전혀 dispatch하지 않는다.
+4. core는 mutation 전 고정된 `/sbin/apk <add|del|upgrade> --simulate --no-progress <validated names>`를 실행한다.
+   non-zero·timeout·transport error이면 `PREFLIGHT_FAILED`를 반환하고 mutation command를 dispatch하지 않는다.
+5. simulation이 통과한 뒤에만 `/sbin/apk <add|del|upgrade> --no-progress <validated names>`를 실행한다.
+   policy 거부와 사용자 취소는 simulation을 포함한 command를 전혀 dispatch하지 않는다.
+6. simulation은 APK database를 변경하지 않지만 index refresh/missing-index download를 하지 않으므로
+   freshness, network, dependency total, filesystem capacity 또는 actual transaction을 보장하지 않는다.
 
 `RuntimePackageCatalog`은 Host/Runtime pack이 제공하는 **표시 전용** metadata contract다. 통합 앱은
 Alpine `v3.21/aarch64` `APKINDEX` snapshot의 version/license/download/installed payload를 표시하지만,
 이 값은 dependency solver, index/cache, filesystem overhead, repository 변경 또는 실제 transaction 결과를
-포함하지 않는다. catalog에 없는 package는 완전한 용량 estimate로 표시하지 않으며, catalog는 allowlist
+포함하지 않는다. catalog에 없는 package 또는 `totalBytesOverflowed` catalog total은 완전한 용량 estimate로 표시하지 않으며, catalog는 allowlist
 정책이나 command argv에 영향을 주지 않는다. 기준 값은
 [Alpine package catalog snapshot](alpine-package-catalog-20260808.md)을 참고한다.
 
@@ -276,6 +307,12 @@ version/license/download/disk size와 Samsung network matrix는 `NOT_RUN`이다.
 - process death: 새 manager가 설치 파일을 검사하고 거짓 RUNNING 상태를 만들지 않는다.
 - 부분 설치: 원자적 activation/rollback 후 `READY` 또는 `REPAIR_REQUIRED`가 된다.
 - reset: runtime 설치는 제거하지만 사용자 workspace는 보존한다.
+- Gateway 자동 복구: 이미 사용자 시작으로 healthy였던 Gateway만 monitor한다. 명시적 Stop,
+  Provider/model owner 교체, Host close는 recovery generation lease를 즉시 revoke한다. 이미 queue된
+  callback은 restart 전에 취소되고, non-cancellable lifecycle restart 도중 revoke되면 새 owner를 다시
+  `STOPPED`로 정리한다. 이 경로는 prompt, terminal command, Provider dispatch를 재실행하지 않는다.
+- Gateway 실제 crash/stale port/PID의 Samsung fault injection은 아직 `NOT_RUN`이며, 위 보장은
+  credential-free deterministic lifecycle regression 범위다.
 - 접근성: 상태는 live region/state description으로 읽히고, 고정 높이 본문 대신 scroll을 사용한다.
 - 입력: IME Send, 한글 UTF-8, Compose 외부 키 이벤트의 Enter·Tab·Esc·Ctrl+C 흐름을 확인한다.
   이는 physical external keyboard hardware/TUI 실사용 검증을 대체하지 않는다.

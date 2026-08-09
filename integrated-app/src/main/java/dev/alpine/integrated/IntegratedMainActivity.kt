@@ -132,7 +132,14 @@ class IntegratedMainActivity : ComponentActivity() {
             if (error != null || bytes == null) {
                 app.workspaceController.reportExternalFailure(workspaceErrorCode(error))
             } else {
-                runCatching { workspaceSafTransfer.writeExport(bytes, uri) }
+                runCatching {
+                    workspaceSafTransfer.writeExport(
+                        bytes = bytes,
+                        uri = uri,
+                        // Exported bytes originated from the same bounded workspace read.
+                        maxBytes = app.workspaceStore.limits.maxReadBytes,
+                    )
+                }
                     .onFailure { writeError ->
                         app.workspaceController.reportExternalFailure(workspaceErrorCode(writeError))
                     }

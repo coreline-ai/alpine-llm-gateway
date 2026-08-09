@@ -2,7 +2,7 @@
 
 ## 범위
 
-- 변경 범위: bounded Gateway 자동 복구, workspace line diff, SAF `content://` import/export·cache share publish 경계, allowlist 기반 package delete/update UI, package metadata snapshot/approval 경계, 10턴 fake Provider 회귀, actual arm64 PRoot terminal close lifecycle evidence
+- 변경 범위: bounded Gateway 자동 복구와 explicit Stop/owner swap recovery-lease 경쟁 방지, workspace line diff, SAF `content://` import/export·cache share publish 경계, allowlist 기반 package delete/update UI, package metadata snapshot/approval 경계, 10턴 fake Provider 회귀, actual arm64 PRoot terminal close lifecycle evidence
 - 기준 앱: `:integrated-app` debug
 - 제외: 실제 Provider 계정 OAuth/API, Gateway process crash, reboot·Doze, x86_64 emulator, Play test track
 
@@ -10,29 +10,45 @@
 
 | 구분 | 결과 | 근거 |
 |---|---|---|
-| Python Gateway·Android boundary | PASS | `python3.11 -m unittest discover -s tests -v` — 106 passed, no skip |
+| Python Gateway·Android boundary | PASS | `python3.11 -m unittest discover -s tests -v` — 111 passed, no skip |
+| Gateway recovery Stop lease | PASS | Bridge unit regression — queued/in-flight restart의 lease는 explicit Stop 뒤 inactive이며 follow-up health/restart를 schedule하지 않음; host는 revoke 중 완료된 restart를 다시 Stop으로 정리 |
 | MobileAgent BFF | PASS | `backend/mobile_agent_bff/.venv/bin/pytest -q` — 39/39 |
 | Android unit·lint·APK | PASS | Runtime API public-surface dump, 관련 module unit test, `:integrated-app:lintDebug`, `assembleDebug`, `assembleDebugAndroidTest` |
 | ANSI terminal renderer·exit summary | PASS | SGR/OSC redaction, cursor, erase, alternate screen, CJK width, dimension cap, raw output 없는 terminal close exit summary unit regression |
 | Developer tool smoke workflow | PASS | fixed Python/Git/SSH/Node argv validation, shell/environment rejection, Host dispatch/result-redaction regression |
-| Package metadata snapshot | PASS | `RuntimePackageCatalog` unknown/duplicate/invalid-source regression + allowlist별 license/download/installed payload snapshot UI |
-| Workspace SAF·share boundary | PASS | Samsung `:alpine-workspace-android:connectedDebugAndroidTest` — 5/5: `content://` import/export, filename sanitize, size cap, provider I/O redaction, app-private atomic share publish |
+| Package metadata snapshot·simulation | PASS | `RuntimePackageCatalog` unknown/duplicate/invalid-source/byte-total-overflow regression + allowlist/approval 뒤 fixed `apk --simulate` failure·timeout·transport error이면 actual `add`/`del`/`upgrade` argv가 dispatch되지 않는 API regression |
+| Workspace SAF·share boundary | PASS | Samsung `:alpine-workspace-android:connectedDebugAndroidTest` — 6/6: `content://` import/export, filename sanitize, import/export size cap, oversized export destination 보존, provider I/O redaction, app-private atomic share publish |
 | Android OAuth·Provider instrumentation | PASS | Samsung `:android:connectedDebugAndroidTest` 3/3 + `:alpine-chat-provider-android:connectedDebugAndroidTest` 12/12 |
 | Integrated OAuth/app boundary | PASS | `verify-mobile-oauth-release.py --integrated-product` 및 scanner regression 7/7 — consumer/CLI fingerprint, probable key/private key, demo/probe/sample package 차단 |
-| Runtime Compose instrumentation | PASS | Samsung `:alpine-runtime-ui-compose:connectedDebugAndroidTest` — 8/8, Korean IME·Enter/Tab/Esc/Ctrl+C Compose key regression·terminal semantics·exit accessibility·confirmed SIGTERM/SIGKILL·fixed Git smoke·package/workspace boundary |
+| Runtime Compose instrumentation | PASS | Samsung `:alpine-runtime-ui-compose:connectedDebugAndroidTest` — 10/10, Korean IME·Enter/Tab/Esc/Ctrl+C Compose key regression·terminal semantics·exit accessibility·confirmed SIGTERM/SIGKILL·fixed Git smoke·package/workspace boundary·simulation failure와 oversized snapshot total bounded guidance |
 | Android 12 tablet Runtime Compose | PASS | `:alpine-runtime-ui-compose:connectedDebugAndroidTest` — 8/8, scroll container에서 package review 및 workspace import/export/share action과 terminal key regression 통과 |
 | Runtime Probe actual terminal lifecycle | PASS | Samsung arm64 actual PRoot: initial `stty size=28 96`, `INITIAL_SIZE_ONLY`, `TERMINAL_RESIZE_UNSUPPORTED`, safe terminal exit event, Host process `STARTED:3`/`STOPPED:3`, restart/repair `READY`·healthy |
 | Probe-only winsize root-cause diagnostic | PASS (diagnostic only) | Samsung: same slave PTY trace + independent helper + BusyBox `stty size=40 120` after removing stale `COLUMNS`/`LINES`; tracee-fork `SIGWINCH=SIG_DFL` and recorder self-test PASS, but `TIOCSWINSZ` creates no guest signal-stop; production capability is unchanged |
 | Probe-only SIGWINCH relay repeat/storm | **FAIL (diagnostic evidence)** | relay16 initial shell trap/primary-tracee ptrace relay is PASS. relay21은 active same-PTY tracee physical foreground와 host-only PTY `SIGWINCH → 이후 input` PASS를 추가 확인했지만, PRoot host-master resize 뒤 guest trap/stop-restart는 `0/0`이고 fixed marker·helper·follow-up input은 미응답이었다. relay24 private-memfd control도 Samsung에서 store/fd-ready까지만 확인되고 guest read/apply와 input 재개는 실패했다. 같은 private socket request를 validate/ack만 하는 no-write control도 input 미응답이어서, memfd write/read나 guest signal만을 원인으로 좁힐 수 없다. repeat/storm도 제품 승격 근거가 아니다. production stays `INITIAL_SIZE_ONLY` |
-| Foreground-service process lease | PASS (local) | background module 4/4: first start/last stop, nested terminal·command, duplicate close, FGS start rejection host-policy callback |
+| Foreground-service process lease | PASS (Samsung) | background unit 4/4 + Samsung module instrumentation 1/1: first start/last stop, nested terminal·command, duplicate close, FGS start rejection host-policy callback, 마지막 `STOPPED` 뒤 service와 test-only permission notification 제거 |
 | UI/release/static | PASS | `verify-ui-design-contract.py`, readiness evidence check, `git diff --check` |
 | OSS/compliance verifier | PASS (internal-only) | native boundary 검사 통과; project license·rootfs corresponding source mirror는 계속 `BLOCKED` |
-| Samsung 통합 instrumentation | PASS | `:integrated-app:connectedDebugAndroidTest` — workspace action forwarding·package snapshot 반영본에서 10/10 |
+| Samsung 통합 instrumentation | PASS | `:integrated-app:connectedDebugAndroidTest` — workspace action forwarding·package snapshot 반영본에서 10/10. DreamActivity만 wake하고, 이전 `IntegratedMainActivity` 종료 뒤 다음 Compose root를 시작하도록 보강했으며 Keyguard·보안 설정은 변경하지 않음 |
 | PRoot unpatched source-to-binary | PASS | arm64/x86_64 pinned OpenMinis source 재빌드, ELF 16 KiB alignment, packaged payload/lock/SPDX/source-offer 및 OSS native source bundle 일치 |
 | 2026-08-09 Runtime Compose 재실행 | PASS | Runtime Compose 8/8 — Tab key-down이 Compose 기본 focus 이동으로 소비되던 결함을 수정하고 Enter/Tab/Esc/Ctrl+C key regression을 추가했다. test APK 제거 뒤 integrated product cold start를 확인했다. |
 | 2026-08-09 tablet Runtime Compose 재실행 | PASS | 첫 실행에서 standalone panel fixture가 viewport 밖 action을 실제 click하지 못한 것을 재현했다. `RuntimeWorkspaceScreen`과 같은 scroll container + `performScrollTo()`로 fixture를 보정한 뒤 8/8 통과했고 test APK를 제거했다. |
 | 2026-08-09 current integrated APK install | PASS | Samsung에 최신 debug APK replace install 후 cold start 성공. credential-free first-run mode guide 시각 점검과 product-only package 검사를 수행했고 Demo/Probe/test package는 없었다. |
+| 2026-08-09 forkpty direct-exec regression | PASS / fail-closed | Samsung `:alpine-runtime-android:connectedDebugAndroidTest` 3/3: unsafe NUL/dimension rejection, missing executable child `127` reap, process-group termination, native shell `SIGWINCH`·input continuity. unpatched PRoot direct Probe 1/1은 dynamic `stty`/repeat/storm/input/close는 통과했지만 guest `SIGWINCH` trap 미수신을 expected-negative로 확인해 production은 계속 `INITIAL_SIZE_ONLY`. |
+| 2026-08-09 full local product regression | PASS | Python 108/108, BFF 39/39, Android unit/runtime host/Compose unit, integrated lint·debug APK·AndroidTest APK, Samsung Android core 3/3, Provider 12/12, integrated 10/10을 재실행했다. test/probe APK 제거 후 `dev.alpine.integrated`만 replace install·cold start했다. |
 | 2026-08-09 mandatory Samsung instrumentation rerun | PASS | OAuth core 3/3, Provider 12/12, integrated fast chat 10/10이 모두 failure/error/skip 없이 통과했다. 계측 뒤 latest integrated debug APK를 재설치·cold start했고 최종 package는 통합 제품만 확인했다. |
+| 2026-08-09 forkpty source-audit Samsung rerun | PASS / fail-closed | OAuth core 3/3, Provider 12/12, Runtime native forkpty 3/3, integrated fast chat 10/10, unpatched PRoot expected-negative Probe 1/1이 모두 failure/error/skip 없이 통과했다. pinned stock PRoot static audit도 tracer default-ignore/`SIGWINCH` non-special-case를 확인했으며, 제품 terminal은 계속 `INITIAL_SIZE_ONLY`다. 계측 뒤 test/Probe package를 제거하고 latest integrated debug APK만 cold start했다. |
+| 2026-08-09 FGS explicit removal Samsung run | PASS | background unit 4/4, default permission lifecycle instrumentation 1/1, test-only permission strict notification instrumentation 1/1, Python 109/109, integrated lint/debug APK PASS. strict test APK/permission 제거 후 integrated product만 cold start했다. |
+| 2026-08-09 recovery lease final rerun | PASS | Python 111/111, BFF 39/39, required Android unit/lint/APK matrix, Samsung OAuth core 3/3·Provider 12/12·integrated 10/10 PASS. DreamActivity는 wake-only 처리하고 test 사이 기존 Activity의 종료를 기다리며, Keyguard 우회·보안 설정 변경은 하지 않았다. test package가 없는 integrated product만 cold start했다. |
+| 2026-08-09 Android 12 tablet integrated rerun | PASS | 연결된 tablet에서 `:integrated-app:connectedDebugAndroidTest` 10/10: fake Provider login/model/stream/Stop/retry/history/fallback과 200% font guide reachability. UTP test APK 제거 뒤 current integrated debug APK만 reinstall·cold start했다. 실제 OAuth·TalkBack gesture·외부 키보드·foldable manual QA는 `NOT_RUN`이다. |
+| 2026-08-09 current GOAL local refresh | PASS / fail-closed | Python 111/111, BFF 39/39, GOAL Android unit/API/lint/debug APK/AndroidTest APK matrix, Samsung OAuth core 3/3·Provider 12/12·integrated 10/10, latest integrated product-only cold start를 재확인했다. OAuth scanner 71 files, SDK publication 19 variants, published consumer 8 variants, UI contract, packaged runtime checksum/16 KiB alignment, `git diff --check`도 통과했다. local OSS source bundle에는 Git metadata가 없어 PRoot static handoff는 `--skip-revision-check` invariant-only로 수행했으며, dynamic resize는 계속 `INITIAL_SIZE_ONLY`다. |
+| 2026-08-09 pinned PRoot provenance refresh | PASS / dynamic resize not proven | runtime lock과 local read-only OpenMinis checkout의 PRoot revision이 일치했다. 해당 checkout으로 static handoff revision check를 통과했고, arm64 packaged launcher/loader checksum·ABI·16 KiB alignment와 Gradle bundled-artifact verifier도 통과했다. 이는 source/binary provenance evidence이며, guest `SIGWINCH`·repeat/storm·rotation·TUI·orphan physical acceptance는 증명하지 않아 production은 계속 `INITIAL_SIZE_ONLY`다. |
+| 2026-08-09 README screenshot metadata contract | PASS | UI verifier가 gallery PNG의 dimension·README link/preview aspect 외에 bounded file size·signature·chunk length/CRC·IEND boundary와 strict allowlist를 검사한다. synthetic safe image 1건, `tEXt` metadata rejection, corrupted CRC·oversized PNG rejection 4/4 regression과 current gallery verifier가 통과했다. sandbox 밖 full Python suite는 115/115 no skip이었다. EXIF/text/time metadata는 CI에서 거부되며 visible pixel의 공개 가능 여부는 manual review다. |
+| 2026-08-09 ARM64 API 26·35 integrated emulator | PASS | read-only/headless ARM64 API 35 및 API 26 AVD에서 `:integrated-app:connectedDebugAndroidTest`가 각 10/10 failure/error/skip 없이 통과했다. API 26은 별도 Provider Activity 전환 직후 Compose root 등록 race를 test wait로 보완한 뒤 통과했다. 두 AVD의 test/product package를 제거하고 종료했으며 Samsung·tablet 상태는 변경하지 않았다. 이 ARM64 결과는 x86_64 E2E를 대체하지 않는다. |
+| 2026-08-09 Provider 401 no-replay | PASS | Android OAuth session은 401 후 credential refresh를 next user action에만 사용하고 complete/stream inference POST를 자동 replay하지 않는다. Android unit test는 no-replay·no-refresh reauthentication과 built-in OpenAI-compatible(xAI 포함)/Anthropic/Gemini/Codex `NEVER_AUTOMATIC` contract를 검증했고 Provider session·direct backend unit regression도 통과했다. |
+| 2026-08-09 Provider Compose host lifecycle | PASS | Samsung에서 library UI test host의 `ActivityScenario`/empty Compose rule root-registration race를 test-only synchronous launch·`RESUMED`/root wait·teardown으로 보강했다. Android OAuth core 3/3, Provider 12/12, integrated fast chat 10/10은 모두 failure/error/skip 없이 통과했고, 최신 integrated APK만 재설치·cold start했다. 실제 Provider account 호출은 포함하지 않는다. |
+| 2026-08-09 x86_64 emulator gate privacy | PASS / gate remains blocked | x86 gate report schema에서 ADB serial을 제거하고 fake ADB regression으로 report에 fixture serial이 남지 않음을 확인했다. gate report에는 fixture/device serial을 보관하지 않는다. |
+| 2026-08-09 x86_64 emulator 실행 시도 | BLOCKED / host architecture | 승인 뒤 Android 35 Google APIs x86_64 image를 설치하고 새 일회용 AVD를 만들었다. 그러나 aarch64 host의 Android QEMU2 emulator가 x86_64 guest CPU architecture를 지원하지 않아 headless boot가 즉시 거부되었고, gate 실행은 `SKIP_NO_X86_64_EMULATOR`였다. AVD는 삭제했으며 image는 유지했다. Intel/AMD x86_64 host 또는 연결된 x86_64 emulator가 필요하다. |
+| 2026-08-09 x86_64 실행 전 로컬 재검증 | PASS / x86 execution attempted | Python **117/117**, MobileAgent BFF **39/39**, Android·Provider·Runtime unit test, Runtime host/UI test, integrated lint·debug APK·AndroidTest APK 생성이 모두 통과했다. x86_64 image 및 일회용 AVD 생성까지 완료했지만 host architecture 제한으로 E2E acceptance는 실행하지 못했으며 x86 gate 상태를 변경하지 않았다. |
 
 ## Samsung smoke
 
@@ -45,7 +61,10 @@
   process-group=foreground=true, process-group≠session leader를 확인했다. PID·command는 result에
   저장하지 않았으며, source-level 후속은 simple `setsid` 재시도가 아니라 master/guest tty identity,
   actual foreground signal 및 PRoot `TIOCGWINSZ` syscall 증명으로 좁혔다.
-- Foreground-service lease regression 반영본도 Samsung에 재설치·cold start했다. 최종 `dev.alpine.integrated`만 설치돼 있으며 실제 notification 제거/OEM lifecycle은 승인 전 `NOT_RUN`으로 유지한다.
+- Foreground-service lease regression은 Samsung에서 unit 4/4와 module instrumentation 1/1을 통과했다. 후자는
+  일회성 test APK permission에서 terminal·command 마지막 `STOPPED` 뒤 service와 app-owned notification 제거를
+  확인했다. test APK/permission을 제거한 뒤 최신 `dev.alpine.integrated`만 재설치·cold start했다. 통합 제품의
+  사용자가 선택한 permission UX와 OEM lifecycle은 승인 전 `NOT_RUN`으로 유지한다.
 - 최신 전체 Android run에서 OAuth core 3/3, Provider 12/12, Runtime Compose 6/6, integrated-app 10/10을 재실행했다. Samsung에는 저장소의 `dev.alpine.llm.demo`, `dev.alpine.llm.runtimeprobe`, `dev.alpine.llm.bridgeprobe`, `dev.alpine.runtime.sample` package가 없고 최종 제품 `dev.alpine.integrated`만 확인했다.
 - 실패했던 `PROOT_WINSIZE_FILE` PRoot override를 shipped binary와 native source bundle에서 제거한 뒤,
   fresh unpatched arm64 Probe가 `runtime_version=...unpatched1`, `healthy=true`, initial `28×96`,
@@ -83,10 +102,15 @@
   아니라 PRoot ptrace reinjection 뒤 interactive input 재개가 남았다는 failure evidence이며, final product
   capability를 변경하지 않는다.
 - 최신 Samsung 자동 회귀는 화면 보호기를 깨운 직후 실행했다. OAuth core 3/3, Provider 12/12,
-  Workspace 5/5, Runtime Compose 7/7, integrated 10/10이 모두 통과했다. Provider Compose test host는
+  Workspace 6/6, Runtime Compose 7/7, integrated 10/10이 모두 통과했다. Provider Compose test host는
   library test APK가 minSdk를 legacy target으로 사용해 Samsung platform dialog를 표시하던 문제를
   `testOptions.targetSdk=36`으로 수정했다. 이는 제품 runtime target을 바꾸지 않고 test host만
   현재 platform policy로 명시하는 변경이다.
+- Provider UI host의 후속 Samsung 재실행에서는, test 간 `ActivityScenario` host와 empty Compose rule의
+  root 등록 경쟁으로 UI assertion이 root를 찾지 못하던 fixture를 synchronous launch·`RESUMED` 대기·명시
+  root wait·teardown으로 보강했다. OAuth core **3/3**, Provider **12/12**, integrated **10/10**이
+  failure/error/skip 없이 통과했고, 검증 후 최신 `dev.alpine.integrated`만 replace install·cold start했다.
+  이는 credential-free fixture 검증이며 실제 Provider OAuth/API는 계속 `NOT_RUN`이다.
 
 ## 보류·차단
 
@@ -96,7 +120,7 @@
 - tablet 수동 smoke: Play Protect 데이터 전송 선택 dialog가 표시되어 사용자 선택 없이 중단
 - true guest dynamic terminal resize (`SIGWINCH → fixed printf → stty` input-resume 회귀, repeat/storm,
   rotation, TUI, orphan matrix), x86_64 emulator E2E
-- actual Samsung notification/FGS removal after terminal close and OEM background lifecycle (Doze/reboot/battery restriction approval 필요)
+- integrated product의 사용자가 선택한 notification permission UX 및 OEM background lifecycle (Doze/reboot/battery restriction approval 필요). module-level Samsung FGS/notification removal은 PASS.
 - release readiness의 외부 승인 gate
 
 상세 release blocker는 [`distribution/release-readiness.json`](../distribution/release-readiness.json)을 기준으로 한다.

@@ -88,6 +88,8 @@ enum class RuntimePackageInstallOutcome {
     INSTALLED,
     POLICY_DENIED,
     APPROVAL_DECLINED,
+    /** Simulation rejected the exact request before a mutating apk command was dispatched. */
+    PREFLIGHT_FAILED,
 }
 
 data class RuntimePackageInstallResult(
@@ -129,19 +131,39 @@ class RuntimePackageInstaller(
                 session.execute(
                     RuntimeCommandRequest(
                         executable = "/sbin/apk",
-                        arguments = listOf("add", "--no-progress") + request.packages,
+                        arguments = listOf("add", "--simulate", "--no-progress") + request.packages,
                         timeoutMillis = request.timeoutMillis,
                     ),
-                ).thenCompose { command ->
-                    if (command.exitCode != 0 || command.timedOut) {
-                        failedStage(RuntimeOperationException(RuntimeErrorCode.COMMAND_FAILED))
-                    } else {
+                ).thenApply { preflight ->
+                    preflight.exitCode == 0 && !preflight.timedOut
+                }.exceptionally {
+                    // A failed simulation transport is still a failed preflight, never a reason
+                    // to optimistically dispatch a mutating apk command.
+                    false
+                }.thenCompose { preflightSucceeded ->
+                    if (!preflightSucceeded) {
                         CompletableFuture.completedFuture(
-                            RuntimePackageInstallResult(
-                                RuntimePackageInstallOutcome.INSTALLED,
-                                command,
-                            ),
+                            RuntimePackageInstallResult(RuntimePackageInstallOutcome.PREFLIGHT_FAILED),
                         )
+                    } else {
+                        session.execute(
+                            RuntimeCommandRequest(
+                                executable = "/sbin/apk",
+                                arguments = listOf("add", "--no-progress") + request.packages,
+                                timeoutMillis = request.timeoutMillis,
+                            ),
+                        ).thenCompose { command ->
+                            if (command.exitCode != 0 || command.timedOut) {
+                                failedStage(RuntimeOperationException(RuntimeErrorCode.COMMAND_FAILED))
+                            } else {
+                                CompletableFuture.completedFuture(
+                                    RuntimePackageInstallResult(
+                                        RuntimePackageInstallOutcome.INSTALLED,
+                                        command,
+                                    ),
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -181,6 +203,8 @@ enum class RuntimePackageMutationOutcome {
     COMPLETED,
     POLICY_DENIED,
     APPROVAL_DECLINED,
+    /** Simulation rejected the exact request before a mutating apk command was dispatched. */
+    PREFLIGHT_FAILED,
 }
 
 data class RuntimePackageMutationResult(
@@ -230,17 +254,21 @@ data class RuntimePackageMetadata(
  * A bounded, package-archive-only estimate for a user selection.
  *
  * [downloadBytes] and [installedBytes] exclude current dependency resolution, package-index
- * downloads, cache and filesystem overhead.  A missing entry deliberately prevents callers from
- * presenting a complete estimate.
+ * downloads, cache and filesystem overhead. A missing entry or an overflowed byte total
+ * deliberately prevents callers from presenting a complete estimate. Byte totals are saturated
+ * to [Long.MAX_VALUE] when [totalBytesOverflowed] is true; callers must not render that value as
+ * an exact installation requirement.
  */
-data class RuntimePackageEstimate(
+data class RuntimePackageEstimate @JvmOverloads constructor(
     val metadata: List<RuntimePackageMetadata>,
     val missingPackageNames: List<String>,
     val downloadBytes: Long,
     val installedBytes: Long,
+    /** True when one or both aggregate byte totals exceeded the representable Long range. */
+    val totalBytesOverflowed: Boolean = false,
 ) {
     val isComplete: Boolean
-        get() = missingPackageNames.isEmpty()
+        get() = missingPackageNames.isEmpty() && !totalBytesOverflowed
 }
 
 /**
@@ -260,17 +288,28 @@ class RuntimePackageCatalog(entries: Collection<RuntimePackageMetadata>) {
         val requestedNames = packageNames.distinct()
         val metadata = requestedNames.mapNotNull(byRequestedName::get)
         val missing = requestedNames.filterNot(byRequestedName::containsKey)
+        val downloadTotal = metadata.fold(0L to false) { total, metadata ->
+            if (total.second || metadata.downloadBytes > Long.MAX_VALUE - total.first) {
+                Long.MAX_VALUE to true
+            } else {
+                total.first + metadata.downloadBytes to false
+            }
+        }
+        val installedTotal = metadata.fold(0L to false) { total, metadata ->
+            if (total.second || metadata.installedBytes > Long.MAX_VALUE - total.first) {
+                Long.MAX_VALUE to true
+            } else {
+                total.first + metadata.installedBytes to false
+            }
+        }
         return RuntimePackageEstimate(
             metadata = metadata,
             missingPackageNames = missing,
-            downloadBytes = metadata.sumBytes(RuntimePackageMetadata::downloadBytes),
-            installedBytes = metadata.sumBytes(RuntimePackageMetadata::installedBytes),
+            downloadBytes = downloadTotal.first,
+            installedBytes = installedTotal.first,
+            totalBytesOverflowed = downloadTotal.second || installedTotal.second,
         )
     }
-
-    private fun List<RuntimePackageMetadata>.sumBytes(
-        selector: (RuntimePackageMetadata) -> Long,
-    ): Long = fold(0L) { total, metadata -> Math.addExact(total, selector(metadata)) }
 }
 
 /**
@@ -306,20 +345,43 @@ class RuntimePackageMutator(
                 session.execute(
                     RuntimeCommandRequest(
                         executable = "/sbin/apk",
-                        arguments = listOf(apkSubcommand(request.action), "--no-progress") + request.packages,
+                        arguments = listOf(apkSubcommand(request.action), "--simulate", "--no-progress") + request.packages,
                         timeoutMillis = request.timeoutMillis,
                     ),
-                ).thenCompose { command ->
-                    if (command.exitCode != 0 || command.timedOut) {
-                        failedStage(RuntimeOperationException(RuntimeErrorCode.COMMAND_FAILED))
-                    } else {
+                ).thenApply { preflight ->
+                    preflight.exitCode == 0 && !preflight.timedOut
+                }.exceptionally {
+                    // The preflight command itself can fail before producing an apk result.
+                    // Treat it as a non-mutating denial instead of exposing a retry path.
+                    false
+                }.thenCompose { preflightSucceeded ->
+                    if (!preflightSucceeded) {
                         CompletableFuture.completedFuture(
                             RuntimePackageMutationResult(
-                                action = request.action,
-                                outcome = RuntimePackageMutationOutcome.COMPLETED,
-                                commandResult = command,
+                                request.action,
+                                RuntimePackageMutationOutcome.PREFLIGHT_FAILED,
                             ),
                         )
+                    } else {
+                        session.execute(
+                            RuntimeCommandRequest(
+                                executable = "/sbin/apk",
+                                arguments = listOf(apkSubcommand(request.action), "--no-progress") + request.packages,
+                                timeoutMillis = request.timeoutMillis,
+                            ),
+                        ).thenCompose { command ->
+                            if (command.exitCode != 0 || command.timedOut) {
+                                failedStage(RuntimeOperationException(RuntimeErrorCode.COMMAND_FAILED))
+                            } else {
+                                CompletableFuture.completedFuture(
+                                    RuntimePackageMutationResult(
+                                        action = request.action,
+                                        outcome = RuntimePackageMutationOutcome.COMPLETED,
+                                        commandResult = command,
+                                    ),
+                                )
+                            }
+                        }
                     }
                 }
             }

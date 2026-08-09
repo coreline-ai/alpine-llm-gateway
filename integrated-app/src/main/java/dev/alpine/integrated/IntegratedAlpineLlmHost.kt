@@ -20,6 +20,7 @@ import dev.alpine.runtime.bridge.AlpineLlmBridgeConfiguration
 import dev.alpine.runtime.bridge.AlpineLlmBridgeController
 import dev.alpine.runtime.bridge.AlpineLlmBridgeHealth
 import dev.alpine.runtime.bridge.AlpineLlmBridgeRecoveryConfiguration
+import dev.alpine.runtime.bridge.AlpineLlmBridgeRecoveryLease
 import dev.alpine.runtime.bridge.AlpineLlmBridgeRecoveryListener
 import dev.alpine.runtime.bridge.AlpineLlmBridgeRecoveryMode
 import dev.alpine.runtime.bridge.AlpineLlmBridgeRecoveryState
@@ -94,7 +95,7 @@ class IntegratedAlpineLlmHost(
     private val listeners = CopyOnWriteArrayList<AlpineWorkspaceLlmStateListener>()
     private val lock = Any()
     private val ownerExecutor: ExecutorService = Executors.newSingleThreadExecutor()
-    private val recoverySupervisor = AlpineLlmBridgeRecoverySupervisor(
+    private val recoverySupervisor = AlpineLlmBridgeRecoverySupervisor.withRecoveryLease(
         healthCheck = ::healthForAutomaticRecovery,
         restartGateway = ::restartAfterUnexpectedFailure,
         configuration = AlpineLlmBridgeRecoveryConfiguration(
@@ -112,7 +113,7 @@ class IntegratedAlpineLlmHost(
     private var ownerKey: OwnerKey? = null
     private var controller: AlpineLlmBridgeController? = null
     private var runtimeBinding: RuntimeSubscription? = null
-    private var closed = false
+    @Volatile private var closed = false
 
     fun currentState(): AlpineWorkspaceLlmState = state
 
@@ -153,7 +154,7 @@ class IntegratedAlpineLlmHost(
             }
             bindActiveSession(active)
             publishHealth(health)
-            recoverySupervisor.startMonitoring()
+            beginAutomaticRecovery(active)
             health
         }
 
@@ -168,7 +169,7 @@ class IntegratedAlpineLlmHost(
             }
             bindActiveSession(active)
             publishHealth(health)
-            recoverySupervisor.startMonitoring()
+            beginAutomaticRecovery(active)
             health
         }
 
@@ -225,7 +226,7 @@ class IntegratedAlpineLlmHost(
         submit(AlpineWorkspaceLlmOperation.IDLE) { controllerOwned(session) }
 
     private fun controllerOwned(session: ChatCompletionSession): AlpineLlmBridgeController {
-        check(!closed) { "Alpine LLM host is closed" }
+        check(synchronized(lock) { !closed }) { "Alpine LLM host is closed" }
         val profile = session.profile
         val key = OwnerKey(profile.id, profile.hashCode(), session.descriptor.model)
         synchronized(lock) {
@@ -340,23 +341,47 @@ class IntegratedAlpineLlmHost(
      * Recovery owns only the Gateway/Runtime lifecycle. It does not submit a chat prompt, replay
      * a terminal command, or use the direct Provider backend.
      */
-    private fun restartAfterUnexpectedFailure(): CompletionStage<AlpineLlmBridgeHealth> =
+    private fun restartAfterUnexpectedFailure(
+        lease: AlpineLlmBridgeRecoveryLease,
+    ): CompletionStage<AlpineLlmBridgeHealth> =
         submit(AlpineWorkspaceLlmOperation.RECOVERING) {
             val active = synchronized(lock) { controller }
                 ?: throw LlmBridgeOperationException(LlmBridgeErrorCode.INVALID_STATE)
-            detachRuntimeSession()
+            if (!ownsActiveRecovery(active, lease)) {
+                throw RecoveryLeaseRevokedException()
+            }
+            detachRuntimeSession(active)
+            if (!ownsActiveRecovery(active, lease)) {
+                throw RecoveryLeaseRevokedException()
+            }
             val health = if (active.currentState() == LlmBridgeLifecycleState.STOPPED) {
                 active.start().toCompletableFuture().join()
             } else {
                 active.restart().toCompletableFuture().join()
+            }
+            // `start`/`restart` cannot be interrupted safely once its runtime lifecycle call has
+            // begun. If the user pressed Stop or changed owner during that narrow window, remove
+            // the just-created owner instead of leaving an unwanted automatic restart alive.
+            if (!ownsActiveRecovery(active, lease)) {
+                runCatching { active.stop().toCompletableFuture().join() }
+                detachRuntimeSession(active)
+                throw RecoveryLeaseRevokedException()
             }
             bindActiveSession(active)
             publishHealth(health)
             health
         }
 
-    private fun detachRuntimeSession() {
+    private fun ownsActiveRecovery(
+        active: AlpineLlmBridgeController,
+        lease: AlpineLlmBridgeRecoveryLease,
+    ): Boolean = lease.isActive() && synchronized(lock) {
+        !closed && controller === active
+    }
+
+    private fun detachRuntimeSession(owner: AlpineLlmBridgeController? = null) {
         synchronized(lock) {
+            if (owner != null && controller !== owner) return
             runtimeBinding?.close()
             runtimeBinding = null
         }
@@ -433,6 +458,14 @@ class IntegratedAlpineLlmHost(
                     future.complete(value)
                 },
                 onFailure = { error ->
+                    if (isRecoveryLeaseRevoked(error)) {
+                        // A user Stop/owner swap already owns the visible state. Do not replace
+                        // it with a synthetic error while the stale recovery future unwinds.
+                        future.completeExceptionally(
+                            LlmBridgeOperationException(LlmBridgeErrorCode.INVALID_STATE),
+                        )
+                        return@fold
+                    }
                     val safe = safeError(error)
                     update {
                         it.copy(
@@ -460,6 +493,11 @@ class IntegratedAlpineLlmHost(
         return LlmBridgeOperationException(LlmBridgeErrorCode.INTERNAL_ERROR)
     }
 
+    private fun isRecoveryLeaseRevoked(error: Throwable): Boolean =
+        generateSequence(error) { it.cause }
+            .take(12)
+            .any { it is RecoveryLeaseRevokedException }
+
     private fun failedBridgeFuture(errorCode: LlmBridgeErrorCode): CompletionStage<AlpineLlmBridgeHealth> =
         CompletableFuture<AlpineLlmBridgeHealth>().also {
             it.completeExceptionally(LlmBridgeOperationException(errorCode))
@@ -471,8 +509,10 @@ class IntegratedAlpineLlmHost(
     }
 
     override fun close() {
-        if (closed) return
-        closed = true
+        synchronized(lock) {
+            if (closed) return
+            closed = true
+        }
         recoverySupervisor.close()
         runCatching { stop().toCompletableFuture().join() }
         detachRuntimeSession()
@@ -505,6 +545,9 @@ class IntegratedAlpineLlmHost(
             emitter: ChatStreamEmitter,
         ): ChatBackendResult = delegate.stream(request, emitter)
     }
+
+    /** Internal control flow only; it is mapped to a closed lifecycle error for the supervisor. */
+    private class RecoveryLeaseRevokedException : RuntimeException()
 
     private companion object {
         const val DIRECT_BACKEND_ID = "android-direct"

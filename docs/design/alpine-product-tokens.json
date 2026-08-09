@@ -37,6 +37,14 @@
       ]
     ],
     "preview_width": 260,
-    "count": 15
+    "count": 15,
+    "max_file_bytes": 8388608,
+    "allowed_png_chunks": [
+      "IHDR",
+      "sBIT",
+      "sRGB",
+      "IDAT",
+      "IEND"
+    ]
   }
 }

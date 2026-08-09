@@ -39,7 +39,7 @@ class RuntimePackageInstallerTest {
     }
 
     @Test
-    fun `approved allowlisted packages dispatch only fixed apk add command`() {
+    fun `approved allowlisted packages simulate before fixed apk add command`() {
         val session = RecordingSession()
         val result = RuntimePackageInstaller(RuntimePackageAllowlistPolicy(setOf("git", "python3"))).install(
             session,
@@ -48,8 +48,54 @@ class RuntimePackageInstallerTest {
         ).toCompletableFuture().join()
 
         assertEquals(RuntimePackageInstallOutcome.INSTALLED, result.outcome)
-        assertEquals("/sbin/apk", session.lastRequest?.executable)
-        assertEquals(listOf("add", "--no-progress", "git", "python3"), session.lastRequest?.arguments)
+        assertEquals(
+            listOf(
+                RuntimeCommandRequest(
+                    executable = "/sbin/apk",
+                    arguments = listOf("add", "--simulate", "--no-progress", "git", "python3"),
+                    timeoutMillis = 5 * 60_000L,
+                ),
+                RuntimeCommandRequest(
+                    executable = "/sbin/apk",
+                    arguments = listOf("add", "--no-progress", "git", "python3"),
+                    timeoutMillis = 5 * 60_000L,
+                ),
+            ),
+            session.requests,
+        )
+    }
+
+    @Test
+    fun `failed install simulation never dispatches package mutation`() {
+        val session = RecordingSession(results = listOf(RuntimeCommandResult(exitCode = 1)))
+
+        val result = RuntimePackageInstaller(RuntimePackageAllowlistPolicy(setOf("git"))).install(
+            session,
+            RuntimePackageInstallRequest(listOf("git")),
+            RuntimePackageApproval { CompletableFuture.completedFuture(true) },
+        ).toCompletableFuture().join()
+
+        assertEquals(RuntimePackageInstallOutcome.PREFLIGHT_FAILED, result.outcome)
+        assertEquals(
+            listOf("add", "--simulate", "--no-progress", "git"),
+            session.lastRequest?.arguments,
+        )
+        assertEquals(1, session.requests.size)
+    }
+
+    @Test
+    fun `failed simulation transport never dispatches package mutation`() {
+        val session = RecordingSession(failingAttempts = setOf(1))
+
+        val result = RuntimePackageInstaller(RuntimePackageAllowlistPolicy(setOf("git"))).install(
+            session,
+            RuntimePackageInstallRequest(listOf("git")),
+            RuntimePackageApproval { CompletableFuture.completedFuture(true) },
+        ).toCompletableFuture().join()
+
+        assertEquals(RuntimePackageInstallOutcome.PREFLIGHT_FAILED, result.outcome)
+        assertEquals(listOf("add", "--simulate", "--no-progress", "git"), session.lastRequest?.arguments)
+        assertEquals(1, session.requests.size)
     }
 
     @Test
@@ -84,7 +130,7 @@ class RuntimePackageInstallerTest {
     }
 
     @Test
-    fun `approved update uses a fixed scoped apk upgrade command`() {
+    fun `approved update simulates before a fixed scoped apk upgrade command`() {
         val session = RecordingSession()
         val result = RuntimePackageMutator(
             RuntimePackageMutationAllowlistPolicy(
@@ -101,18 +147,64 @@ class RuntimePackageInstallerTest {
         ).toCompletableFuture().join()
 
         assertEquals(RuntimePackageMutationOutcome.COMPLETED, result.outcome)
-        assertEquals("/sbin/apk", session.lastRequest?.executable)
-        assertEquals(listOf("upgrade", "--no-progress", "git"), session.lastRequest?.arguments)
+        assertEquals(
+            listOf(
+                RuntimeCommandRequest(
+                    executable = "/sbin/apk",
+                    arguments = listOf("upgrade", "--simulate", "--no-progress", "git"),
+                    timeoutMillis = 5 * 60_000L,
+                ),
+                RuntimeCommandRequest(
+                    executable = "/sbin/apk",
+                    arguments = listOf("upgrade", "--no-progress", "git"),
+                    timeoutMillis = 5 * 60_000L,
+                ),
+            ),
+            session.requests,
+        )
     }
 
-    private class RecordingSession : RuntimeSession {
+    @Test
+    fun `timed out remove simulation never dispatches package deletion`() {
+        val session = RecordingSession(results = listOf(RuntimeCommandResult(exitCode = 0, timedOut = true)))
+
+        val result = RuntimePackageMutator(
+            RuntimePackageMutationAllowlistPolicy(
+                allowedPackages = setOf("git"),
+                removablePackages = setOf("git"),
+            ),
+        ).mutate(
+            session = session,
+            request = RuntimePackageMutationRequest(RuntimePackageAction.REMOVE, listOf("git")),
+            approval = RuntimePackageApproval { CompletableFuture.completedFuture(true) },
+        ).toCompletableFuture().join()
+
+        assertEquals(RuntimePackageMutationOutcome.PREFLIGHT_FAILED, result.outcome)
+        assertEquals(listOf("del", "--simulate", "--no-progress", "git"), session.lastRequest?.arguments)
+        assertEquals(1, session.requests.size)
+    }
+
+    private class RecordingSession(
+        results: List<RuntimeCommandResult> = emptyList(),
+        private val failingAttempts: Set<Int> = emptySet(),
+    ) : RuntimeSession {
         override val id: String = "recording"
         override val startedAtEpochMillis: Long = 0
-        var lastRequest: RuntimeCommandRequest? = null
+        private val queuedResults = results.toMutableList()
+        val requests = mutableListOf<RuntimeCommandRequest>()
+        val lastRequest: RuntimeCommandRequest?
+            get() = requests.lastOrNull()
 
         override fun execute(request: RuntimeCommandRequest): CompletionStage<RuntimeCommandResult> {
-            lastRequest = request
-            return CompletableFuture.completedFuture(RuntimeCommandResult(0))
+            requests += request
+            if (requests.size in failingAttempts) {
+                return CompletableFuture<RuntimeCommandResult>().also {
+                    it.completeExceptionally(IllegalStateException("test preflight transport failure"))
+                }
+            }
+            return CompletableFuture.completedFuture(
+                if (queuedResults.isEmpty()) RuntimeCommandResult(0) else queuedResults.removeAt(0),
+            )
         }
 
         override fun openTerminal(request: RuntimeTerminalRequest): CompletionStage<RuntimeTerminalSession> =

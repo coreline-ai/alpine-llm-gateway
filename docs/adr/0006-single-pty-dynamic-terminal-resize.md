@@ -14,9 +14,13 @@ PTY는 resize뿐 아니라 foreground process group과 `SIGWINCH` 소유권도 �
 
 ## 결정
 
-- Native PTY 경로는 `setsid -c → PRoot → guest shell`의 단일 PTY를 사용한다.
+- Native PTY의 우선 경로는 JNI `forkpty() → PRoot → guest shell`의 단일 PTY를 사용한다. native child는
+  새 slave PTY를 controlling terminal로 얻은 뒤 validated working directory로 이동하고 즉시 `execve`한다.
+  native 경로를 만들 수 없는 환경에서만 기존 `setsid` 경로와 interactive pipe fallback을 사용하며, 어느
+  fallback도 dynamic resize capability를 얻지 않는다.
 - guest wrapper는 최초 `stty cols/rows`만 적용하고 shell을 직접 `exec`한다.
-- Native PTY launcher는 `COLUMNS`/`LINES` 환경 변수를 exec 전 제거한다. guest wrapper가 최초
+- Native PTY launcher는 `COLUMNS`/`LINES` 환경 변수를 exec 전 제거한다. 두 key는 Runtime-owned
+  reserved environment으로 session·command·terminal request가 재주입할 수 없으며, guest wrapper가 최초
   `stty cols/rows`를 적용하는 것은 유지하되, 실행 중 size truth는 tty ioctl만 사용한다.
 - Host는 PTY master control fd에 최초 `TIOCSWINSZ`만 적용한다. production API는 이 값을 실행 중
   resize capability로 해석하지 않는다.
@@ -30,6 +34,34 @@ PTY는 resize뿐 아니라 foreground process group과 `SIGWINCH` 소유권도 �
 - 현재 로컬 OpenMinis PRoot의 `origin/master`는 pinned `8cf13e9`와 동일하다. 포함된 `--native-offload`은
   선택한 guest `execve`를 abstract socket host handler로 보내는 opt-in extension이므로 interactive terminal
   session/resize backend가 아니며 product candidate로 사용하지 않는다.
+- 2026-08-09 read-only upstream 재확인에서도 [OpenMinis `master`](https://github.com/OpenMinis/proot)는
+  runtime lock의 `8cf13e9`와 동일했다. 최근 유지보수된 [Termux PRoot](https://github.com/termux/proot)를
+  후보로 비교했지만, 확인한 `event_loop()`의 default signal-ignore policy는 동일했고 공개 issue/source에서
+  Android guest `SIGWINCH` physical acceptance를 제공하는 채택 가능한 terminal hook은 찾지 못했다. 이는
+  exact root cause나 fork 비호환성을 증명하는 결과는 아니며, fork 교체에는 provenance·ABI·legal review와
+  전체 physical acceptance가 필요한 별도 workstream이므로 현재 product binary/lock은 바꾸지 않는다.
+
+### forkpty direct-exec acceptance (2026-08-09)
+
+`alpine-runtime-android`는 direct-exec child PID를 `NativePtyDescriptor`에 소유시키고 bounded
+`waitpid(WNOHANG)`/process-group lifecycle terminate를 Runtime terminal session에 연결했다. argument,
+environment, working directory와 dimension은 fork 전 검증하며 child 쪽은 Java/JNI/log를 다시 호출하지 않는다.
+production은 이 경로를 우선 사용하지만 `resizeSupport=INITIAL_SIZE_ONLY` 및
+`ALPINE_TERMINAL_RESIZE_CHANNEL=unsupported`를 그대로 유지한다.
+
+Samsung arm64의 native `/system/bin/sh` fixture는 initial `80×24`, master `TIOCSWINSZ`의 `120×40`, kernel
+`SIGWINCH`, 이후 input을 모두 통과했다. unsafe NUL/dimension은 fork 전에 거부됐고 missing executable child는
+`127`로 reap됐으며 lifecycle `SIGTERM`도 owned process group을 종료했다. 따라서 Android native PTY 자체와
+direct-exec lifecycle은 이 ABI에서 동작한다.
+
+동일 기기의 **unpatched PRoot** debug-only direct fixture는 guest initial/dynamic `stty`, repeat/storm final
+size, post-resize input, terminal close 뒤 tracked process removal을 통과했지만, guest controlling tty와
+foreground group이 확인된 상태에서도 physical resize 뒤 shell `SIGWINCH` trap을 받지 못했다. stock PRoot
+`event_loop()`의 default-signal ignore는 후속 source boundary지만 이것만으로 exact root cause를 단정하지
+않는다. 이는 expected-negative Probe PASS이지 dynamic resize PASS가 아니다. rotation과 representative
+`vi`/`nano`/`top` matrix도 실행하지 않았으므로 `DYNAMIC` 승격은 금지한다. direct guest signal injection,
+host-to-guest relay, polling/FIFO, PID/fd reopen, command replay/retry는 도입하지 않았다. 상세 결과는
+`dev-plan/implement_20260809_082423.md`에 기록한다.
 
 ### Relay28 보정 (2026-08-09)
 
@@ -71,12 +103,19 @@ contract는 계속 `INITIAL_SIZE_ONLY`다. 상세는 `dev-plan/implement_2026080
 `scripts/verify-proot-terminal-handoff.py`는 runtime lock의 pinned OpenMinis PRoot revision을 대상으로,
 raw terminal data·command·PID/fd를 읽거나 기록하지 않는 source-level audit을 수행한다. 현재 pinned source는
 Android `PR_ioctl`을 syscall-exit trace 대상으로 두고, tracee signal stop을 syscall chain이 아닐 때 generic
-`ptrace(..., signal)` restart로 전달할 수 있다. 반면 stock entry/exit source에는 `TIOCGWINSZ`/`TIOCSWINSZ`
-rewrite나 guest `SIGWINCH` 생성·relay hook이 없다.
+`ptrace(..., signal)` restart로 전달할 수 있다. 또한 tracer의 `event_loop()`는 job-control 예외 외 신호를
+`SIG_IGN`으로 설정하고 `SIGWINCH`를 별도 처리하지 않는다는 사실을 검증한다. 반면 stock entry/exit source에는
+`TIOCGWINSZ`/`TIOCSWINSZ` rewrite나 guest `SIGWINCH` 생성·relay hook이 없다.
 
-이는 host kernel이 이 Android PRoot topology에 실제 `SIGWINCH`를 delivery했다는 증거가 아니며, static
-handoff 자체도 physical resize acceptance를 대체하지 않는다. audit 결과는 pinned stock source에 안전하게
-승격할 local terminal hook이 없다는 경계만 확정한다. 따라서 새로운 signal/FIFO/PID/fd workaround나
+2026-08-09 provenance refresh에서는 lock과 일치하는 local read-only OpenMinis checkout을 audit에 직접
+사용해 revision check를 통과했고, arm64 packaged launcher/loader의 checksum·ABI·16 KiB alignment도 별도
+verifier와 bundled artifact task로 재확인했다. 이 결과는 source/binary boundary를 강하게 만들지만 dynamic
+terminal acceptance를 대체하지 않는다.
+
+이는 tracer ignore 정책이 guest trap 미수신의 exact root cause라는 증거가 아니고, host kernel이 이 Android
+PRoot topology에 실제 `SIGWINCH`를 delivery했다는 증거도 아니다. static handoff 자체도 physical resize
+acceptance를 대체하지 않는다. audit 결과는 pinned stock source에 안전하게 승격할 local terminal hook이 없다는
+경계만 확정한다. 따라서 새로운 signal/FIFO/PID/fd workaround나
 Probe artifact 확장은 중단하고, upstream-maintained hook 또는 대체 controlling-terminal architecture가
 별도 acceptance matrix를 통과할 때까지 product contract와 blocker를 유지한다. 상세 실행 결과는
 `dev-plan/implement_20260809_071338.md`에 기록한다.

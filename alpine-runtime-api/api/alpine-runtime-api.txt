@@ -423,27 +423,32 @@ public final class dev.alpine.runtime.api.RuntimePackageCatalog {
 }
 Compiled from "RuntimePackages.kt"
 public final class dev.alpine.runtime.api.RuntimePackageEstimate {
-  public dev.alpine.runtime.api.RuntimePackageEstimate(java.util.List<dev.alpine.runtime.api.RuntimePackageMetadata>, java.util.List<java.lang.String>, long, long);
+  public dev.alpine.runtime.api.RuntimePackageEstimate(java.util.List<dev.alpine.runtime.api.RuntimePackageMetadata>, java.util.List<java.lang.String>, long, long, boolean);
+  public dev.alpine.runtime.api.RuntimePackageEstimate(java.util.List, java.util.List, long, long, boolean, int, kotlin.jvm.internal.DefaultConstructorMarker);
   public final java.util.List<dev.alpine.runtime.api.RuntimePackageMetadata> getMetadata();
   public final java.util.List<java.lang.String> getMissingPackageNames();
   public final long getDownloadBytes();
   public final long getInstalledBytes();
+  public final boolean getTotalBytesOverflowed();
   public final boolean isComplete();
   public final java.util.List<dev.alpine.runtime.api.RuntimePackageMetadata> component1();
   public final java.util.List<java.lang.String> component2();
   public final long component3();
   public final long component4();
-  public final dev.alpine.runtime.api.RuntimePackageEstimate copy(java.util.List<dev.alpine.runtime.api.RuntimePackageMetadata>, java.util.List<java.lang.String>, long, long);
-  public static dev.alpine.runtime.api.RuntimePackageEstimate copy$default(dev.alpine.runtime.api.RuntimePackageEstimate, java.util.List, java.util.List, long, long, int, java.lang.Object);
+  public final boolean component5();
+  public final dev.alpine.runtime.api.RuntimePackageEstimate copy(java.util.List<dev.alpine.runtime.api.RuntimePackageMetadata>, java.util.List<java.lang.String>, long, long, boolean);
+  public static dev.alpine.runtime.api.RuntimePackageEstimate copy$default(dev.alpine.runtime.api.RuntimePackageEstimate, java.util.List, java.util.List, long, long, boolean, int, java.lang.Object);
   public java.lang.String toString();
   public int hashCode();
   public boolean equals(java.lang.Object);
+  public dev.alpine.runtime.api.RuntimePackageEstimate(java.util.List<dev.alpine.runtime.api.RuntimePackageMetadata>, java.util.List<java.lang.String>, long, long);
 }
 Compiled from "RuntimePackages.kt"
 public final class dev.alpine.runtime.api.RuntimePackageInstallOutcome extends java.lang.Enum<dev.alpine.runtime.api.RuntimePackageInstallOutcome> {
   public static final dev.alpine.runtime.api.RuntimePackageInstallOutcome INSTALLED;
   public static final dev.alpine.runtime.api.RuntimePackageInstallOutcome POLICY_DENIED;
   public static final dev.alpine.runtime.api.RuntimePackageInstallOutcome APPROVAL_DECLINED;
+  public static final dev.alpine.runtime.api.RuntimePackageInstallOutcome PREFLIGHT_FAILED;
   public static dev.alpine.runtime.api.RuntimePackageInstallOutcome[] values();
   public static dev.alpine.runtime.api.RuntimePackageInstallOutcome valueOf(java.lang.String);
   public static kotlin.enums.EnumEntries<dev.alpine.runtime.api.RuntimePackageInstallOutcome> getEntries();
@@ -524,6 +529,7 @@ public final class dev.alpine.runtime.api.RuntimePackageMutationOutcome extends 
   public static final dev.alpine.runtime.api.RuntimePackageMutationOutcome COMPLETED;
   public static final dev.alpine.runtime.api.RuntimePackageMutationOutcome POLICY_DENIED;
   public static final dev.alpine.runtime.api.RuntimePackageMutationOutcome APPROVAL_DECLINED;
+  public static final dev.alpine.runtime.api.RuntimePackageMutationOutcome PREFLIGHT_FAILED;
   public static dev.alpine.runtime.api.RuntimePackageMutationOutcome[] values();
   public static dev.alpine.runtime.api.RuntimePackageMutationOutcome valueOf(java.lang.String);
   public static kotlin.enums.EnumEntries<dev.alpine.runtime.api.RuntimePackageMutationOutcome> getEntries();

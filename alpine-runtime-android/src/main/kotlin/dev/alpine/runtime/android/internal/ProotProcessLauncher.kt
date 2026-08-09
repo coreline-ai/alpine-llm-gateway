@@ -47,6 +47,7 @@ internal class ProotProcessLauncher(
     private val ttyDiagnosticDisablePrimaryTraceeForeground: Boolean = false,
     private val ttyDiagnosticPostWinsizeInputTrace: Boolean = false,
     private val ttyDiagnosticCanonicalizeStdio: Boolean = false,
+    private val ttyDiagnosticForkPtyDirect: Boolean = false,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val processes = ConcurrentHashMap<Long, ProcessRecord>()
@@ -134,12 +135,13 @@ internal class ProotProcessLauncher(
         }
         // Android's public java.lang.Process stub does not expose the child PID consistently.
         // Use a stable runtime-local handle for lifecycle correlation.
+        val runtimeProcess = JavaRuntimeChildProcess(process)
         val registered = synchronized(lifecycleLock) {
             if (sessionId !in activeSessions) {
                 false
             } else {
                 processes[pid] = ProcessRecord(
-                    process,
+                    runtimeProcess,
                     sessionId,
                     request.executable,
                     startedAt,
@@ -150,7 +152,7 @@ internal class ProotProcessLauncher(
             }
         }
         if (!registered) {
-            terminateProcess(process, guestPidFile)
+            terminateProcess(runtimeProcess, guestPidFile)
             throw RuntimeOperationException(RuntimeErrorCode.PROCESS_EXITED)
         }
         val stdout = LimitedOutputCollector(process.inputStream, maxOutputBytes)
@@ -187,7 +189,7 @@ internal class ProotProcessLauncher(
                 }
             }
             if (!completed) {
-                terminateProcess(process, guestPidFile)
+                terminateProcess(runtimeProcess, guestPidFile)
             }
             if (cancelled) throw CancellationException()
             joinCollector(stdoutThread)
@@ -200,7 +202,7 @@ internal class ProotProcessLauncher(
                 timedOut = !completed,
             )
         } finally {
-            if (process.isAlive) process.destroyForcibly()
+            if (runtimeProcess.isAlive) runtimeProcess.terminate(force = true)
             joinCollector(stdoutThread)
             joinCollector(stderrThread)
             val removed = synchronized(lifecycleLock) { processes.remove(pid) }
@@ -297,7 +299,7 @@ internal class ProotProcessLauncher(
         val terminalId = UUID.randomUUID().toString()
         return ProcessRuntimeTerminalSession(
             id = terminalId,
-            process = process,
+            process = terminalProcess.process,
             input = terminalProcess.input,
             output = terminalProcess.output,
             guestPidFile = guestPidFile,
@@ -306,7 +308,8 @@ internal class ProotProcessLauncher(
             resizeTerminal = terminalProcess.resize,
             closeIo = terminalProcess.closeIo,
             terminate = { force ->
-                if (force) killProcess(process, guestPidFile) else terminateProcess(process, guestPidFile)
+                if (force) killProcess(terminalProcess.process, guestPidFile)
+                else terminateProcess(terminalProcess.process, guestPidFile)
             },
             onClosed = { exitCode ->
                 val removed = synchronized(lifecycleLock) { processes.remove(pid) }
@@ -325,6 +328,12 @@ internal class ProotProcessLauncher(
         command: List<String>,
         guestEnvironment: Map<String, String>,
     ): TerminalProcess {
+        // forkpty establishes the child session and controlling slave PTY before exec. The
+        // product capability remains INITIAL_SIZE_ONLY until physical Samsung acceptance proves
+        // guest SIGWINCH, repeat/storm and interactive input continuity together.
+        if (ttyDiagnosticFile == null || ttyDiagnosticForkPtyDirect) {
+            launchForkPtyTerminalProcess(runtime, request, command, guestEnvironment)?.let { return it }
+        }
         val pty = NativePtyBridge.open(request.columns, request.rows)
         if (pty != null) {
             try {
@@ -413,7 +422,7 @@ internal class ProotProcessLauncher(
                     }
                     .start()
                 return TerminalProcess(
-                    process = process,
+                    process = JavaRuntimeChildProcess(process),
                     input = pty.input,
                     output = pty.output,
                     resizeSupport = {
@@ -457,6 +466,45 @@ internal class ProotProcessLauncher(
         return launchPipeTerminalProcess(runtime, request, command, guestEnvironment)
     }
 
+    private fun launchForkPtyTerminalProcess(
+        runtime: InstalledRuntime,
+        request: RuntimeTerminalRequest,
+        command: List<String>,
+        guestEnvironment: Map<String, String>,
+    ): TerminalProcess? {
+        val environment = hostEnvironment(runtime, guestEnvironment).toMutableMap().apply {
+            if (ttyDiagnosticForkPtyDirect) {
+                put("ALPINE_TERMINAL_MODE", "probe-forkpty-direct")
+                put("ALPINE_TERMINAL_RESIZE_CHANNEL", "probe-kernel-pty")
+            } else {
+                put("ALPINE_TERMINAL_MODE", "native-pty")
+                put("ALPINE_TERMINAL_RESIZE_CHANNEL", "unsupported")
+            }
+        }
+        val pty = NativePtyBridge.forkExec(
+            argv = command,
+            environment = environment,
+            workingDirectory = runtime.workspaceDirectory.absolutePath,
+            columns = request.columns,
+            rows = request.rows,
+        ) ?: return null
+        if (pty.childPid <= 0) {
+            pty.close()
+            return null
+        }
+        return TerminalProcess(
+            process = NativePtyRuntimeChildProcess(pty.childPid),
+            input = pty.input,
+            output = pty.output,
+            resizeSupport = {
+                if (ttyDiagnosticForkPtyDirect) RuntimeTerminalResizeSupport.DYNAMIC
+                else RuntimeTerminalResizeSupport.INITIAL_SIZE_ONLY
+            },
+            resize = { columns, rows -> NativePtyBridge.resize(pty.controlFd, columns, rows) },
+            closeIo = pty::close,
+        )
+    }
+
     private fun launchPipeTerminalProcess(
         runtime: InstalledRuntime,
         request: RuntimeTerminalRequest,
@@ -474,7 +522,7 @@ internal class ProotProcessLauncher(
             }
             .start()
         return TerminalProcess(
-            process = process,
+            process = JavaRuntimeChildProcess(process),
             input = process.inputStream,
             output = process.outputStream,
             resizeSupport = { RuntimeTerminalResizeSupport.INITIAL_SIZE_ONLY },
@@ -550,16 +598,27 @@ internal class ProotProcessLauncher(
         runtime: InstalledRuntime,
         guestEnvironment: Map<String, String>,
     ) {
-        environment()["TERM"] = "xterm-256color"
-        environment()["LANG"] = "C.UTF-8"
-        environment()["HOME"] = "/root"
-        environment()["PATH"] = "/usr/local/bin:/usr/bin:/bin"
-        environment()["PROOT_TMP_DIR"] = File(cacheDirectory, "proot-tmp")
-            .apply { mkdirs() }
-            .absolutePath
-        environment()["LD_LIBRARY_PATH"] = runtime.launcher.parentFile?.absolutePath.orEmpty()
-        environment()["PROOT_LOADER"] = runtime.loader.absolutePath
-        environment().putAll(guestEnvironment)
+        environment().clear()
+        environment().putAll(hostEnvironment(runtime, guestEnvironment))
+    }
+
+    private fun hostEnvironment(
+        runtime: InstalledRuntime,
+        guestEnvironment: Map<String, String>,
+    ): Map<String, String> = LinkedHashMap(System.getenv()).apply {
+        put("TERM", "xterm-256color")
+        put("LANG", "C.UTF-8")
+        put("HOME", "/root")
+        put("PATH", "/usr/local/bin:/usr/bin:/bin")
+        put("PROOT_TMP_DIR", File(cacheDirectory, "proot-tmp").apply { mkdirs() }.absolutePath)
+        put("LD_LIBRARY_PATH", runtime.launcher.parentFile?.absolutePath.orEmpty())
+        put("PROOT_LOADER", runtime.loader.absolutePath)
+        putAll(guestEnvironment)
+        // PTY dimensions are owned by RuntimeTerminalRequest and the kernel. Letting a session
+        // or command request restore these launch-time hints makes BusyBox prefer stale values
+        // after a real TIOCSWINSZ, so keep this defense even though validation also rejects them.
+        remove("COLUMNS")
+        remove("LINES")
     }
 
     private fun prepareTtyDiagnosticFile(): File? {
@@ -585,53 +644,34 @@ internal class ProotProcessLauncher(
         }
     }
 
-    private fun terminateProcess(process: Process, guestPidFile: File) {
+    private fun terminateProcess(process: RuntimeChildProcess, guestPidFile: File) {
         val guestPid = readGuestPid(guestPidFile)
-        val descendants = processDescendants(process)
+        val descendants = process.descendants()
         descendants.asReversed().forEach { pid ->
             runCatching { AndroidProcess.sendSignal(pid, SIGTERM) }
         }
         if (guestPid != null) runCatching { AndroidProcess.sendSignal(guestPid, SIGTERM) }
-        process.destroy()
-        val exited = try {
-            process.waitFor(2, TimeUnit.SECONDS)
-        } catch (_: InterruptedException) {
-            Thread.currentThread().interrupt()
-            false
-        }
-        if (!exited) {
+        process.terminate(force = false)
+        if (process.awaitExit(2_000) == null) {
             descendants.asReversed().forEach { pid ->
                 runCatching { AndroidProcess.sendSignal(pid, SIGKILL) }
             }
             if (guestPid != null) runCatching { AndroidProcess.sendSignal(guestPid, SIGKILL) }
-            process.destroyForcibly()
-            runCatching { process.waitFor(2, TimeUnit.SECONDS) }
+            process.terminate(force = true)
+            process.awaitExit(2_000)
         }
     }
 
-    private fun killProcess(process: Process, guestPidFile: File) {
-        processDescendants(process).asReversed().forEach { pid ->
+    private fun killProcess(process: RuntimeChildProcess, guestPidFile: File) {
+        process.descendants().asReversed().forEach { pid ->
             runCatching { AndroidProcess.sendSignal(pid, SIGKILL) }
         }
         readGuestPid(guestPidFile)?.let { pid ->
             runCatching { AndroidProcess.sendSignal(pid, SIGKILL) }
         }
-        process.destroyForcibly()
-        runCatching { process.waitFor(2, TimeUnit.SECONDS) }
+        process.terminate(force = true)
+        process.awaitExit(2_000)
     }
-
-    private fun processDescendants(process: Process): List<Int> = runCatching {
-        @Suppress("UNCHECKED_CAST")
-        val descendants = Process::class.java.getMethod("descendants").invoke(process) as Stream<Any>
-        val pidMethod = Class.forName("java.lang.ProcessHandle").getMethod("pid")
-        descendants.use { stream ->
-            stream.iterator().asSequence().mapNotNull { handle ->
-                (pidMethod.invoke(handle) as? Long)
-                    ?.takeIf { it in 2..Int.MAX_VALUE.toLong() }
-                    ?.toInt()
-            }.toList()
-        }
-    }.getOrDefault(emptyList())
 
     private fun readGuestPid(file: File): Int? {
         repeat(5) {
@@ -653,7 +693,7 @@ internal class ProotProcessLauncher(
     }
 
     private data class ProcessRecord(
-        val process: Process,
+        val process: RuntimeChildProcess,
         val sessionId: String,
         val command: String,
         val startedAt: Long,
@@ -661,13 +701,81 @@ internal class ProotProcessLauncher(
     )
 
     private data class TerminalProcess(
-        val process: Process,
+        val process: RuntimeChildProcess,
         val input: InputStream,
         val output: OutputStream,
         val resizeSupport: () -> RuntimeTerminalResizeSupport,
         val resize: (Int, Int) -> Boolean,
         val closeIo: () -> Unit,
     )
+
+    private interface RuntimeChildProcess {
+        val isAlive: Boolean
+        fun awaitExit(timeoutMillis: Long): Int?
+        fun exitCode(): Int?
+        fun terminate(force: Boolean)
+        fun descendants(): List<Int>
+    }
+
+    private class JavaRuntimeChildProcess(
+        private val delegate: Process,
+    ) : RuntimeChildProcess {
+        override val isAlive: Boolean
+            get() = delegate.isAlive
+
+        override fun awaitExit(timeoutMillis: Long): Int? {
+            return try {
+                if (!delegate.waitFor(timeoutMillis, TimeUnit.MILLISECONDS)) null else exitCode()
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                null
+            }
+        }
+
+        override fun exitCode(): Int? = runCatching { delegate.exitValue() }.getOrNull()
+
+        override fun terminate(force: Boolean) {
+            if (force) delegate.destroyForcibly() else delegate.destroy()
+        }
+
+        override fun descendants(): List<Int> = runCatching {
+            @Suppress("UNCHECKED_CAST")
+            val descendants = Process::class.java.getMethod("descendants").invoke(delegate) as Stream<Any>
+            val pidMethod = Class.forName("java.lang.ProcessHandle").getMethod("pid")
+            descendants.use { stream ->
+                stream.iterator().asSequence().mapNotNull { handle ->
+                    (pidMethod.invoke(handle) as? Long)
+                        ?.takeIf { it in 2..Int.MAX_VALUE.toLong() }
+                        ?.toInt()
+                }.toList()
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    private class NativePtyRuntimeChildProcess(
+        private val pid: Int,
+    ) : RuntimeChildProcess {
+        @Volatile private var status: Int? = null
+
+        override val isAlive: Boolean
+            get() = status == null && NativePtyBridge.isChildAlive(pid)
+
+        @Synchronized
+        override fun awaitExit(timeoutMillis: Long): Int? {
+            status?.let { return it }
+            val result = NativePtyBridge.waitForChild(pid, timeoutMillis)
+            if (result != null) status = result
+            return result
+        }
+
+        override fun exitCode(): Int? = status?.takeIf { it in 0..255 }
+
+        override fun terminate(force: Boolean) {
+            NativePtyBridge.signalProcessGroup(pid, if (force) SIGKILL else SIGTERM)
+        }
+
+        override fun descendants(): List<Int> = emptyList()
+    }
 
     private class LimitedOutputCollector(
         private val input: InputStream,
@@ -696,7 +804,7 @@ internal class ProotProcessLauncher(
 
     private class ProcessRuntimeTerminalSession(
         override val id: String,
-        private val process: Process,
+        private val process: RuntimeChildProcess,
         private val input: InputStream,
         private val output: OutputStream,
         private val guestPidFile: File,
@@ -796,11 +904,8 @@ internal class ProotProcessLauncher(
             open.set(false)
             if (!closed.compareAndSet(false, true)) return
             if (terminateProcess && process.isAlive) terminate(force)
-            if (!terminateProcess && process.isAlive) {
-                runCatching { process.waitFor(500, TimeUnit.MILLISECONDS) }
-            }
-            processExitCode = runCatching { process.exitValue() }
-                .getOrNull()
+            if (!terminateProcess && process.isAlive) process.awaitExit(500)
+            processExitCode = process.exitCode()
                 ?.takeIf { it in 0..MAX_PROCESS_EXIT_CODE }
             runCatching(closeIo)
             guestPidFile.delete()
@@ -858,6 +963,8 @@ internal class ProotProcessLauncher(
             "PROOT_TTY_DIAGNOSTIC_FILE",
             "PROOT_TTY_DIAGNOSTIC_EXPECTED_RDEV",
             "PROOT_TTY_POST_WINSIZE_INPUT_TRACE",
+            "COLUMNS",
+            "LINES",
         )
     }
 }

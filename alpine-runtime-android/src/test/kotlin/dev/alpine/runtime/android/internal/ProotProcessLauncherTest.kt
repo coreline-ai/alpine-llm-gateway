@@ -61,6 +61,62 @@ class ProotProcessLauncherTest {
     }
 
     @Test
+    fun `terminal size hints are runtime owned and cannot be restored by any caller environment`() {
+        val base = temporaryFolder.newFolder("terminal-size-hints")
+        val runtime = InstalledRuntime(
+            runtimeId = "alpine",
+            runtimeVersion = "test",
+            abi = "arm64-v8a",
+            rootfsDirectory = File(base, "rootfs"),
+            workspaceDirectory = File(base, "workspace").apply { mkdirs() },
+            launcher = File(base, "libproot.so"),
+            loader = File(base, "libproot-loader.so"),
+        )
+        val launcher = ProotProcessLauncher(
+            cacheDirectory = File(base, "cache"),
+            environmentContributors = emptyList(),
+            processListener = RuntimeHostProcessListener { },
+            maxOutputBytes = 1024,
+        )
+        launcher.openSession("session")
+
+        fun assertRejected(key: String, action: () -> Unit) {
+            val error = assertThrows(RuntimeOperationException::class.java, action)
+            assertEquals("$key must not override the PTY size", RuntimeErrorCode.INVALID_REQUEST, error.errorCode)
+        }
+
+        listOf("COLUMNS", "LINES").forEach { key ->
+            assertRejected(key) {
+                launcher.openTerminal(
+                    runtime = runtime,
+                    sessionId = "session",
+                    sessionEnvironment = emptyMap(),
+                    request = RuntimeTerminalRequest(environment = mapOf(key to "999")),
+                )
+            }
+            assertRejected(key) {
+                launcher.openTerminal(
+                    runtime = runtime,
+                    sessionId = "session",
+                    sessionEnvironment = mapOf(key to "999"),
+                    request = RuntimeTerminalRequest(),
+                )
+            }
+            assertRejected(key) {
+                launcher.execute(
+                    runtime = runtime,
+                    sessionId = "session",
+                    sessionEnvironment = emptyMap(),
+                    request = RuntimeCommandRequest(
+                        executable = "/bin/sh",
+                        environment = mapOf(key to "999"),
+                    ),
+                )
+            }
+        }
+    }
+
+    @Test
     fun `closed session cannot create a new host process`() {
         val base = temporaryFolder.newFolder("closed-runtime")
         val runtime = InstalledRuntime(

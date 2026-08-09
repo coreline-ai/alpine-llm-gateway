@@ -33,8 +33,12 @@
 - filesystem block/metadata 여유 공간
 - 이미 설치된 package 상태 및 update/remove에 따른 의존성 정리
 - repository의 이후 version, license expression, provider 변경
+- byte 합계가 `Long` 표시 범위를 넘는 snapshot의 정확한 aggregate total
 
-따라서 값은 설치를 허용하거나 성공을 보장하는 preflight가 아니다. 실제 repository preflight, network failure, cancel, disk-full, actual installed-size Samsung matrix는 `NOT_RUN`이다.
+따라서 값은 설치를 허용하거나 성공을 보장하는 preflight가 아니다. 제품은 approval 뒤 current cached index를
+사용하는 fixed `apk --simulate`을 실행하고 실패하면 mutation을 보내지 않지만, Alpine APK의 simulation은 index를
+refresh하거나 missing index를 다운로드하지 않는다. 따라서 실제 repository freshness, network failure, cancel,
+disk-full, actual installed-size Samsung matrix는 계속 `NOT_RUN`이다. 참고: [Alpine APK simulation contract](https://wiki.alpinelinux.org/wiki/Apk/apkv3_doc_diff).
 
 ## 출처
 

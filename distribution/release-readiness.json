@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-08-09T00:00:00Z",
+  "updated_at": "2026-08-09T04:16:08Z",
   "gates": [
     {
       "gate_id": "project_license",
@@ -50,18 +50,20 @@
       "release_blocking": true,
       "blocker_code": "DESTRUCTIVE_DEVICE_TEST_APPROVAL_REQUIRED",
       "evidence": [
-        "dev-plan/alpine-runtime-p1-p2-verification-20260801.md"
+        "dev-plan/alpine-runtime-p1-p2-verification-20260801.md",
+        "dev-plan/implement_20260809_104217.md"
       ]
     },
     {
       "gate_id": "github_remote_ci",
-      "state": "READY",
+      "state": "BLOCKED",
       "owner": "LOCAL_ENGINEERING",
       "release_blocking": true,
-      "blocker_code": null,
+      "blocker_code": "GITHUB_CURRENT_HEAD_CI_NOT_VERIFIED",
       "evidence": [
         ".github/workflows/ci.yml",
-        "distribution/GITHUB_CI_STATUS.md"
+        "distribution/GITHUB_CI_STATUS.md",
+        "dev-plan/implement_20260809_133500.md"
       ]
     },
     {
@@ -91,6 +93,8 @@
     "dev-plan/implement_20260809_070000.md",
     "dev-plan/implement_20260809_073000.md",
     "dev-plan/implement_20260809_071338.md",
+    "dev-plan/implement_20260809_130000.md",
+    "dev-plan/implement_20260809_082423.md",
     "dev-plan/goal-completion-audit-20260808.md",
     "docs/adr/0006-single-pty-dynamic-terminal-resize.md",
     "scripts/verify-proot-terminal-handoff.py"
@@ -103,7 +107,10 @@
       "release_blocking": false,
       "blocker_code": "X86_64_EMULATOR_UNAVAILABLE",
       "evidence": [
-        "scripts/runtime/run-x86_64-emulator-gate.sh"
+        "scripts/runtime/run-x86_64-emulator-gate.sh",
+        "dev-plan/implement_20260809_132000.md",
+        "dev-plan/implement_20260809_125602.md",
+        "dev-plan/implement_20260809_143000.md"
       ]
     },
     {

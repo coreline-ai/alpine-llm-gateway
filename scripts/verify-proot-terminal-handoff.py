@@ -66,6 +66,27 @@ def audit(source: Path, expected_commit: str | None = None) -> dict[str, Any]:
         if revision != expected_commit:
             fail("PRoot source revision does not match the runtime lock")
 
+    # PRoot's tracer owns the physical controlling terminal before it forks the
+    # first ptrace tracee.  The event loop explicitly ignores every signal that
+    # is not in its small job-control exception list; SIGWINCH is not an
+    # exception.  This is an intentionally narrow source fact: it does *not*
+    # establish why Android did not deliver a resize signal to the tracee in a
+    # particular run, and it is not permission to synthesize or relay one.
+    event_loop_start = event.find("int event_loop()")
+    if event_loop_start < 0:
+        fail("PRoot terminal handoff invariant failed: event_loop_missing")
+    event_loop_setup = event[event_loop_start:].split("while (1)", 1)[0]
+    require(
+        event_loop_setup,
+        r"for \(signum = 0; signum < SIGRTMAX; signum\+\+\).*?"
+        r"case SIGCHLD:.*?case SIGTTOU:.*?continue;.*?"
+        r"default:\s*/\* Ignore all other signals.*?\*/\s*"
+        r"signal_action\.sa_sigaction = \(void \*\)SIG_IGN",
+        "tracer_default_signal_policy_is_ignore",
+    )
+    if re.search(r"case\s+SIGWINCH\s*:", event_loop_setup):
+        fail("PRoot terminal handoff invariant failed: tracer_sigwinch_is_not_ignored")
+
     # A tracee signal stop falls through this default case unless a syscall
     # chain is active.  The signal is then passed verbatim into ptrace restart.
     # This proves only the generic handoff point; it does not prove that the
@@ -121,8 +142,10 @@ def audit(source: Path, expected_commit: str | None = None) -> dict[str, Any]:
             "ptrace_restart_receives_pending_signal": True,
             "stock_entry_has_no_winsize_rewrite": True,
             "stock_exit_has_no_winsize_rewrite": True,
+            "tracer_default_signal_policy_is_ignore": True,
+            "tracer_sigwinch_is_not_special_cased": True,
         },
-        "conclusion": "STATIC_HANDOFF_PRESENT_NO_STOCK_TTY_WINSIZE_OR_SIGNAL_HOOK",
+        "conclusion": "STATIC_HANDOFF_PRESENT_TRACER_SIGWINCH_IGNORED_NO_STOCK_TTY_HOOK",
         "dynamic_resize_status": "NOT_PROVEN",
     }
 

@@ -3,6 +3,7 @@ package dev.alpine.llm
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -10,6 +11,29 @@ import java.nio.charset.StandardCharsets
 import java.util.Base64
 
 class ProviderProtocolAdaptersTest {
+    @Test
+    fun builtInInferenceAdaptersNeverOptIntoAutomaticRetry() {
+        val requestJson = """
+            {"model":"test-model","messages":[{"role":"user","content":"hello"}]}
+        """.trimIndent()
+        val requests = listOf(
+            OpenAiCompatibleOAuthAdapter("https://api.example.com/v1/chat/completions")
+                .createStreamRequest(requestJson),
+            AnthropicMessagesOAuthAdapter("https://api.example.com/v1/messages")
+                .createStreamRequest(requestJson),
+            GeminiGenerateContentOAuthAdapter(
+                "https://api.example.com/v1/models/{model}:generateContent",
+            ).createStreamRequest(requestJson),
+            CodexResponsesOAuthAdapter("https://api.example.com/v1/responses")
+                .createStreamRequest(requestJson),
+        )
+
+        requests.forEach { request ->
+            assertEquals(ProviderRetrySafety.NEVER_AUTOMATIC, request.retrySafety)
+            assertNull(request.idempotencyKeyHeader)
+        }
+    }
+
     @Test
     fun anthropicAdapterMapsSystemMessagesAndUsage() {
         val adapter = AnthropicMessagesOAuthAdapter(

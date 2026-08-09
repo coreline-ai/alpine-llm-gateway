@@ -11,6 +11,8 @@ Provider별 model 접근 권한, 모바일 public-client 승인, endpoint별 ide
 - Android direct/Alpine Gateway backend는 계속 `ChatBackendIdempotency.NONE`으로 유지한다.
 - 429·5xx·I/O·SSE 중단은 UI가 **사용자의 Retry**를 제안할 수 있어도 transport 자동 재전송의
   근거가 되지 않는다. Provider 문서의 SDK backoff 안내도 server-side deduplication 보장이 아니다.
+- OAuth access token이 401로 거부되어도 refresh 뒤 같은 inference POST를 자동 재전송하지 않는다.
+  refresh가 성공하면 다음 **사용자 명시 Retry**만 새 credential을 사용할 수 있다.
 - `X-Client-Request-Id`, `request-id`, batch 요청 식별자는 support correlation 또는 batch 범위의
   용도이며 실시간 inference 재전송 권한으로 해석하지 않는다.
 - 모델 문서는 catalog 변동·tier·계정 권한을 보여 주는 참고 자료일 뿐 현재 로그인 profile의
@@ -43,12 +45,23 @@ Provider별 model 접근 권한, 모바일 public-client 승인, endpoint별 ide
 형식 검증 필드일 뿐, 현재 adapter가 Provider header로 보내거나 router가 요청을 replay한다는 뜻이
 아니다.
 
+## Android 401 경계
+
+2026-08-09에 `OAuthLlmSession`의 401 후 refresh→같은 complete/stream inference 재전송 경로를 제거했다.
+401은 credential refresh를 시도할 수 있지만, 그 결과는 다음 사용자 action을 위한 저장 credential에만
+사용한다. 최초 inference 결과는 401로 반환하며 refresh가 불가능하면 reauthentication을 요구한다.
+
+`OAuthLlmSessionTest`는 stream과 non-stream 모두에서 첫 401의 bridge dispatch가 정확히 1회이고,
+사용자가 새로 Retry할 때만 refreshed credential으로 2번째 dispatch가 일어남을 검증한다.
+`ProviderProtocolAdaptersTest`는 OpenAI-compatible(xAI 포함), Anthropic, Gemini, Codex built-in adapter가
+`NEVER_AUTOMATIC`과 idempotency header 미설정을 유지함을 검증한다.
+
 ## 현 상태
 
 | 항목 | 상태 |
 |---|---|
 | 공식 문서 재검토 | `PASS` |
-| 자동 재전송 차단 regression | `PASS` (local unit test) |
+| 자동 재전송 차단 regression | `PASS` (local unit test: 401 refresh 뒤 no-replay + built-in adapter contract) |
 | 실제 모델 목록·권한·OAuth/API E2E | `NOT_RUN` |
 | 429·5xx·비정상 SSE 실제 Provider/fault proxy 검증 | `NOT_RUN` |
 | Provider별 실시간 inference idempotency 계약 | `NOT_CONFIRMED` |

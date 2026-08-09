@@ -81,7 +81,7 @@ Anthropic/Codex/xAI direct OAuth 유형은 compatibility/reference 경로다. �
 
 키보드가 열린 동안에는 작은 화면에서 답변과 오류가 가려지지 않도록 Alpine 상태 카드와 sub-navigation을 임시로 접는다. 키보드를 닫으면 다시 표시된다.
 
-패키지 설치는 `curl`, `git`, `openssh-client`, `py3-pip`, `python3`, `nodejs`, `npm`의 exact allowlist와 사용자 확인을 모두 통과해야 한다. 임의 shell 문자열은 실행하지 않는다. 승인 전 화면은 Alpine `v3.21/aarch64` snapshot 기준의 license·download/installed payload와 network 필요 여부를 표시한다. 이 값은 dependency/index/cache/filesystem overhead나 이후 repository 변경을 포함하지 않는 표시용 추정치이며 install 권한이나 실제 결과를 보장하지 않는다. Python·Git·SSH·Node profile의 `검사` action은 fixed direct-argv version check만 실행하고 Guest 출력은 UI 상태에 저장하지 않는다.
+패키지 설치·삭제·업데이트는 `curl`, `git`, `openssh-client`, `py3-pip`, `python3`, `nodejs`, `npm`의 exact allowlist와 사용자 확인을 모두 통과해야 한다. 임의 shell 문자열은 실행하지 않는다. 승인 뒤 실제 mutation 전에 동일한 validated 이름으로 고정 `apk --simulate`을 실행하며, non-zero·timeout·transport error이면 실제 command를 보내지 않고 stable 안내만 표시한다. simulation은 index refresh·missing index download를 하지 않으므로 network·freshness·dependency total·disk-full 보장은 아니다. 승인 전 화면은 Alpine `v3.21/aarch64` snapshot 기준의 license·download/installed payload와 network 필요 여부를 표시한다. 이 값은 dependency/index/cache/filesystem overhead나 이후 repository 변경을 포함하지 않는 표시용 추정치이며, metadata byte 합계가 `Long` 범위를 넘으면 정확한 total 대신 제한 안내를 표시한다. install 권한이나 실제 결과를 보장하지 않는다. Python·Git·SSH·Node profile의 `검사` action은 fixed direct-argv version check만 실행하고 Guest 출력은 UI 상태에 저장하지 않는다.
 
 ## 빌드·설치
 
@@ -106,25 +106,27 @@ ANDROID_SERIAL=<device-serial> \
   ./gradlew :integrated-app:connectedDebugAndroidTest
 ```
 
-2026-08-08 기준:
+2026-08-09 기준:
 
 | 검증 | 결과 |
 |---|---|
 | Chat·Runtime UI compile/unit | PASS |
-| Runtime Compose package/tool smoke | **Samsung 7/7 PASS** — fixed Git argv 선택·terminal semantics·한글 IME·terminal exit accessibility·confirmed SIGTERM/SIGKILL·package snapshot/workspace action forwarding |
+| Runtime Compose package/tool smoke | **Samsung 10/10 PASS** — fixed Git argv 선택·terminal semantics·한글 IME·terminal exit accessibility·confirmed SIGTERM/SIGKILL·package snapshot/workspace action forwarding·simulation failure 및 oversized snapshot total bounded guidance |
 | Runtime Probe actual terminal lifecycle | **Samsung PASS** — actual PRoot initial `stty size=28 96`, fail-closed `INITIAL_SIZE_ONLY`/`TERMINAL_RESIZE_UNSUPPORTED`, safe terminal exit event, Host process `STARTED:3`/`STOPPED:3`, restart/repair healthy |
-| Foreground-service process lease | **Local 4/4 PASS** — first start/last stop, nested terminal·command, duplicate close, FGS start-rejection host policy; actual notification removal은 `NOT_RUN` |
-| Workspace SAF·share boundary | **Samsung 5/5 PASS** — bounded `content://` import/export, filename sanitize, provider I/O stable error, cache FileProvider share publish |
-| Package metadata snapshot UI | PASS — license·payload·network/estimate boundary AndroidTest 회귀 |
+| Foreground-service process lease | **Samsung PASS** — background 4/4 unit + test-only permission을 쓴 module instrumentation 1/1: terminal·command 마지막 `STOPPED` 뒤 FGS와 app-owned notification 제거 확인 |
+| Workspace SAF·share boundary | **Samsung 6/6 PASS** — bounded `content://` import/export, filename sanitize, oversized export가 destination URI를 열거나 변경하기 전 거부됨, provider I/O stable error, cache FileProvider share publish |
+| Package metadata snapshot UI | PASS — license·payload·network/estimate boundary와 overflowed total bounded guidance AndroidTest 회귀 |
 | Integrated App lint/APK | PASS |
-| Samsung integrated instrumentation | **10/10 PASS** — 기존 채팅 4건 + first-run guide 5건 + 접근성·한글 IME 1건 |
+| Samsung integrated instrumentation | **10/10 PASS** — 기존 채팅 4건 + first-run guide 5건 + 접근성·한글 IME 1건. test setup은 DreamActivity만 wake하며 Keyguard를 우회하지 않음 |
+| Android 12 tablet integrated instrumentation | **10/10 PASS** — 동일 fake Provider 흐름과 200% font guide reachability를 확인. 실제 OAuth, TalkBack gesture, external keyboard·foldable 수동 QA는 `NOT_RUN` |
 | Samsung Demo 전체 회귀 | **35/35 PASS** — Provider·Chat·lifecycle·Markdown·theme |
 | OAuth lifecycle recovery | **PASS** — OAuth core 3건, Provider 12건, 복구 GUI 3건, credential-free `am force-stop` cold start |
+| Gateway recovery Stop 경쟁 | **Local PASS** — explicit Stop·provider/model owner 교체는 recovery lease를 즉시 revoke하며, 이미 실행 중인 restart도 owner를 다시 Stop으로 정리; prompt·terminal command·direct Provider fallback 재실행 없음 |
 | Integrated OAuth/app boundary scan | **Local PASS** — consumer/CLI fingerprint, known copied registration/API key/private key 및 demo/probe/sample package fail-closed 검사 |
 | 빠른 채팅·Gateway·Runtime·패키지 화면 | Samsung portrait 확인 |
 | 실제 Provider 계정 OAuth/API E2E | `NOT_RUN` — 외부 승인 필요 |
 
-Instrumentation은 실제 credential을 사용하지 않는 fake Provider로 로그인→모델 선택→stream→모드 왕복→Stop→503→retry, 대화 복원과 Alpine fallback 승인·거절 전 direct Provider 미호출을 검증한다. OAuth lifecycle 회귀는 Activity 재생성, orphaned encrypted transaction 폐기, 성공 token 우선, stale attempt 격리와 명시적 재로그인을 검증한다. 추가 접근성 회귀는 한국어 icon label, 메시지 sender/status semantics, History·Assistant 닫기, 48dp action과 한글 IME 단일 전송을 검증한다. 장치 probe는 실제 PRoot Runtime, loopback HostBridge, bundled Python Gateway, `llmctl`, stream·cancel과 capability 회전을 별도로 검증한다.
+Instrumentation은 실제 credential을 사용하지 않는 fake Provider로 로그인→모델 선택→stream→모드 왕복→Stop→503→retry, 대화 복원과 Alpine fallback 승인·거절 전 direct Provider 미호출을 검증한다. OAuth lifecycle 회귀는 Activity 재생성, orphaned encrypted transaction 폐기, 성공 token 우선, stale attempt 격리와 명시적 재로그인을 검증한다. Gateway 자동 복구는 user Stop·owner swap 직후 queued/in-flight restart에 recovery lease가 남지 않는지 단위 회귀로 검증하며, 취소 경로는 prompt·terminal command·direct Provider fallback을 호출하지 않는다. 추가 접근성 회귀는 한국어 icon label, 메시지 sender/status semantics, History·Assistant 닫기, 48dp action과 한글 IME 단일 전송을 검증한다. 장치 probe는 실제 PRoot Runtime, loopback HostBridge, bundled Python Gateway, `llmctl`, stream·cancel과 capability 회전을 별도로 검증한다.
 
 ## 알려진 제한
 
@@ -132,7 +134,7 @@ Instrumentation은 실제 credential을 사용하지 않는 fake Provider로 로
 - Workspace의 Android DocumentsUI full import → edit → terminal → export/share 수동 흐름은 `NOT_RUN`이다. 자동화는 test provider와 app-private explicit share URI까지만 다룬다.
 - terminal UI는 bounded ANSI colour·cursor·clear·alternate screen snapshot과 raw guest output을 저장하지 않는 마지막 exit code 요약을 표시하지만, vi/nano/top의
   full TUI compatibility와 실제 외부 keyboard matrix는 아직 실기기 검증 전이다.
-- terminal process 종료 뒤 실제 Samsung notification/FGS 제거 및 OEM background lifecycle은 Doze/reboot/battery restriction 승인 전 `NOT_RUN`이다.
+- terminal process 종료 뒤 module-level Samsung FGS/notification 제거는 통과했다. 다만 통합 제품의 사용자가 선택한 notification permission UX와 OEM Doze/reboot/battery restriction lifecycle은 `NOT_RUN`이다.
 - Provider·Chat·History·Assistant·first-run guide의 semantics, 48dp, 한글 IME와 200% font·compact 자동 검증은 통과했지만 실제 TalkBack 음성·focus gesture, Switch Access와 foldable 화면은 확장 QA가 남아 있다.
 - 실제 Provider 계정 browser callback 도중 process kill, refresh/logout과 OEM background 정책은 승인된 계정·기기 창에서 추가 검증해야 한다.
 - Gemini 외 direct Provider는 Provider가 승인한 model catalog를 아직 번들하지 않는다. 앱 소유 OAuth·endpoint·scope·model을 명시 입력해도 실계정 OAuth/API E2E 전에는 `NOT_RUN`이다.

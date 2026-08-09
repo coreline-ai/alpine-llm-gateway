@@ -288,6 +288,7 @@ fun RuntimePackagePanel(
                                 RuntimePackageInstallOutcome.INSTALLED -> "설치 완료"
                                 RuntimePackageInstallOutcome.POLICY_DENIED -> "정책에서 거부됨"
                                 RuntimePackageInstallOutcome.APPROVAL_DECLINED -> "사용자가 취소함"
+                                RuntimePackageInstallOutcome.PREFLIGHT_FAILED -> "사전 확인 실패"
                             },
                             style = MaterialTheme.typography.labelLarge,
                         )
@@ -296,6 +297,8 @@ fun RuntimePackagePanel(
                                 RuntimePackageInstallOutcome.INSTALLED -> "터미널에서 설치된 도구를 사용할 수 있습니다."
                                 RuntimePackageInstallOutcome.POLICY_DENIED -> "allowlist에 있는 정확한 패키지만 선택하세요."
                                 RuntimePackageInstallOutcome.APPROVAL_DECLINED -> "Runtime은 변경되지 않았습니다."
+                                RuntimePackageInstallOutcome.PREFLIGHT_FAILED ->
+                                    "실제 설치는 시작하지 않았습니다. network·repository 상태를 확인한 뒤 다시 시도하세요."
                             },
                             style = MaterialTheme.typography.bodySmall,
                         )
@@ -403,10 +406,18 @@ private fun RuntimePackageEstimateSummary(
                     )
                 }
                 val source = estimate.metadata.map { it.snapshotId }.distinct().joinToString()
-                Text(
-                    "합계(알려진 항목): 내려받기 ${formatPackageBytes(estimate.downloadBytes)} · 설치 payload ${formatPackageBytes(estimate.installedBytes)}",
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                if (estimate.totalBytesOverflowed) {
+                    Text(
+                        "합계는 snapshot 표시 범위를 넘었습니다. 실제 설치 용량으로 사용하지 마세요.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.error,
+                    )
+                } else {
+                    Text(
+                        "합계(알려진 항목): 내려받기 ${formatPackageBytes(estimate.downloadBytes)} · 설치 payload ${formatPackageBytes(estimate.installedBytes)}",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
                 Text(
                     "기준: $source",
                     style = MaterialTheme.typography.bodySmall,
@@ -465,13 +476,14 @@ private fun RuntimePackageAction.description(): String = when (this) {
 }
 
 private fun RuntimePackageAction.confirmationMessage(): String = when (this) {
-    RuntimePackageAction.INSTALL -> "Alpine repository network와 앱 전용 저장 공간을 사용합니다. 설치 중 앱을 강제 종료하지 마세요."
-    RuntimePackageAction.REMOVE -> "선택한 개발 도구와 사용되지 않는 의존성이 제거될 수 있습니다. 현재 실행 중인 Gateway는 자동으로 다시 시작되지 않습니다."
-    RuntimePackageAction.UPDATE -> "선택한 package의 Alpine repository version으로 업데이트합니다. network와 추가 저장 공간이 필요할 수 있습니다."
+    RuntimePackageAction.INSTALL -> "먼저 현재 repository index로 변경 없는 사전 확인을 실행합니다. 통과한 경우에만 Alpine repository network와 앱 전용 저장 공간을 사용해 설치합니다."
+    RuntimePackageAction.REMOVE -> "먼저 변경 없는 사전 확인을 실행합니다. 통과한 경우 선택한 개발 도구와 사용되지 않는 의존성이 제거될 수 있으며, 현재 Gateway는 자동으로 다시 시작되지 않습니다."
+    RuntimePackageAction.UPDATE -> "먼저 현재 repository index로 변경 없는 사전 확인을 실행합니다. 통과한 경우 선택한 package를 업데이트하며 network와 추가 저장 공간이 필요할 수 있습니다."
 }
 
 private fun RuntimePackageMutationOutcome.userLabel(): String = when (this) {
     RuntimePackageMutationOutcome.COMPLETED -> "완료"
     RuntimePackageMutationOutcome.POLICY_DENIED -> "정책 거부"
     RuntimePackageMutationOutcome.APPROVAL_DECLINED -> "사용자 취소"
+    RuntimePackageMutationOutcome.PREFLIGHT_FAILED -> "사전 확인 실패"
 }

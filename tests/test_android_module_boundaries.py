@@ -447,6 +447,60 @@ class AndroidModuleBoundaryTests(unittest.TestCase):
         integrated_build = (ROOT / "integrated-app/build.gradle.kts").read_text()
         self.assertNotIn("alpine-runtime-probe", integrated_build)
 
+    def test_forkpty_probe_exposure_is_debug_gated_and_product_resize_stays_closed(self) -> None:
+        configuration = (
+            ROOT
+            / "alpine-runtime-android/src/main/kotlin/dev/alpine/runtime/android/"
+            "AndroidAlpineRuntimeFactory.kt"
+        ).read_text()
+        manager = (
+            ROOT
+            / "alpine-runtime-android/src/main/kotlin/dev/alpine/runtime/android/internal/"
+            "AndroidAlpineRuntimeManager.kt"
+        ).read_text()
+        launcher = (
+            ROOT
+            / "alpine-runtime-android/src/main/kotlin/dev/alpine/runtime/android/internal/"
+            "ProotProcessLauncher.kt"
+        ).read_text()
+        bridge = (
+            ROOT / "alpine-runtime-android/src/main/cpp/pty_bridge.c"
+        ).read_text()
+        integrated_manifest = (
+            ROOT / "integrated-app/src/main/AndroidManifest.xml"
+        ).read_text()
+
+        self.assertIn("val ttyDiagnosticForkPtyDirect: Boolean = false", configuration)
+        self.assertIn(
+            "require(!ttyDiagnosticForkPtyDirect || enableTtyIoctlDiagnostics)",
+            configuration,
+        )
+        self.assertIn("ApplicationInfo.FLAG_DEBUGGABLE", manager)
+        self.assertIn("TTY_DIAGNOSTIC_MANIFEST_KEY", manager)
+        self.assertIn(
+            "configuration.ttyDiagnosticForkPtyDirect && ttyDiagnosticFile != null",
+            manager,
+        )
+        self.assertNotIn("dev.alpine.runtime.TTY_DIAGNOSTIC_PROBE_ENABLED", integrated_manifest)
+
+        self.assertIn('put("ALPINE_TERMINAL_MODE", "native-pty")', launcher)
+        self.assertIn('put("ALPINE_TERMINAL_RESIZE_CHANNEL", "unsupported")', launcher)
+        self.assertIn("RuntimeTerminalResizeSupport.INITIAL_SIZE_ONLY", launcher)
+        self.assertIn("if (ttyDiagnosticForkPtyDirect) RuntimeTerminalResizeSupport.DYNAMIC", launcher)
+        self.assertIn("probe-forkpty-direct", launcher)
+        self.assertIn('"COLUMNS",', launcher)
+        self.assertIn('"LINES",', launcher)
+        host_environment = launcher[launcher.index("private fun hostEnvironment("):]
+        self.assertLess(
+            host_environment.index("putAll(guestEnvironment)"),
+            host_environment.index('remove("COLUMNS")'),
+        )
+        self.assertLess(
+            host_environment.index('remove("COLUMNS")'),
+            host_environment.index('remove("LINES")'),
+        )
+        self.assertNotIn("SIGWINCH", bridge)
+
     def test_x86_64_pack_payload_matches_experimental_lock(self) -> None:
         lock = json.loads(
             (ROOT / "runtime" / "alpine-3.21.3-x86_64.lock.json").read_text()
@@ -710,6 +764,65 @@ class AndroidModuleBoundaryTests(unittest.TestCase):
         self.assertNotIn("/bin/sh", packages)
         self.assertNotIn("android.", packages)
         self.assertNotIn("androidx.", packages)
+
+    def test_runtime_foreground_service_removes_notification_on_direct_stop(self) -> None:
+        service = (
+            ROOT
+            / "alpine-runtime-background-android/src/main/kotlin/dev/alpine/runtime/background/android/"
+            "RuntimeForegroundService.kt"
+        ).read_text()
+        listener = (
+            ROOT
+            / "alpine-runtime-background-android/src/main/kotlin/dev/alpine/runtime/background/android/"
+            "RuntimeForegroundProcessListener.kt"
+        ).read_text()
+        instrumentation = (
+            ROOT
+            / "alpine-runtime-background-android/src/androidTest/kotlin/dev/alpine/runtime/background/android/"
+            "RuntimeForegroundServiceInstrumentedTest.kt"
+        ).read_text()
+
+        destroy_body = service.split("override fun onDestroy()", 1)[1].split("override fun onBind", 1)[0]
+        self.assertIn("stopForeground(STOP_FOREGROUND_REMOVE)", destroy_body)
+        self.assertIn("RuntimeProcessLeaseAction.STOP_FOREGROUND -> stopForeground()", listener)
+        self.assertIn("lastRuntimeProcessClearsForegroundServiceAndNotification", instrumentation)
+        self.assertIn("requireNotificationVisibility", instrumentation)
+
+    def test_gateway_recovery_lease_prevents_stale_restart_from_touching_new_owner(self) -> None:
+        supervisor = (
+            ROOT
+            / "alpine-llm-bridge/src/main/kotlin/dev/alpine/runtime/bridge/"
+            "AlpineLlmBridgeRecoverySupervisor.kt"
+        ).read_text()
+        host = (
+            ROOT
+            / "integrated-app/src/main/java/dev/alpine/integrated/IntegratedAlpineLlmHost.kt"
+        ).read_text()
+
+        self.assertIn("fun interface AlpineLlmBridgeRecoveryLease", supervisor)
+        self.assertIn("restartGateway(lease)", supervisor)
+        self.assertIn("AlpineLlmBridgeRecoveryLease { isRecovering(expectedGeneration) }", supervisor)
+        self.assertIn("restartAfterUnexpectedFailure(\n        lease: AlpineLlmBridgeRecoveryLease", host)
+        recovery = host.split("private fun restartAfterUnexpectedFailure(", 1)[1].split(
+            "private fun ownsActiveRecovery(", 1
+        )[0]
+        self.assertGreaterEqual(recovery.count("ownsActiveRecovery(active, lease)"), 3)
+        self.assertIn("active.stop().toCompletableFuture().join()", recovery)
+        self.assertNotIn("completeFromStream", recovery)
+        self.assertNotIn("streamForHostBridge", recovery)
+        self.assertNotIn("AndroidDirectChatBackend", recovery)
+
+    def test_integrated_ui_regression_wakes_dream_without_keyguard_bypass(self) -> None:
+        instrumentation = (
+            ROOT
+            / "integrated-app/src/androidTest/java/dev/alpine/integrated/"
+            "IntegratedFastChatInstrumentedTest.kt"
+        ).read_text()
+
+        self.assertIn("wakeScreenForUiTest()", instrumentation)
+        self.assertIn('input keyevent KEYCODE_WAKEUP', instrumentation)
+        self.assertNotIn("dismiss-keyguard", instrumentation.lower())
+        self.assertNotIn("KEYCODE_MENU", instrumentation)
 
     def test_proot_and_talloc_remain_outside_android_jni_link_boundary(self) -> None:
         native_bridge = (

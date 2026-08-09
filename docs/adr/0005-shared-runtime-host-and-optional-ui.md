@@ -18,8 +18,10 @@ new process must not restore a stale RUNNING flag from UI persistence.
 3. `:alpine-runtime-ui-compose` is a stateless optional renderer of `RuntimeHostState`.
 4. `:alpine-integration-sample` proves XML/View integration without Compose or demo code.
 5. `:integrated-app` proves Compose assembly and explicit `FAST_CHAT`/`ALPINE_WORKSPACE` selection.
-6. Package installation accepts validated package names, an exact allowlist, and explicit approval;
-   only the fixed apk command can be dispatched.
+6. Package mutation accepts validated package names, an exact allowlist, and explicit approval;
+   a fixed non-mutating `apk --simulate` runs first and a fixed mutation argv can be dispatched only
+   after that simulation succeeds. A simulation cannot be interpreted as a fresh-index, network,
+   capacity, or full transaction guarantee.
 7. Closing or rotating a screen removes listeners but never silently stops the runtime.
 
 ## Consequences

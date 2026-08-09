@@ -53,16 +53,30 @@ fun interface AlpineLlmBridgeRecoveryListener {
 }
 
 /**
+ * Read-only authority granted to one automatic recovery attempt.
+ *
+ * The lease becomes inactive synchronously when its monitoring generation is revoked by an
+ * explicit Stop, owner swap, or close. A restart implementation must check it immediately before
+ * doing work and again after any non-cancellable lifecycle call. It is deliberately incapable of
+ * starting, stopping, or replaying work itself.
+ */
+fun interface AlpineLlmBridgeRecoveryLease {
+    fun isActive(): Boolean
+}
+
+/**
  * App-neutral, single-owner health supervisor for [AlpineLlmBridgeController].
  *
  * Call [startMonitoring] only once an already-authorized lifecycle owner has successfully
  * started the Gateway. [stopMonitoring] is deliberately synchronous: an explicit Stop revokes
- * the current generation before an in-flight health callback can schedule another restart.
+ * the current generation before an in-flight health callback can schedule another restart. A
+ * restart callback receives a [AlpineLlmBridgeRecoveryLease] so it can also discard work that was
+ * already queued when Stop or an owner swap occurred.
  */
 class AlpineLlmBridgeRecoverySupervisor internal constructor(
     private val configuration: AlpineLlmBridgeRecoveryConfiguration,
     private val healthCheck: () -> CompletionStage<AlpineLlmBridgeHealth>,
-    private val restartGateway: () -> CompletionStage<AlpineLlmBridgeHealth>,
+    private val restartGateway: (AlpineLlmBridgeRecoveryLease) -> CompletionStage<AlpineLlmBridgeHealth>,
     private val listener: AlpineLlmBridgeRecoveryListener,
     private val scheduler: ScheduledExecutorService,
 ) : AutoCloseable {
@@ -75,7 +89,7 @@ class AlpineLlmBridgeRecoverySupervisor internal constructor(
     ) : this(
         configuration = configuration,
         healthCheck = healthCheck,
-        restartGateway = restartGateway,
+        restartGateway = { _ -> restartGateway() },
         listener = listener,
         scheduler = Executors.newSingleThreadScheduledExecutor { runnable ->
             Thread(runnable, "alpine-gateway-health").apply { isDaemon = true }
@@ -224,8 +238,9 @@ class AlpineLlmBridgeRecoverySupervisor internal constructor(
 
     private fun runRestart(expectedGeneration: Long) {
         if (!isRecovering(expectedGeneration)) return
+        val lease = AlpineLlmBridgeRecoveryLease { isRecovering(expectedGeneration) }
         val future = try {
-            restartGateway()
+            restartGateway(lease)
         } catch (error: Throwable) {
             failedHealth(error)
         }
@@ -303,4 +318,28 @@ class AlpineLlmBridgeRecoverySupervisor internal constructor(
 
     private fun failedHealth(error: Throwable): CompletionStage<AlpineLlmBridgeHealth> =
         CompletableFuture<AlpineLlmBridgeHealth>().also { it.completeExceptionally(error) }
+
+    companion object {
+        /**
+         * Opt-in constructor for owners that must observe Stop/owner-swap revocation while a
+         * restart callback is already queued. The legacy constructor remains source/binary
+         * compatible for app-neutral SDK users that do not need the lease.
+         */
+        @JvmStatic
+        @JvmOverloads
+        fun withRecoveryLease(
+            healthCheck: () -> CompletionStage<AlpineLlmBridgeHealth>,
+            restartGateway: (AlpineLlmBridgeRecoveryLease) -> CompletionStage<AlpineLlmBridgeHealth>,
+            configuration: AlpineLlmBridgeRecoveryConfiguration = AlpineLlmBridgeRecoveryConfiguration(),
+            listener: AlpineLlmBridgeRecoveryListener = AlpineLlmBridgeRecoveryListener { },
+        ): AlpineLlmBridgeRecoverySupervisor = AlpineLlmBridgeRecoverySupervisor(
+            configuration = configuration,
+            healthCheck = healthCheck,
+            restartGateway = restartGateway,
+            listener = listener,
+            scheduler = Executors.newSingleThreadScheduledExecutor { runnable ->
+                Thread(runnable, "alpine-gateway-health").apply { isDaemon = true }
+            },
+        )
+    }
 }

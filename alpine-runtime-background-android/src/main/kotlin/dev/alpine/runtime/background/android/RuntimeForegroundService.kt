@@ -54,6 +54,10 @@ class RuntimeForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        // The controller may stop the service directly instead of delivering ACTION_STOP.
+        // Explicitly remove the foreground association here as well, rather than relying on
+        // the legacy implicit cleanup that happens when a started service is destroyed.
+        stopForeground(STOP_FOREGROUND_REMOVE)
         store.set(RuntimeBackgroundState.STOPPED)
         super.onDestroy()
     }
@@ -84,7 +88,7 @@ class RuntimeForegroundService : Service() {
         internal const val ACTION_STOP = "dev.alpine.runtime.background.STOP"
         internal const val ACTION_STOP_STALE = "dev.alpine.runtime.background.STOP_STALE"
         private const val CHANNEL_ID = "alpine-runtime-work"
-        private const val NOTIFICATION_ID = 0xA11E
+        internal const val NOTIFICATION_ID = 0xA11E
         private const val STOP_REQUEST_CODE = 0xA11E
     }
 }

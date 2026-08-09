@@ -136,6 +136,31 @@ class RuntimeApiTest {
     }
 
     @Test
+    fun `package catalog saturates overflowed byte totals without reporting a complete estimate`() {
+        val catalog = RuntimePackageCatalog(
+            listOf(
+                packageMetadata(
+                    packageName = "git",
+                    downloadBytes = Long.MAX_VALUE,
+                    installedBytes = Long.MAX_VALUE,
+                ),
+                packageMetadata(
+                    packageName = "curl",
+                    downloadBytes = 1,
+                    installedBytes = 1,
+                ),
+            ),
+        )
+
+        val estimate = catalog.estimate(listOf("git", "curl"))
+
+        assertEquals(Long.MAX_VALUE, estimate.downloadBytes)
+        assertEquals(Long.MAX_VALUE, estimate.installedBytes)
+        assertTrue(estimate.totalBytesOverflowed)
+        assertFalse(estimate.isComplete)
+    }
+
+    @Test
     fun `package catalog rejects duplicate names and invalid snapshot urls`() {
         val git = packageMetadata(packageName = "git")
         assertThrows(IllegalArgumentException::class.java) {

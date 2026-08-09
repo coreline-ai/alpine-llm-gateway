@@ -17,6 +17,6 @@ inventory, compliance report와 SHA-256 목록을 하나의 `dist/alpine-sdk-<ve
 현재 mode는 `INTERNAL_ONLY`다. 내부 bundle 생성 성공은 외부 배포 승인을 의미하지 않으며,
 `manifest.json`의 `external_distribution_ready`를 별도로 확인해야 한다.
 
-2026-08-07 기준 release-blocking gate 7개 중 GitHub remote CI만 `READY`이며 프로젝트
-라이선스, corresponding source, Provider 계정, Play test track, Samsung lifecycle 승인 창과
-배포 위치·책임자 6개는 `BLOCKED`다.
+현재 deliverable 기준 release-blocking gate 7개는 모두 `BLOCKED`다. 과거 GitHub remote CI 성공은
+이전 baseline만 증명하며, 미커밋 또는 새 commit 변경은 명시적 Push와 해당 SHA workflow 성공 전까지
+`GITHUB_CURRENT_HEAD_CI_NOT_VERIFIED`로 유지한다.

@@ -19,7 +19,7 @@
 python3.11 -m unittest discover -s tests -v
 ```
 
-2026-08-09 로컬 기준선은 Python 106/106, Android OAuth/Provider unit,
+2026-08-10 최신 로컬 기준선은 Python 114/114, Android OAuth/Provider unit,
 Samsung OAuth 저장소 3/3·Provider 12/12·Integrated 10/10 통과다. 이는 실제 Provider 또는 staging
 fault proxy 실행을 대체하지 않는다.
 
@@ -32,6 +32,8 @@ fault proxy 실행을 대체하지 않는다.
 5. [공식 정책 재검토](provider-official-policy-review-20260809.md)의 Provider별 endpoint 문서와
    owner 승인 계약으로 idempotency key/header 지원 여부를 검토한다.
    계약이 확인되지 않으면 `NEVER_AUTOMATIC`으로 기록하고 앱이 429·5xx·I/O 오류를 자동 재시도하지 않는지 확인한다.
+   401은 token refresh가 성공해도 최초 inference POST를 자동 재전송하지 않으며, 사용자가 명시적으로
+   **Retry**를 선택한 다음 action에서만 refreshed credential을 사용한다.
    지원이 확인된 경우에만 `IDEMPOTENT_WITH_STABLE_KEY`를 사용하고 동일 논리 요청의 모든 transport attempt가
    같은 key/header를 재사용하는지 확인한다.
 6. 같은 논리 요청을 다른 backend로 자동 fallback하지 않는지 확인한다.

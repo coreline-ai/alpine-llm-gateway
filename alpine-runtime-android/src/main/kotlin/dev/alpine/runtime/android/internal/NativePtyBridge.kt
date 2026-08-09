@@ -20,6 +20,34 @@ internal object NativePtyBridge {
         }?.takeUnless { it.isClosed }
     }
 
+    /**
+     * Starts an executable as the child of a real [forkpty] session.
+     *
+     * The child side does not call back into Java after fork: it changes to the already-validated
+     * working directory and immediately execs [argv]. This gives PRoot a session-leader-owned
+     * controlling slave PTY instead of relying on a later ProcessBuilder redirect plus `setsid`.
+     * It is a terminal architecture primitive, not a resize relay or signal-injection mechanism.
+     */
+    fun forkExec(
+        argv: List<String>,
+        environment: Map<String, String>,
+        workingDirectory: String,
+        columns: Int,
+        rows: Int,
+    ): NativePtyDescriptor? {
+        if (!loaded || argv.isEmpty() || !isValidDimension(columns) || !isValidDimension(rows)) return null
+        if (workingDirectory.isBlank() || '\u0000' in workingDirectory) return null
+        if (argv.any { it.isBlank() || '\u0000' in it }) return null
+        if (environment.any { (key, value) ->
+                !ENVIRONMENT_NAME.matches(key) || '\u0000' in value || '\u0000' in key
+            }
+        ) return null
+        val envp = environment.entries.map { (key, value) -> "$key=$value" }.toTypedArray()
+        return runCatching {
+            nativeForkExec(argv.toTypedArray(), envp, workingDirectory, columns, rows)
+        }.getOrNull()
+    }
+
     fun resize(fd: Int, columns: Int, rows: Int): Boolean =
         loaded && runCatching { nativeResize(fd, columns, rows) }.getOrDefault(false)
 
@@ -54,6 +82,21 @@ internal object NativePtyBridge {
     fun readSize(fd: Int): NativePtySize? =
         if (!loaded) null else decodeSize(runCatching { nativeReadSize(fd) }.getOrDefault(0L))
 
+    /** Returns null when the child is still running or the status cannot be read in time. */
+    fun waitForChild(pid: Int, timeoutMillis: Long): Int? {
+        if (!loaded || pid <= 0 || timeoutMillis !in 0..MAX_WAIT_MILLIS) return null
+        val result = runCatching { nativeWaitForChild(pid, timeoutMillis) }.getOrDefault(WAIT_ERROR)
+        return result.takeUnless { it == WAIT_TIMEOUT || it == WAIT_ERROR }
+    }
+
+    /** Sends lifecycle termination to the forkpty-owned process group, never a resize signal. */
+    fun signalProcessGroup(pid: Int, signal: Int): Boolean =
+        loaded && pid > 0 && signal in 1 until MAX_SIGNAL &&
+            runCatching { nativeSignalProcessGroup(pid, signal) }.getOrDefault(false)
+
+    fun isChildAlive(pid: Int): Boolean =
+        loaded && pid > 0 && runCatching { nativeIsChildAlive(pid) }.getOrDefault(false)
+
     private fun decodeSize(encoded: Long): NativePtySize? {
         val rows = (encoded ushr 32).toInt()
         val columns = encoded.toInt()
@@ -65,6 +108,13 @@ internal object NativePtyBridge {
     }
 
     private external fun nativeOpen(): NativePtyDescriptor?
+    private external fun nativeForkExec(
+        argv: Array<String>,
+        environment: Array<String>,
+        workingDirectory: String,
+        columns: Int,
+        rows: Int,
+    ): NativePtyDescriptor?
     private external fun nativeResize(fd: Int, columns: Int, rows: Int): Boolean
     private external fun nativeResizeAndRequestProbeRelay(
         fd: Int,
@@ -78,6 +128,17 @@ internal object NativePtyBridge {
         relaySocketPath: String,
     ): Boolean
     private external fun nativeReadSize(fd: Int): Long
+    private external fun nativeWaitForChild(pid: Int, timeoutMillis: Long): Int
+    private external fun nativeSignalProcessGroup(pid: Int, signal: Int): Boolean
+    private external fun nativeIsChildAlive(pid: Int): Boolean
+
+    private fun isValidDimension(value: Int): Boolean = value in 1..1_000
+
+    private const val WAIT_TIMEOUT = Int.MIN_VALUE
+    private const val WAIT_ERROR = Int.MIN_VALUE + 1
+    private const val MAX_WAIT_MILLIS = 10_000L
+    private const val MAX_SIGNAL = 128
+    private val ENVIRONMENT_NAME = Regex("[A-Za-z_][A-Za-z0-9_]*")
 }
 
 internal data class NativePtySize(val columns: Int, val rows: Int)
@@ -89,6 +150,8 @@ internal class NativePtyDescriptor(
     /** Kernel device identity of the slave PTY, used only by the dev Probe. */
     val slaveDeviceId: Long,
     val slavePath: String,
+    /** Native forkpty child PID. Zero means this descriptor has no owned native child. */
+    val childPid: Int = 0,
 ) : AutoCloseable {
     private val closed = AtomicBoolean(false)
     private val readDescriptor = ParcelFileDescriptor.adoptFd(readFd)

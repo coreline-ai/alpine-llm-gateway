@@ -1,12 +1,6 @@
 package dev.alpine.llm
 
-/**
- * Optional OpenAI account OAuth configuration supplied by the application owner.
- *
- * The public client ID identifies an OAuth registration and must not be copied from another
- * app or CLI. This class does not authorize a ChatGPT consumer endpoint for inference; callers
- * must provide an approved HTTPS Responses endpoint separately.
- */
+/** OpenAI Codex OAuth Authorization Code + PKCE configuration. */
 object CodexOAuthContract {
     const val AUTHORIZATION_ENDPOINT = "https://auth.openai.com/oauth/authorize"
     const val TOKEN_ENDPOINT = "https://auth.openai.com/oauth/token"
@@ -32,8 +26,14 @@ object CodexOAuthContract {
         redirectPath = REDIRECT_PATH,
         redirectHost = REDIRECT_HOST,
         callbackFallbackPorts = emptyList(),
-        tokenRequestEncoding = OAuthTokenRequestEncoding.FORM_URLENCODED,
+        extraAuthorizationParams = mapOf(
+            "codex_cli_simplified_flow" to "true",
+            "originator" to "codex_cli_rs",
+            "id_token_add_organizations" to "true",
+        ),
+        tokenRequestEncoding = OAuthTokenRequestEncoding.JSON,
         tokenRequestAdapter = StandardOAuthTokenRequestAdapter,
+        tokenResponseAdapter = JwtClaimMetadataTokenResponseAdapter(),
         tokenRequestMaxAttempts = 3,
         tokenRetryInitialDelayMs = 1_000L,
         refreshSkewMs = refreshSkewMs,

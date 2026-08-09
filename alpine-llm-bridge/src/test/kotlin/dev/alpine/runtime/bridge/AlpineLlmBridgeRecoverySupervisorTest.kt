@@ -3,6 +3,7 @@ package dev.alpine.runtime.bridge
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -88,6 +89,38 @@ class AlpineLlmBridgeRecoverySupervisorTest {
         assertEquals(2, restarts.get())
         assertEquals(AlpineLlmBridgeRecoveryMode.EXHAUSTED, supervisor.currentState().mode)
         assertFalse(supervisor.currentState().errorCode == null)
+        supervisor.close()
+    }
+
+    @Test
+    fun `explicit stop revokes lease for an already executing restart without a follow-up check`() {
+        val healthChecks = AtomicInteger()
+        val restartStarted = CountDownLatch(1)
+        val releaseRestart = CountDownLatch(1)
+        val leaseWasActiveAfterStop = AtomicBoolean(true)
+        val supervisor = AlpineLlmBridgeRecoverySupervisor.withRecoveryLease(
+            healthCheck = {
+                healthChecks.incrementAndGet()
+                CompletableFuture.completedFuture(health(false))
+            },
+            restartGateway = { lease ->
+                restartStarted.countDown()
+                releaseRestart.await(2, TimeUnit.SECONDS)
+                leaseWasActiveAfterStop.set(lease.isActive())
+                CompletableFuture.completedFuture(health(true))
+            },
+            configuration = policy(maxRestarts = 1),
+        )
+
+        supervisor.startMonitoring()
+        assertTrue("restart did not start", restartStarted.await(2, TimeUnit.SECONDS))
+        supervisor.stopMonitoring()
+        releaseRestart.countDown()
+        Thread.sleep(100)
+
+        assertFalse("restart callback retained authority after explicit Stop", leaseWasActiveAfterStop.get())
+        assertEquals(1, healthChecks.get())
+        assertEquals(AlpineLlmBridgeRecoveryMode.STOPPED, supervisor.currentState().mode)
         supervisor.close()
     }
 

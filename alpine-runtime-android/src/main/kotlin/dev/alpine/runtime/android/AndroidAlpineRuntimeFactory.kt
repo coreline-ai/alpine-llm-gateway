@@ -90,6 +90,14 @@ data class AndroidRuntimeConfiguration @JvmOverloads constructor(
      */
     val ttyDiagnosticPostWinsizeInputTrace: Boolean = false,
     val ttyDiagnosticCanonicalizeStdio: Boolean = false,
+    /**
+     * Probe-only exposure of the production forkpty direct-exec architecture.
+     *
+     * It is valid only behind the existing debuggable+manifest diagnostic gate and lets a
+     * controlled instrumentation fixture exercise kernel-delivered resize on an unpatched PRoot
+     * binary. Product hosts keep this false until the complete physical acceptance matrix passes.
+     */
+    val ttyDiagnosticForkPtyDirect: Boolean = false,
 ) {
     init {
         requireDirectoryName(runtimeDirectoryName, "runtimeDirectoryName")
@@ -119,6 +127,9 @@ data class AndroidRuntimeConfiguration @JvmOverloads constructor(
         }
         require(!ttyDiagnosticCanonicalizeStdio || enableTtyIoctlDiagnostics) {
             "ttyDiagnosticCanonicalizeStdio requires enableTtyIoctlDiagnostics"
+        }
+        require(!ttyDiagnosticForkPtyDirect || enableTtyIoctlDiagnostics) {
+            "ttyDiagnosticForkPtyDirect requires enableTtyIoctlDiagnostics"
         }
         ttyDiagnosticGuestHelperFileName?.let { fileName ->
             require(fileName.matches(SAFE_NATIVE_LIBRARY_FILE_NAME)) {
