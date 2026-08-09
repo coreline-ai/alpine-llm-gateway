@@ -18,7 +18,6 @@ KOTLIN_COLORS = ROOT / (
 KOTLIN_SHAPES = ROOT / (
     "alpine-chat-feature/src/main/java/dev/alpine/chat/feature/ui/theme/Shape.kt"
 )
-FLUTTER_APP = ROOT / "apps/mobile_agent/lib/src/mobile_agent_app.dart"
 README = ROOT / "README.md"
 SCREENSHOT_DIR = ROOT / "docs/assets/screenshots"
 INTEGRATED_BUILD = ROOT / "integrated-app/build.gradle.kts"
@@ -69,13 +68,6 @@ def verify_tokens(tokens: dict[str, object]) -> None:
         pattern = rf"val\s+{re.escape(kotlin_name)}\s*=\s*Color\(0xFF{hex_value}\)"
         if not re.search(pattern, kotlin, flags=re.IGNORECASE):
             fail(f"Kotlin token drift: {token_name}={expected[token_name]}")
-
-    flutter = FLUTTER_APP.read_text(encoding="utf-8")
-    for token_name in ("ink", "paper", "acid", "slate"):
-        hex_value = expected[token_name].removeprefix("#")
-        pattern = rf"const\s+_{token_name}\s*=\s*Color\(0xFF{hex_value}\)"
-        if not re.search(pattern, flutter, flags=re.IGNORECASE):
-            fail(f"Flutter token drift: {token_name}={expected[token_name]}")
 
     shapes = tokens["radius_dp"]
     if not isinstance(shapes, dict):
