@@ -6,7 +6,7 @@
         android:name=".IntegratedApplication"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
-        android:label="Alpine AI Workspace"
+        android:label="${appLabel}"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">

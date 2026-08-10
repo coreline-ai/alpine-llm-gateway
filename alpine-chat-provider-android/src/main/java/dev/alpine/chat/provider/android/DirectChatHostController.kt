@@ -5,6 +5,7 @@ import dev.alpine.chat.feature.ui.ChatViewModel
 import dev.alpine.chat.provider.android.data.ProviderProfileStore
 import dev.alpine.chat.provider.android.session.ChatCompletionSession
 import dev.alpine.chat.provider.android.session.ConnectedProviderRegistry
+import dev.alpine.chat.provider.android.session.toChatBackendDescriptor
 
 /**
  * Reusable Android direct-Provider host boundary shared by sample and product apps.
@@ -52,7 +53,9 @@ class DirectChatHostController(
     /** Returns a model-specific authenticated host session without exposing OAuth credentials. */
     fun session(profileId: String, model: String): ChatCompletionSession? {
         sessions[profileId]?.takeIf { it.profile.model == model }?.let { return it }
-        val profile = store.find(profileId)?.copy(model = model) ?: return null
+        val storedProfile = store.find(profileId) ?: return null
+        if (model !in storedProfile.toChatBackendDescriptor().modelOptions) return null
+        val profile = storedProfile.copy(model = model)
         val key = "$profileId\u0000$model"
         return modelSessions.getOrPut(key) {
             ProviderDependencies.createSession(appContext, profile)

@@ -2,12 +2,14 @@ package dev.alpine.chat.provider.android.session
 
 import android.app.Activity
 import android.content.Context
+import android.util.Log
 import dev.alpine.chat.feature.backend.ChatBackendDelta
 import dev.alpine.chat.feature.backend.ChatBackendException
 import dev.alpine.chat.feature.backend.ChatBackendFailureCode
 import dev.alpine.chat.feature.backend.ChatBackendStreamResult
 import dev.alpine.llm.AnthropicMessagesOAuthAdapter
 import dev.alpine.llm.CodexOAuthContract
+import dev.alpine.llm.CodexOAuthCompatibilityRegistry
 import dev.alpine.llm.CodexResponsesOAuthAdapter
 import dev.alpine.llm.GeminiGenerateContentOAuthAdapter
 import dev.alpine.llm.GeminiOAuthContract
@@ -66,6 +68,10 @@ object ProviderSessionFactory {
             )
             ProviderType.CODEX -> CodexResponsesOAuthAdapter(
                 responsesEndpoint = profile.inferenceEndpoint,
+                compatibility = CodexOAuthCompatibilityRegistry.matching(
+                    profile.clientId,
+                    profile.inferenceEndpoint,
+                ),
             )
             ProviderType.XAI -> OpenAiCompatibleOAuthAdapter(
                 completionEndpoint = profile.inferenceEndpoint,
@@ -176,13 +182,18 @@ object ProviderSessionFactory {
         is ProviderCircuitOpenException -> ChatBackendException(
             ChatBackendFailureCode.CIRCUIT_OPEN,
         )
-        is ProviderStreamException -> ChatBackendException(
-            ChatBackendFailureCode.INVALID_RESPONSE,
-        )
+        is ProviderStreamException -> {
+            runCatching {
+                Log.w(DIAGNOSTIC_TAG, "provider_stream_failure:${error.diagnosticCode}")
+            }
+            ChatBackendException(ChatBackendFailureCode.INVALID_RESPONSE)
+        }
         is TimeoutCancellationException,
         is SocketTimeoutException,
         is IOException,
         -> error
         else -> ChatBackendException(ChatBackendFailureCode.UNKNOWN)
     }
+
+    private const val DIAGNOSTIC_TAG = "AlpineOAuthStream"
 }

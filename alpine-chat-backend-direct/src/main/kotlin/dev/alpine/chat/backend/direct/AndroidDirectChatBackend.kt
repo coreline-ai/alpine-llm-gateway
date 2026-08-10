@@ -1,5 +1,6 @@
 package dev.alpine.chat.backend.direct
 
+import android.util.Log
 import dev.alpine.chat.routing.ChatBackend
 import dev.alpine.chat.routing.ChatBackendCapabilities
 import dev.alpine.chat.routing.ChatBackendFailure
@@ -121,7 +122,10 @@ class AndroidDirectChatBackend constructor(
             ChatBackendResult.Failed(
                 failure(ChatBackendFailureCode.PROVIDER_UNAVAILABLE, deltaEmitted, retryable = true),
             )
-        } catch (_: ProviderStreamException) {
+        } catch (error: ProviderStreamException) {
+            runCatching {
+                Log.w(DIAGNOSTIC_TAG, "provider_stream_failure:${error.diagnosticCode}")
+            }
             ChatBackendResult.Failed(
                 failure(ChatBackendFailureCode.INVALID_RESPONSE, deltaEmitted, retryable = false),
             )
@@ -182,6 +186,7 @@ class AndroidDirectChatBackend constructor(
 
     companion object {
         const val DEFAULT_BACKEND_ID = "android-direct"
+        private const val DIAGNOSTIC_TAG = "AlpineOAuthStream"
     }
 
     private class SafeDirectStreamException : Exception()

@@ -39,6 +39,7 @@ import dev.alpine.chat.provider.android.session.ChatCompletionSession
 import dev.alpine.chat.provider.android.session.ProviderConnection
 import dev.alpine.chat.provider.android.session.ProviderConnectionIssue
 import dev.alpine.chat.provider.android.session.ProviderConnectionState
+import dev.alpine.llm.CodexOAuthContract
 import dev.alpine.llm.OAuthAuthenticationState
 import dev.alpine.llm.OAuthException
 import dev.alpine.llm.OAuthFailureKind
@@ -229,6 +230,31 @@ class ProviderScreensInstrumentedTest {
         compose.runOnIdle { assertEquals(ProviderSaveAction.SAVE_AND_LOGIN, action) }
         compose.onNodeWithTag("save_for_later").assertIsDisplayed().performClick()
         compose.runOnIdle { assertEquals(ProviderSaveAction.SAVE_FOR_LATER, action) }
+    }
+
+    @Test
+    fun codexEditorUsesOAuthFieldsAndPinsTheSafeContract() {
+        val profile = ProviderProfile.draft(ProviderType.CODEX, "OpenAI Responses")
+        render {
+            AlpineProductTheme {
+                ProviderEditScreen(
+                    initialProfile = profile,
+                    isEditing = false,
+                    onBack = {},
+                    onSave = { _, _ -> emptyMap() },
+                )
+            }
+        }
+
+        compose.onNodeWithTag("client_id").assertExists()
+        compose.onNodeWithTag("api_key").assertDoesNotExist()
+        compose.onNodeWithTag("model").assertExists()
+        compose.onNodeWithTag("authorization_endpoint")
+            .performScrollTo()
+            .assertTextContains(CodexOAuthContract.AUTHORIZATION_ENDPOINT)
+        compose.onNodeWithTag("callback_port")
+            .performScrollTo()
+            .assertTextContains(CodexOAuthContract.CALLBACK_PORT.toString())
     }
 
     @Test

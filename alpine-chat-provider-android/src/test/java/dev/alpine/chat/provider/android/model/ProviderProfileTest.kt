@@ -1,14 +1,24 @@
 package dev.alpine.chat.provider.android.model
 
+import dev.alpine.llm.CodexOAuthContract
+import dev.alpine.llm.CodexOAuthCompatibilityConfig
+import dev.alpine.llm.CodexOAuthCompatibilityRegistry
 import dev.alpine.llm.GeminiOAuthContract
+import dev.alpine.chat.provider.android.session.toChatBackendDescriptor
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Test
 
 class ProviderProfileTest {
+    @After
+    fun clearCompatibility() {
+        CodexOAuthCompatibilityRegistry.clear()
+    }
+
     @Test
     fun `all supported provider profiles round trip without credentials`() {
         ProviderType.entries.forEach { type ->
@@ -53,8 +63,66 @@ class ProviderProfileTest {
     }
 
     @Test
-    fun `non gemini draft fails closed until host owned oauth data is entered`() {
-        ProviderType.entries.filter { it != ProviderType.GEMINI }.forEach { type ->
+    fun `codex draft pins oauth protocol and requires app registration and model`() {
+        val draft = ProviderProfile.draft(ProviderType.CODEX, "Codex")
+
+        assertEquals(CodexOAuthContract.AUTHORIZATION_ENDPOINT, draft.authorizationEndpoint)
+        assertEquals(CodexOAuthContract.TOKEN_ENDPOINT, draft.tokenEndpoint)
+        assertEquals(CodexOAuthContract.SCOPES, draft.scopes)
+        assertEquals(CodexOAuthContract.CALLBACK_PORT, draft.callbackPort)
+        assertTrue(draft.validationErrors().containsKey(ProviderProfile.Field.CLIENT_ID))
+        assertTrue(draft.validationErrors().containsKey(ProviderProfile.Field.MODEL))
+    }
+
+    @Test
+    fun `codex rejects modified oauth protocol contract`() {
+        val invalid = validProfile(ProviderType.CODEX).copy(
+            authorizationEndpoint = "https://identity.example.test/authorize",
+            tokenEndpoint = "https://identity.example.test/token",
+            scopes = listOf("openid"),
+            callbackPort = 54545,
+        )
+        val errors = invalid.validationErrors()
+
+        assertTrue(errors.containsKey(ProviderProfile.Field.AUTHORIZATION_ENDPOINT))
+        assertTrue(errors.containsKey(ProviderProfile.Field.TOKEN_ENDPOINT))
+        assertTrue(errors.containsKey(ProviderProfile.Field.SCOPES))
+        assertTrue(errors.containsKey(ProviderProfile.Field.CALLBACK_PORT))
+    }
+
+    @Test
+    fun `approved debug compatibility seeds codex registration endpoint and models`() {
+        val compatibility = CodexOAuthCompatibilityConfig(
+            sourceRevision = "reference@revision",
+            clientId = "approved-debug-public-client",
+            responsesEndpoint = "https://approved.example.test/codex/responses",
+            defaultModel = "gpt-current",
+            modelOptions = listOf("gpt-current", "gpt-fast"),
+            extraAuthorizationParams = mapOf("approved_flow" to "true"),
+            requestHeaders = mapOf("Originator" to "approved-debug"),
+            accountIdHeader = "Provider-Account-Id",
+        )
+        CodexOAuthCompatibilityRegistry.installApprovedDebug(compatibility)
+
+        val draft = ProviderProfile.draft(ProviderType.CODEX, "Codex")
+
+        assertEquals(compatibility.clientId, draft.clientId)
+        assertEquals(compatibility.responsesEndpoint, draft.inferenceEndpoint)
+        assertEquals(compatibility.defaultModel, draft.model)
+        assertTrue(draft.validationErrors().isEmpty())
+        assertEquals(compatibility.modelOptions, draft.toChatBackendDescriptor().modelOptions)
+        assertTrue(
+            draft.copy(model = "unknown-model")
+                .validationErrors()
+                .containsKey(ProviderProfile.Field.MODEL),
+        )
+    }
+
+    @Test
+    fun `configurable provider draft fails closed until host owned oauth data is entered`() {
+        ProviderType.entries
+            .filter { it != ProviderType.GEMINI && it != ProviderType.CODEX }
+            .forEach { type ->
             val draft = ProviderProfile.draft(type, type.displayName)
             val errors = draft.validationErrors()
 
@@ -165,15 +233,21 @@ class ProviderProfileTest {
 
     private fun validProfile(type: ProviderType): ProviderProfile {
         val draft = ProviderProfile.draft(type, type.displayName)
-        return if (type == ProviderType.GEMINI) {
-            draft.copy(
+        return when (type) {
+            ProviderType.GEMINI -> draft.copy(
                 id = "profile-${type.wireName}",
                 clientId = "host-owned-public-client",
                 googleProjectId = "test-project",
                 createdAtMs = 1234L,
             )
-        } else {
-            draft.copy(
+            ProviderType.CODEX -> draft.copy(
+                id = "profile-${type.wireName}",
+                inferenceEndpoint = "https://relay.example.test/v1/responses",
+                clientId = "host-owned-public-client",
+                model = "test-model",
+                createdAtMs = 1234L,
+            )
+            else -> draft.copy(
                 id = "profile-${type.wireName}",
                 authorizationEndpoint = "https://identity.example.test/oauth/authorize",
                 tokenEndpoint = "https://identity.example.test/oauth/token",

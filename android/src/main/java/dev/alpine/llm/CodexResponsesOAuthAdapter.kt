@@ -6,16 +6,18 @@ import java.security.MessageDigest
 
 /**
  * OpenAI chat-completion JSON to an application-owner-approved Responses endpoint.
- *
- * It deliberately carries no consumer endpoint, first-party CLI header, originator,
- * account header, or private protocol option. The selected profile must supply the
- * approved HTTPS endpoint and the credential boundary adds authorization later.
+ * The host may supply an explicitly approved compatibility contract; credentials are still added
+ * only at the OAuth boundary and never reach this adapter.
  */
 class CodexResponsesOAuthAdapter(
     private val responsesEndpoint: String,
+    private val compatibility: CodexOAuthCompatibilityConfig? = null,
 ) : OAuthStreamingProviderHttpAdapter {
     init {
         ProviderAdapterJson.requireHttps(responsesEndpoint, "responsesEndpoint")
+        require(compatibility == null || compatibility.responsesEndpoint == responsesEndpoint) {
+            "compatibility endpoint does not match responsesEndpoint"
+        }
     }
 
     override fun createRequest(requestJson: String): ProviderHttpRequest =
@@ -84,7 +86,7 @@ class CodexResponsesOAuthAdapter(
         return runCatching {
             val json = JSONObject(event.data)
             if (json.has("error")) {
-                throw ProviderStreamException("Codex Provider returned a stream error")
+                throw codexStreamError(json.optJSONObject("error"))
             }
             when (json.optString("type")) {
                 "response.output_text.delta" -> json.optString("delta")
@@ -131,15 +133,30 @@ class CodexResponsesOAuthAdapter(
                         usage = completed.optJSONObject("usage")?.let(::streamUsage),
                     )
                 }
-                "response.failed", "error" -> throw ProviderStreamException(
-                    "Codex Provider returned a stream error",
+                "response.failed", "error" -> throw codexStreamError(
+                    json.optJSONObject("response")?.optJSONObject("error")
+                        ?: json.optJSONObject("error"),
                 )
                 else -> null
             }
         }.getOrElse { error ->
             if (error is ProviderStreamException) throw error
-            throw ProviderStreamException("Codex Provider returned an invalid SSE event")
+            throw ProviderStreamException(
+                "Codex Provider returned an invalid SSE event",
+                diagnosticCode = "codex_invalid_sse",
+            )
         }
+    }
+
+    private fun codexStreamError(error: JSONObject?): ProviderStreamException {
+        val providerCode = error?.optString("code")
+            ?.lowercase()
+            ?.takeIf { it.matches(SAFE_PROVIDER_CODE) }
+            ?: "unknown"
+        return ProviderStreamException(
+            "Codex Provider returned a stream error",
+            diagnosticCode = "codex_stream_error.$providerCode",
+        )
     }
 
     private fun request(requestJson: String, stream: Boolean): ProviderHttpRequest {
@@ -161,6 +178,17 @@ class CodexResponsesOAuthAdapter(
             .put("store", false)
             .put("parallel_tool_calls", true)
             .put("input", responsesInput)
+        compatibility?.let { approved ->
+            if (approved.includeEncryptedReasoning) {
+                body.put("include", JSONArray().put("reasoning.encrypted_content"))
+            }
+            approved.reasoningEffort?.let { effort ->
+                body.put(
+                    "reasoning",
+                    JSONObject().put("effort", effort).put("summary", "auto"),
+                )
+            }
+        }
         if (instructions.isNotEmpty()) body.put("instructions", instructions.joinToString("\n\n"))
         if (input.tools.isNotEmpty()) {
             body.put(
@@ -178,6 +206,9 @@ class CodexResponsesOAuthAdapter(
         return ProviderHttpRequest(
             url = responsesEndpoint,
             bodyJson = body.toString(),
+            headers = compatibility?.requestHeaders.orEmpty(),
+            credentialAccountIdHeader = compatibility?.accountIdHeader,
+            allowNonStandardEventStreamContentType = compatibility != null,
         )
     }
 
@@ -320,5 +351,6 @@ class CodexResponsesOAuthAdapter(
     companion object {
         private const val PROVIDER_NAME = "codex"
         private const val MAX_RESPONSE_ID_LENGTH = 64
+        private val SAFE_PROVIDER_CODE = Regex("[a-z0-9_.-]{1,64}")
     }
 }

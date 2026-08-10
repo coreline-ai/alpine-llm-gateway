@@ -43,6 +43,13 @@ FORBIDDEN_FRAGMENTS = {
     b"libtty_session_virtual_resize_launcher.so": "Probe-only virtual winsize session launcher in integrated product",
     b"libtty_winsize_probe.so": "Probe-only guest winsize helper in integrated product",
 }
+APPROVED_OPENMINIS_DEBUG_FRAGMENTS = {
+    b"chatgpt.com/backend-api",
+    b"codex_cli_rs",
+}
+APPROVED_OPENMINIS_DEBUG_REGISTRATION_SHA256 = {
+    "584341c2f0e88ad1f7c6856553d81dc4776ff42c43951daed3e2d8d91552eaa2",
+}
 SECRET_PATTERNS = (
     (re.compile(rb"sk-ant-[A-Za-z0-9_-]{20,}"), "Anthropic API key"),
     (re.compile(rb"xai-[A-Za-z0-9_-]{20,}"), "xAI API key"),
@@ -65,27 +72,54 @@ def iter_files(root: Path):
         yield path
 
 
-def scan_bytes(source_label: str, data: bytes) -> list[str]:
+def scan_bytes(
+    source_label: str,
+    data: bytes,
+    allowed_fragments: set[bytes] | frozenset[bytes] = frozenset(),
+    allowed_registration_sha256: set[str] | frozenset[str] = frozenset(),
+) -> list[str]:
     findings: list[str] = []
     for fragment, label in FORBIDDEN_FRAGMENTS.items():
-        if fragment in data:
+        if fragment in data and fragment not in allowed_fragments:
             findings.append(f"{source_label}: {label}")
     for pattern, label in SECRET_PATTERNS:
         if pattern.search(data):
             findings.append(f"{source_label}: probable {label}")
     for candidate in REGISTRATION_CANDIDATE.findall(data):
-        if hashlib.sha256(candidate).hexdigest() in FORBIDDEN_REGISTRATION_SHA256:
+        candidate_hash = hashlib.sha256(candidate).hexdigest()
+        if (
+            candidate_hash in FORBIDDEN_REGISTRATION_SHA256
+            and candidate_hash not in allowed_registration_sha256
+        ):
             findings.append(f"{source_label}: copied third-party OAuth client registration")
             break
     return findings
 
 
-def scan_file(path: Path) -> list[str]:
+def scan_file(path: Path, allow_approved_openminis_debug: bool = False) -> list[str]:
     try:
         data = path.read_bytes()
     except OSError as error:
         return [f"{path}: cannot read ({error})"]
-    findings = scan_bytes(str(path), data)
+    debug_compatibility_path = path.name == "integrated-app-debug.apk" or (
+        "src" in path.parts and "debug" in path.parts
+    )
+    allowed_fragments = (
+        APPROVED_OPENMINIS_DEBUG_FRAGMENTS
+        if allow_approved_openminis_debug and debug_compatibility_path
+        else frozenset()
+    )
+    allowed_registration_sha256 = (
+        APPROVED_OPENMINIS_DEBUG_REGISTRATION_SHA256
+        if allow_approved_openminis_debug and debug_compatibility_path
+        else frozenset()
+    )
+    findings = scan_bytes(
+        str(path),
+        data,
+        allowed_fragments,
+        allowed_registration_sha256,
+    )
     if path.suffix.lower() not in {".apk", ".aab", ".ipa", ".zip"}:
         return findings
     try:
@@ -98,7 +132,14 @@ def scan_file(path: Path) -> list[str]:
                 except (OSError, RuntimeError, zipfile.BadZipFile) as error:
                     findings.append(f"{path}!{member.filename}: cannot read ({error})")
                     continue
-                findings.extend(scan_bytes(f"{path}!{member.filename}", member_data))
+                findings.extend(
+                    scan_bytes(
+                        f"{path}!{member.filename}",
+                        member_data,
+                        allowed_fragments,
+                        allowed_registration_sha256,
+                    )
+                )
     except zipfile.BadZipFile as error:
         findings.append(f"{path}: invalid release archive ({error})")
     return findings
@@ -108,6 +149,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("paths", nargs="*", type=Path, help="Integrated sources or built APK/AAB/IPA files to scan.")
     parser.add_argument("--require-default-roots", action="store_true", help="Fail when an expected integrated source or APK is missing.")
+    parser.add_argument(
+        "--allow-approved-openminis-debug",
+        action="store_true",
+        help="Allow only the approved OpenMinis endpoint and CLI fingerprint in debug source/APK paths.",
+    )
     return parser.parse_args()
 
 
@@ -120,7 +166,11 @@ def main() -> int:
             print(f"MISSING: {root}", file=sys.stderr)
         return 2
     files = [path for root in roots if root.exists() for path in iter_files(root)]
-    findings = [finding for path in files for finding in scan_file(path)]
+    findings = [
+        finding
+        for path in files
+        for finding in scan_file(path, args.allow_approved_openminis_debug)
+    ]
     if findings:
         print("Integrated product OAuth release scan FAILED:", file=sys.stderr)
         for finding in findings:

@@ -2,7 +2,40 @@
 
 작성 일시: `2026-08-10 06:13:14 KST`
 
+> **2026-08-10 12:09 KST 실행 완료 정정 — 아래 이전 기록보다 우선한다.**
+>
+> - 작업 저장소는 `/Volumes/ExternalSSD/projects_8/alpine-llm-gateway`다.
+> - 사용자가 OpenMinis 호환 OAuth·consumer Responses 정보를 사용하는 로컬 개발을 명시 승인했다.
+> - 호환 registration, endpoint, header fingerprint와 모델 목록은
+>   `integrated-app/src/debug`에만 격리했고 production/main source에는 넣지 않았다.
+> - 기준 소스는 OpenMinis `9cf3a855fecd27bb5735b84cacbd56852a3ab8dd`다.
+> - Samsung `R3CY40PXCAP`의 side-by-side debug package
+>   `dev.alpine.integrated.debug`에 설치했고, OpenAI 계정 선택과 Codex 동의를 거쳐 UI `연결됨`을 확인했다.
+> - `gpt-5.6-sol`로 `Reply exactly: OAUTH CHAT OK`를 한 번 전송해 실제 streaming 응답
+>   `OAUTH CHAT OK`를 수신했다. OAuth token, callback query, PKCE 값과 Provider 원문은 기록하지 않았다.
+> - 초기 inference 실패 원인은 2xx Codex stream의 비표준 `Content-Type`을 공통 transport가
+>   선제 거절한 것이었다. OpenMinis처럼 SSE 라인 파서로 넘기되, 이 완화는 승인된 compatibility
+>   request에만 적용하고 일반 Provider는 기존 strict 검사를 유지한다.
+> - production strict OAuth scan `PASS (71 files)`, 승인 debug scan `PASS (74 files)`,
+>   관련 unit tests·`compileReleaseKotlin`·`assembleDebug`·`git diff --check`가 모두 통과했다.
+> - refresh token 실제 갱신, logout credential 삭제, non-stream 및 Stop 동작은 아직 검증하지 않았다.
+
 이 문서는 `/Volumes/Eprojects/project_202607/alpine-llm-gateway`에서 진행한 Codex OAuth 호환 로그인 작업의 현재 상태를 보존한다. 새 작업 세션은 아래 상태와 주의사항을 확인한 뒤 이어서 진행한다.
+
+> **2026-08-10 최종 정정:** 제품 채팅 인증은 API 키 입력·저장 방식이 아니라 **OAuth 전용**이다.
+> `CodexOAuthContract`는 앱 소유 public client를 사용하는 Authorization Code + PKCE 계약으로 유지하되,
+> CLI/다른 앱 fingerprint authorization 파라미터와 ID-token 기반 private metadata 해석은 제거했다.
+> 현재 계약은 추가 authorization 파라미터 없이 표준 OAuth token 응답만 처리한다. Responses 호출도
+> OAuth credential 경계만 사용하며 모바일 API 키 저장소·API 키 편집 UI·직접 API-key session은 없다.
+> 아래 OpenMinis/CLI 호환 파라미터 절은 이전 debug 실험의 감사 기록이며 현재 구현 지침이 아니다.
+> 모델 선택 회귀는 API 키나 추측성 정적 목록으로 해결하지 않고
+> `implement_20260810_095746.md`의 profile-owned 모델 카탈로그 계획으로 분리한다.
+>
+> 삼성폰 `R3CY40PXCAP`의 기존 `dev.alpine.integrated`는 과거 debug 인증서로 서명되어 현재 빌드의
+> `adb install -r`이 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`로 거부됐다. 앱 삭제·데이터 초기화는 하지
+> 않았다. OAuth 전용 수정본은 별도 `dev.alpine.integrated.debug` package의 debug 서명 빌드로 검증한다.
+> 실제 OAuth 로그인과 추론 성공은 앱 소유 client registration과 승인된 Responses 경로가 준비되기
+> 전까지 `NOT_CONFIRMED`다.
 
 ## 1. 저장소 스냅샷
 
@@ -148,14 +181,15 @@ $ADB -s "$S" shell dumpsys activity activities \
 
 ## 8. 중요한 미완료 항목
 
-- [ ] 삼성폰에서 새 OAuth flow 시작
-- [ ] 사용자의 로그인·MFA·consent 완료
-- [ ] UI `연결됨` 확인
+- [x] 삼성폰에서 새 OAuth flow 시작
+- [x] 사용자의 계정 선택·consent 완료
+- [x] UI `연결됨` 확인
 - [ ] refresh token 갱신 경로 확인
 - [ ] 로그아웃 후 credential 삭제 확인
 - [ ] 실제 Codex inference non-stream smoke
 - [ ] 실제 Codex inference stream/Stop smoke
-- [ ] redacted Provider E2E report 작성
+- [x] 실제 Codex inference streaming 1-turn smoke
+- [x] redacted Provider E2E report 작성
 - [ ] 전체 unit/instrumentation/clean-room verifier 재실행
 
 ## 9. 로그인 이후 예상되는 추가 구현 리스크

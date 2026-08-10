@@ -6,13 +6,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Test
 
 class CodexResponsesOAuthAdapterTest {
     private val endpoint = "https://provider.example.test/v1/responses"
 
     @Test
-    fun contractUsesCodexLoopbackAndJsonTokenRequest() {
+    fun contractUsesCodexLoopbackWithoutCliFingerprint() {
         val config = CodexOAuthContract.providerConfig("codex-profile", "public-client")
 
         assertEquals(CodexOAuthContract.AUTHORIZATION_ENDPOINT, config.authorizationEndpoint)
@@ -20,9 +21,8 @@ class CodexResponsesOAuthAdapterTest {
         assertEquals("http://localhost:1455/auth/callback", config.redirectUri())
         assertTrue(config.callbackFallbackPorts.isEmpty())
         assertEquals(OAuthTokenRequestEncoding.JSON, config.tokenRequestEncoding)
-        assertEquals("true", config.extraAuthorizationParams["codex_cli_simplified_flow"])
-        assertEquals("codex_cli_rs", config.extraAuthorizationParams["originator"])
-        assertEquals("true", config.extraAuthorizationParams["id_token_add_organizations"])
+        assertTrue(config.extraAuthorizationParams.isEmpty())
+        assertTrue(config.tokenResponseAdapter is StandardOAuthTokenResponseAdapter)
         val request = mapOf("grant_type" to "authorization_code", "code_verifier" to "verifier")
         assertEquals(
             request,
@@ -55,6 +55,7 @@ class CodexResponsesOAuthAdapterTest {
         assertTrue(request.headers.isEmpty())
         assertFalse(request.headers.containsKey("Authorization"))
         assertNull(request.credentialAccountIdHeader)
+        assertFalse(request.allowNonStandardEventStreamContentType)
 
         val body = JSONObject(request.bodyJson)
         assertTrue(body.getBoolean("stream"))
@@ -63,6 +64,38 @@ class CodexResponsesOAuthAdapterTest {
         assertFalse(body.has("reasoning"))
         assertEquals("base instruction\n\nsecond instruction", body.getString("instructions"))
         assertEquals("lookup", body.getJSONArray("tools").getJSONObject(0).getString("name"))
+    }
+
+    @Test
+    fun approvedCompatibilityAddsOauthMetadataHeadersAndRequiredBodyFields() {
+        val compatibility = CodexOAuthCompatibilityConfig(
+            sourceRevision = "reference@revision",
+            clientId = "approved-debug-public-client",
+            responsesEndpoint = endpoint,
+            defaultModel = "gpt-current",
+            modelOptions = listOf("gpt-current", "gpt-fast"),
+            extraAuthorizationParams = mapOf("approved_flow" to "true"),
+            requestHeaders = mapOf("Version" to "1.2.3", "Originator" to "approved-debug"),
+            accountIdHeader = "Provider-Account-Id",
+            includeEncryptedReasoning = true,
+            reasoningEffort = "low",
+        )
+        CodexOAuthCompatibilityRegistry.installApprovedDebug(compatibility)
+
+        val oauth = CodexOAuthContract.providerConfig("codex-profile", compatibility.clientId)
+        assertEquals(mapOf("approved_flow" to "true"), oauth.extraAuthorizationParams)
+        assertTrue(oauth.tokenResponseAdapter is JwtClaimMetadataTokenResponseAdapter)
+
+        val request = CodexResponsesOAuthAdapter(endpoint, compatibility).createStreamRequest(
+            """{"model":"gpt-current","messages":[{"role":"user","content":"hello"}]}""",
+        )
+        val body = JSONObject(request.bodyJson)
+        assertEquals(compatibility.requestHeaders, request.headers)
+        assertEquals("Provider-Account-Id", request.credentialAccountIdHeader)
+        assertTrue(request.allowNonStandardEventStreamContentType)
+        assertEquals("reasoning.encrypted_content", body.getJSONArray("include").getString(0))
+        assertEquals("low", body.getJSONObject("reasoning").getString("effort"))
+        assertEquals("auto", body.getJSONObject("reasoning").getString("summary"))
     }
 
     @Test
@@ -126,6 +159,22 @@ class CodexResponsesOAuthAdapterTest {
     }
 
     @Test
+    fun streamFailureKeepsOnlySafeProviderErrorCode() {
+        val adapter = CodexResponsesOAuthAdapter(endpoint)
+        val error = runCatching {
+            adapter.createStreamEvent(
+                ProviderSseEvent(
+                    null,
+                    """{"type":"response.failed","response":{"error":{"code":"model_not_found","message":"do not expose"}}}""",
+                ),
+            )
+        }.exceptionOrNull() as ProviderStreamException
+
+        assertEquals("codex_stream_error.model_not_found", error.diagnosticCode)
+        assertFalse(error.message.orEmpty().contains("do not expose"))
+    }
+
+    @Test
     fun malformedAndHttpErrorResponsesAreRedacted() {
         val adapter = CodexResponsesOAuthAdapter(endpoint)
         val malformed = adapter.createResult(ProviderHttpResponse(200, "not-json-secret"))
@@ -137,3 +186,7 @@ class CodexResponsesOAuthAdapterTest {
         assertFalse(httpError.bodyJson.contains("provider-secret"))
     }
 }
+    @After
+    fun clearCompatibility() {
+        CodexOAuthCompatibilityRegistry.clear()
+    }

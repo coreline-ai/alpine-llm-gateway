@@ -1,5 +1,7 @@
 package dev.alpine.chat.provider.android.model
 
+import dev.alpine.llm.CodexOAuthContract
+import dev.alpine.llm.CodexOAuthCompatibilityRegistry
 import dev.alpine.llm.GeminiOAuthContract
 import org.json.JSONObject
 import java.net.URI
@@ -37,8 +39,8 @@ enum class ProviderType(
         wireName = "codex",
         displayName = "OpenAI Responses (승인 필요)",
         description = "앱 소유 OAuth 등록과 승인된 Responses relay가 필요합니다. ChatGPT/CLI 기본값은 제공하지 않습니다.",
-        inferenceEndpointPlaceholder = "https://provider.example.com/v1/responses",
-        defaultScopes = "",
+        inferenceEndpointPlaceholder = CodexOAuthContract.RESPONSES_ENDPOINT_PLACEHOLDER,
+        defaultScopes = CodexOAuthContract.SCOPES.joinToString(" "),
     ),
     XAI(
         wireName = "xai",
@@ -137,6 +139,33 @@ data class ProviderProfile(
                 put(Field.CALLBACK_PORT, "Gemini callback port는 8085를 사용하세요.")
             }
         }
+        if (type == ProviderType.CODEX) {
+            CodexOAuthCompatibilityRegistry.current()?.takeIf {
+                it.clientId == clientId && it.responsesEndpoint == inferenceEndpoint
+            }?.let { compatibility ->
+                if (model !in compatibility.modelOptions) {
+                    put(Field.MODEL, "승인된 debug OAuth 모델을 선택하세요.")
+                }
+            }
+            if (authorizationEndpoint != CodexOAuthContract.AUTHORIZATION_ENDPOINT) {
+                put(
+                    Field.AUTHORIZATION_ENDPOINT,
+                    "Codex Authorization endpoint는 OAuth 계약의 고정값을 사용하세요.",
+                )
+            }
+            if (tokenEndpoint != CodexOAuthContract.TOKEN_ENDPOINT) {
+                put(
+                    Field.TOKEN_ENDPOINT,
+                    "Codex Token endpoint는 OAuth 계약의 고정값을 사용하세요.",
+                )
+            }
+            if (scopes != CodexOAuthContract.SCOPES) {
+                put(Field.SCOPES, "Codex OAuth scopes는 OAuth 계약의 고정값을 사용하세요.")
+            }
+            if (callbackPort != CodexOAuthContract.CALLBACK_PORT) {
+                put(Field.CALLBACK_PORT, "Codex callback port는 1455를 사용하세요.")
+            }
+        }
         if (clientId.isBlank()) put(Field.CLIENT_ID, "OAuth Public Client ID를 입력하세요.")
         if (scopes.none(String::isNotBlank)) put(Field.SCOPES, "OAuth scope를 하나 이상 입력하세요.")
         if (model.isBlank()) put(Field.MODEL, "기본 모델을 선택하거나 입력하세요.")
@@ -176,29 +205,41 @@ data class ProviderProfile(
             createdAtMs = json.optLong("created_at_ms", System.currentTimeMillis()),
         )
 
-        fun draft(type: ProviderType, label: String): ProviderProfile = ProviderProfile(
-            label = label,
-            type = type,
-            authorizationEndpoint = when (type) {
-                ProviderType.GEMINI -> GeminiOAuthContract.AUTHORIZATION_ENDPOINT
-                else -> ""
-            },
-            tokenEndpoint = when (type) {
-                ProviderType.GEMINI -> GeminiOAuthContract.TOKEN_ENDPOINT
-                else -> ""
-            },
-            inferenceEndpoint = type.inferenceEndpointPlaceholder,
-            clientId = "",
-            scopes = type.defaultScopes.split(" ").filter(String::isNotBlank),
-            model = when (type) {
-                ProviderType.GEMINI -> GeminiProfileDefaults.DEFAULT_MODEL
-                else -> ""
-            },
-            callbackPort = when (type) {
-                ProviderType.GEMINI -> GeminiOAuthContract.CALLBACK_PORT
-                else -> DEFAULT_CALLBACK_PORT
-            },
-        )
+        fun draft(type: ProviderType, label: String): ProviderProfile {
+            val compatibility = if (type == ProviderType.CODEX) {
+                CodexOAuthCompatibilityRegistry.current()
+            } else {
+                null
+            }
+            return ProviderProfile(
+                label = label,
+                type = type,
+                authorizationEndpoint = when (type) {
+                    ProviderType.GEMINI -> GeminiOAuthContract.AUTHORIZATION_ENDPOINT
+                    ProviderType.CODEX -> CodexOAuthContract.AUTHORIZATION_ENDPOINT
+                    else -> ""
+                },
+                tokenEndpoint = when (type) {
+                    ProviderType.GEMINI -> GeminiOAuthContract.TOKEN_ENDPOINT
+                    ProviderType.CODEX -> CodexOAuthContract.TOKEN_ENDPOINT
+                    else -> ""
+                },
+                inferenceEndpoint = compatibility?.responsesEndpoint
+                    ?: type.inferenceEndpointPlaceholder,
+                clientId = compatibility?.clientId.orEmpty(),
+                scopes = type.defaultScopes.split(" ").filter(String::isNotBlank),
+                model = when (type) {
+                    ProviderType.GEMINI -> GeminiProfileDefaults.DEFAULT_MODEL
+                    ProviderType.CODEX -> compatibility?.defaultModel.orEmpty()
+                    else -> ""
+                },
+                callbackPort = when (type) {
+                    ProviderType.GEMINI -> GeminiOAuthContract.CALLBACK_PORT
+                    ProviderType.CODEX -> CodexOAuthContract.CALLBACK_PORT
+                    else -> DEFAULT_CALLBACK_PORT
+                },
+            )
+        }
 
         private fun validateHttps(value: String, label: String): String? {
             if (value.isBlank()) return "$label 값을 입력하세요."

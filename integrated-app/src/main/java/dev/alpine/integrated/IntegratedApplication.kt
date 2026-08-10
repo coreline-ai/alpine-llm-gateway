@@ -19,7 +19,7 @@ import dev.alpine.workspace.android.AppPrivateWorkspaceStore
 import dev.alpine.workspace.api.WorkspaceHostController
 import dev.alpine.workspace.api.WorkspaceStore
 
-class IntegratedApplication : Application() {
+open class IntegratedApplication : Application() {
     lateinit var runtimeManager: AlpineRuntimeManager
         private set
     lateinit var runtimeController: RuntimeHostController

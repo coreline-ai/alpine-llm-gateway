@@ -16,7 +16,9 @@ object CodexOAuthContract {
         clientId: String,
         refreshSkewMs: Long = 5 * 60 * 1000L,
         callbackTimeoutMs: Long = 5 * 60 * 1000L,
-    ): OAuthProviderConfig = OAuthProviderConfig(
+    ): OAuthProviderConfig {
+        val compatibility = CodexOAuthCompatibilityRegistry.matching(clientId)
+        return OAuthProviderConfig(
         providerId = providerId,
         authorizationEndpoint = AUTHORIZATION_ENDPOINT,
         tokenEndpoint = TOKEN_ENDPOINT,
@@ -26,17 +28,18 @@ object CodexOAuthContract {
         redirectPath = REDIRECT_PATH,
         redirectHost = REDIRECT_HOST,
         callbackFallbackPorts = emptyList(),
-        extraAuthorizationParams = mapOf(
-            "codex_cli_simplified_flow" to "true",
-            "originator" to "codex_cli_rs",
-            "id_token_add_organizations" to "true",
-        ),
+        extraAuthorizationParams = compatibility?.extraAuthorizationParams.orEmpty(),
         tokenRequestEncoding = OAuthTokenRequestEncoding.JSON,
         tokenRequestAdapter = StandardOAuthTokenRequestAdapter,
-        tokenResponseAdapter = JwtClaimMetadataTokenResponseAdapter(),
+        tokenResponseAdapter = if (compatibility == null) {
+            StandardOAuthTokenResponseAdapter()
+        } else {
+            JwtClaimMetadataTokenResponseAdapter()
+        },
         tokenRequestMaxAttempts = 3,
         tokenRetryInitialDelayMs = 1_000L,
         refreshSkewMs = refreshSkewMs,
         callbackTimeoutMs = callbackTimeoutMs,
-    )
+        )
+    }
 }

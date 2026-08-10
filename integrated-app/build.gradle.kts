@@ -14,8 +14,17 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.3.0"
+        manifestPlaceholders["appLabel"] = "Alpine AI Workspace"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += "arm64-v8a" }
+    }
+
+    buildTypes {
+        getByName("debug") {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            manifestPlaceholders["appLabel"] = "Alpine AI Workspace (Debug)"
+        }
     }
 
     buildFeatures { compose = true }

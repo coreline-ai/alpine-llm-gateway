@@ -74,6 +74,7 @@ import dev.alpine.chat.provider.android.model.GeminiProfileDefaults
 import dev.alpine.chat.provider.android.model.ProviderProfile
 import dev.alpine.chat.provider.android.model.ProviderSaveAction
 import dev.alpine.chat.provider.android.model.ProviderType
+import dev.alpine.llm.CodexOAuthCompatibilityRegistry
 import dev.alpine.chat.feature.ui.designsystem.AlpineConfirmDialog
 import dev.alpine.chat.feature.ui.designsystem.AlpineEmptyState
 import dev.alpine.chat.feature.ui.designsystem.AlpinePrimaryAction
@@ -620,9 +621,17 @@ fun ProviderEditScreen(
     ) {
         mutableStateOf(emptyMap())
     }
-    val fixedProtocolContract = initialProfile.type == ProviderType.GEMINI
+    val fixedOAuthContract = initialProfile.type == ProviderType.GEMINI ||
+        initialProfile.type == ProviderType.CODEX
+    val codexCompatibility = CodexOAuthCompatibilityRegistry.matching(
+        clientId = initialProfile.clientId,
+        responsesEndpoint = initialProfile.inferenceEndpoint,
+    )
+    val fixedInferenceContract = initialProfile.type == ProviderType.GEMINI ||
+        codexCompatibility != null
     val selectableModels = when (initialProfile.type) {
         ProviderType.GEMINI -> GeminiProfileDefaults.MODELS
+        ProviderType.CODEX -> codexCompatibility?.modelOptions.orEmpty()
         else -> emptyList()
     }
 
@@ -717,8 +726,16 @@ fun ProviderEditScreen(
                 item {
                     AlpineStepLabel(
                         step = 2,
-                        title = "앱 소유 OAuth 정보",
-                        description = "다른 앱이나 CLI의 Client ID를 복사하지 마세요.",
+                        title = if (codexCompatibility == null) {
+                            "앱 소유 OAuth 정보"
+                        } else {
+                            "승인된 debug OAuth 정보"
+                        },
+                        description = if (codexCompatibility == null) {
+                            "다른 앱이나 CLI의 Client ID를 복사하지 마세요."
+                        } else {
+                            "사용자가 승인한 OpenMinis 호환 등록을 debug 앱에서만 사용합니다."
+                        },
                     )
                 }
                 item {
@@ -731,14 +748,26 @@ fun ProviderEditScreen(
                     ProfileTextField(
                         value = clientId, onValueChange = { clientId = it }, label = "OAuth Public Client ID",
                         error = errors[ProviderProfile.Field.CLIENT_ID], tag = "client_id",
-                        readOnly = false,
+                        readOnly = codexCompatibility != null,
                     )
                 }
                 item {
                     AlpineStatusRail(
-                        label = "앱 소유 registration 필요",
-                        message = "공식 CLI·OpenMinis·다른 앱의 Client ID와 fingerprint를 제품에 포함하지 않습니다.",
-                        tone = AlpineStatusTone.WARNING,
+                        label = if (codexCompatibility == null) {
+                            "앱 소유 registration 필요"
+                        } else {
+                            "OpenMinis 호환 · DEBUG ONLY"
+                        },
+                        message = if (codexCompatibility == null) {
+                            "공식 CLI·OpenMinis·다른 앱의 Client ID와 fingerprint를 제품에 포함하지 않습니다."
+                        } else {
+                            "승인된 참조 revision의 OAuth/Responses 계약입니다. release에는 포함되지 않습니다."
+                        },
+                        tone = if (codexCompatibility == null) {
+                            AlpineStatusTone.WARNING
+                        } else {
+                            AlpineStatusTone.CONNECTED
+                        },
                     )
                 }
                 if (initialProfile.type == ProviderType.GEMINI) {
@@ -773,47 +802,51 @@ fun ProviderEditScreen(
                 }
                 item {
                     ProtocolSectionHeader(
-                        title = if (fixedProtocolContract) "프로토콜 정보 · 읽기 전용" else "고급 프로토콜 설정",
+                        title = when {
+                            fixedInferenceContract -> "프로토콜 정보 · 읽기 전용"
+                            fixedOAuthContract -> "프로토콜 정보 · OAuth 읽기 전용"
+                            else -> "고급 프로토콜 설정"
+                        },
                         expanded = showProtocolDetails,
                         onToggle = { showProtocolDetails = !showProtocolDetails },
                     )
                 }
                 if (showProtocolDetails) {
-                item {
-                    ProfileTextField(
-                        value = authorizationEndpoint, onValueChange = { authorizationEndpoint = it },
-                        label = "Authorization Endpoint", error = errors[ProviderProfile.Field.AUTHORIZATION_ENDPOINT],
-                        tag = "authorization_endpoint", keyboardType = KeyboardType.Uri,
-                        readOnly = fixedProtocolContract,
-                    )
-                }
-                item {
-                    ProfileTextField(
-                        value = tokenEndpoint, onValueChange = { tokenEndpoint = it }, label = "Token Endpoint",
-                        error = errors[ProviderProfile.Field.TOKEN_ENDPOINT], tag = "token_endpoint", keyboardType = KeyboardType.Uri,
-                        readOnly = fixedProtocolContract,
-                    )
-                }
-                item {
-                    ProfileTextField(
-                        value = scopes, onValueChange = { scopes = it }, label = "OAuth Scopes",
-                        error = errors[ProviderProfile.Field.SCOPES], tag = "scopes",
-                        readOnly = fixedProtocolContract,
-                    )
-                }
-                item {
-                    ProfileTextField(
-                        value = callbackPort, onValueChange = { callbackPort = it }, label = "Loopback Callback Port",
-                        error = errors[ProviderProfile.Field.CALLBACK_PORT], tag = "callback_port", keyboardType = KeyboardType.Number,
-                        readOnly = fixedProtocolContract,
-                    )
-                }
+                    item {
+                        ProfileTextField(
+                            value = authorizationEndpoint, onValueChange = { authorizationEndpoint = it },
+                            label = "Authorization Endpoint", error = errors[ProviderProfile.Field.AUTHORIZATION_ENDPOINT],
+                            tag = "authorization_endpoint", keyboardType = KeyboardType.Uri,
+                            readOnly = fixedOAuthContract,
+                        )
+                    }
+                    item {
+                        ProfileTextField(
+                            value = tokenEndpoint, onValueChange = { tokenEndpoint = it }, label = "Token Endpoint",
+                            error = errors[ProviderProfile.Field.TOKEN_ENDPOINT], tag = "token_endpoint", keyboardType = KeyboardType.Uri,
+                            readOnly = fixedOAuthContract,
+                        )
+                    }
+                    item {
+                        ProfileTextField(
+                            value = scopes, onValueChange = { scopes = it }, label = "OAuth Scopes",
+                            error = errors[ProviderProfile.Field.SCOPES], tag = "scopes",
+                            readOnly = fixedOAuthContract,
+                        )
+                    }
+                    item {
+                        ProfileTextField(
+                            value = callbackPort, onValueChange = { callbackPort = it }, label = "Loopback Callback Port",
+                            error = errors[ProviderProfile.Field.CALLBACK_PORT], tag = "callback_port", keyboardType = KeyboardType.Number,
+                            readOnly = fixedOAuthContract,
+                        )
+                    }
                 item {
                     ProfileTextField(
                         value = inferenceEndpoint, onValueChange = { inferenceEndpoint = it }, label = "LLM Endpoint",
                         placeholder = initialProfile.type.inferenceEndpointPlaceholder,
                         error = errors[ProviderProfile.Field.INFERENCE_ENDPOINT], tag = "inference_endpoint", keyboardType = KeyboardType.Uri,
-                        readOnly = fixedProtocolContract,
+                        readOnly = fixedInferenceContract,
                     )
                 }
                 }

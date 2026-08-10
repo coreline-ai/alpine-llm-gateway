@@ -35,6 +35,11 @@ data class ProviderHttpRequest(
     val headers: Map<String, String> = emptyMap(),
     /** Header name that receives the sanitized OAuth account id at the credential boundary. */
     val credentialAccountIdHeader: String? = null,
+    /**
+     * Some approved consumer backends stream SSE records with a non-standard response media type.
+     * Keep strict Content-Type validation by default and opt out only at a reviewed adapter boundary.
+     */
+    val allowNonStandardEventStreamContentType: Boolean = false,
     val retrySafety: ProviderRetrySafety = ProviderRetrySafety.NEVER_AUTOMATIC,
     val idempotencyKeyHeader: String? = null,
 ) {
@@ -78,7 +83,20 @@ data class ProviderHttpStreamResponse(
     val headers: Map<String, String> = emptyMap(),
 )
 
-class ProviderStreamException(message: String) : Exception(message)
+class ProviderStreamException(
+    message: String,
+    val diagnosticCode: String = "invalid_response",
+) : Exception(message) {
+    init {
+        require(diagnosticCode.matches(DIAGNOSTIC_CODE)) {
+            "diagnosticCode must be a safe identifier"
+        }
+    }
+
+    private companion object {
+        val DIAGNOSTIC_CODE = Regex("[a-z0-9_.-]{1,96}")
+    }
+}
 
 /**
  * Provider adapters transform protocol data only. They never receive the
@@ -335,8 +353,13 @@ class UrlConnectionOAuthHttpTransport(
                     headers = headers,
                 )
             }
-            if (!isEventStreamContentType(connection.contentType)) {
-                throw ProviderStreamException("Provider stream content type is invalid")
+            if (!request.allowNonStandardEventStreamContentType &&
+                !isEventStreamContentType(connection.contentType)
+            ) {
+                throw ProviderStreamException(
+                    "Provider stream content type is invalid",
+                    diagnosticCode = "invalid_content_type",
+                )
             }
             val input = connection.inputStream
             openingCancellation.dispose()

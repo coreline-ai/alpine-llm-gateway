@@ -2,6 +2,7 @@ package dev.alpine.chat.provider.android.session
 
 import android.app.Activity
 import dev.alpine.llm.OAuthAuthenticationState
+import dev.alpine.llm.CodexOAuthCompatibilityRegistry
 import dev.alpine.llm.HostLlmStreamEvent
 import dev.alpine.llm.HostLlmStreamResult
 import dev.alpine.chat.feature.backend.ChatBackendDescriptor
@@ -45,8 +46,11 @@ fun ProviderProfile.toChatBackendDescriptor(): ChatBackendDescriptor = ChatBacke
     model = model,
     modelOptions = when (type) {
         ProviderType.GEMINI -> (GeminiProfileDefaults.MODELS + model).distinct()
+        ProviderType.CODEX -> CodexOAuthCompatibilityRegistry.matching(
+            clientId,
+            inferenceEndpoint,
+        )?.modelOptions?.let { (it + model).distinct() } ?: listOf(model)
         ProviderType.ANTHROPIC,
-        ProviderType.CODEX,
         ProviderType.OPENAI_COMPATIBLE,
         ProviderType.XAI,
         -> listOf(model)
