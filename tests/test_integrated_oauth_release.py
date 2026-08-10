@@ -60,3 +60,17 @@ def test_openminis_xai_material_is_allowed_only_for_an_explicit_debug_scan() -> 
         assert strict.returncode == 1
         assert "first-party Grok CLI scope" in strict.stderr
         assert approved_debug.returncode == 0
+
+
+def test_openminis_claude_material_is_allowed_only_for_an_explicit_debug_scan() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        apk = Path(directory) / "integrated-app-debug.apk"
+        with zipfile.ZipFile(apk, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("classes.dex", b"claude.ai/oauth/authorize")
+
+        strict = run_scan(apk)
+        approved_debug = run_scan(apk, allow_approved_openminis_debug=True)
+
+        assert strict.returncode == 1
+        assert "Claude consumer compatibility endpoint" in strict.stderr
+        assert approved_debug.returncode == 0

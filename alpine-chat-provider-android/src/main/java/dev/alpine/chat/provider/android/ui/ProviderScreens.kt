@@ -74,6 +74,7 @@ import dev.alpine.chat.provider.android.model.GeminiProfileDefaults
 import dev.alpine.chat.provider.android.model.ProviderProfile
 import dev.alpine.chat.provider.android.model.ProviderSaveAction
 import dev.alpine.chat.provider.android.model.ProviderType
+import dev.alpine.llm.AnthropicOAuthCompatibilityRegistry
 import dev.alpine.llm.CodexOAuthCompatibilityRegistry
 import dev.alpine.llm.XaiOAuthCompatibilityRegistry
 import dev.alpine.chat.feature.ui.designsystem.AlpineConfirmDialog
@@ -622,9 +623,12 @@ fun ProviderEditScreen(
     ) {
         mutableStateOf(emptyMap())
     }
-    val fixedOAuthContract = initialProfile.type == ProviderType.GEMINI ||
-        initialProfile.type == ProviderType.CODEX ||
-        initialProfile.type == ProviderType.XAI
+    val anthropicCompatibility = AnthropicOAuthCompatibilityRegistry.matching(
+        clientId = initialProfile.clientId,
+        authorizationEndpoint = initialProfile.authorizationEndpoint,
+        tokenEndpoint = initialProfile.tokenEndpoint,
+        messagesEndpoint = initialProfile.inferenceEndpoint,
+    )
     val codexCompatibility = CodexOAuthCompatibilityRegistry.matching(
         clientId = initialProfile.clientId,
         responsesEndpoint = initialProfile.inferenceEndpoint,
@@ -633,11 +637,17 @@ fun ProviderEditScreen(
         clientId = initialProfile.clientId,
         chatCompletionsEndpoint = initialProfile.inferenceEndpoint,
     )
-    val debugCompatibility = codexCompatibility != null || xaiCompatibility != null
+    val debugCompatibility = anthropicCompatibility != null ||
+        codexCompatibility != null || xaiCompatibility != null
+    val fixedOAuthContract = initialProfile.type == ProviderType.GEMINI ||
+        initialProfile.type == ProviderType.CODEX ||
+        initialProfile.type == ProviderType.XAI ||
+        anthropicCompatibility != null
     val fixedInferenceContract = initialProfile.type == ProviderType.GEMINI ||
         initialProfile.type == ProviderType.XAI ||
-        codexCompatibility != null
+        codexCompatibility != null || anthropicCompatibility != null
     val selectableModels = when (initialProfile.type) {
+        ProviderType.ANTHROPIC -> anthropicCompatibility?.modelOptions.orEmpty()
         ProviderType.GEMINI -> GeminiProfileDefaults.MODELS
         ProviderType.CODEX -> codexCompatibility?.modelOptions.orEmpty()
         ProviderType.XAI -> xaiCompatibility?.modelOptions.orEmpty()

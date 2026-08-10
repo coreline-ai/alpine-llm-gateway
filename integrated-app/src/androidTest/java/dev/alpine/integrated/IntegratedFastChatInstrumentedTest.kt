@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
@@ -129,6 +130,7 @@ class IntegratedFastChatInstrumentedTest {
         waitForChatScreen()
         waitForDisplayedText(profile.label)
         compose.onNodeWithText(profile.label).assertIsDisplayed()
+        compose.onNodeWithTag("chat_context_toggle").performClick()
         compose.onNodeWithTag("quick_model_gemini-3.5-flash").performClick()
         compose.waitUntil(5_000) {
             ProviderProfileStore(context).find(profile.id)?.model == "gemini-3.5-flash"
@@ -162,6 +164,42 @@ class IntegratedFastChatInstrumentedTest {
         ).assertIsDisplayed()
 
         assertEquals(3, scenario.requestCount.get())
+    }
+
+    @Test
+    fun chatContextControlsAreCompactUntilExplicitlyExpanded() {
+        val profile = geminiProfile("integrated-compact-context")
+        val scenario = IntegratedProviderScenario(startSignedOut = false, immediate = true)
+        ProviderProfileStore(context).upsert(profile)
+        ProviderDependencies.installSessionFactoryForTests { _, selected ->
+            scenario.create(selected)
+        }
+
+        launch()
+        waitForChatScreen()
+        waitForDisplayedText(profile.label)
+
+        compose.onNodeWithTag("chat_context_toggle")
+            .assertIsDisplayed()
+            .assert(hasStateDescription("접힘"))
+        compose.onNodeWithTag("provider_selector").assertDoesNotExist()
+        compose.onNodeWithTag("model_quick_switcher").assertDoesNotExist()
+        compose.onNodeWithTag("assistant_mode_selector").assertDoesNotExist()
+
+        compose.onNodeWithTag("chat_context_toggle").performClick()
+
+        compose.onNodeWithTag("chat_context_toggle")
+            .assert(hasStateDescription("펼쳐짐"))
+        compose.onNodeWithTag("provider_selector").assertIsDisplayed()
+        compose.onNodeWithTag("model_quick_switcher").assertIsDisplayed()
+        compose.onNodeWithTag("assistant_mode_selector").assertIsDisplayed()
+
+        compose.onNodeWithTag("chat_context_toggle").performClick()
+
+        compose.onNodeWithTag("provider_selector").assertDoesNotExist()
+        compose.onNodeWithTag("model_quick_switcher").assertDoesNotExist()
+        compose.onNodeWithTag("assistant_mode_selector").assertDoesNotExist()
+        compose.onNodeWithTag("message_input").assertIsDisplayed()
     }
 
     @Test

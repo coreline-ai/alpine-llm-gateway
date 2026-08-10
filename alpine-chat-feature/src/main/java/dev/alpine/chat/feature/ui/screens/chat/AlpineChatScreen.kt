@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -63,6 +62,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -85,6 +85,7 @@ import androidx.compose.ui.unit.sp
 import dev.alpine.chat.feature.model.ChatMessage
 import dev.alpine.chat.feature.model.ChatMessageState
 import dev.alpine.chat.feature.model.ChatRole
+import dev.alpine.chat.feature.assistant.AssistantCatalog
 import dev.alpine.chat.feature.ui.ChatUiState
 import dev.alpine.chat.feature.ui.ConnectedProviderOption
 import dev.alpine.chat.feature.ui.components.AdaptiveContent
@@ -200,24 +201,20 @@ fun AlpineChatScreen(
                     if (state.providers.isEmpty()) {
                         ConnectionNotice()
                     }
-                    ProviderSelector(
+                    ChatContextControls(
                         providers = state.providers,
                         selectedProfileId = state.selectedProfileId,
-                        enabled = state.providers.isNotEmpty() && !state.isLoadingConversations,
-                        streaming = state.isStreaming,
-                        onSelect = onSelectProvider,
-                        onSelectModel = onSelectModel,
-                        onManageProviders = onManageProviders,
-                    )
-                    AssistantModeControl(
                         selectedSkillId = state.selectedSkillId,
                         selectedPersonaId = state.selectedPersonaId,
                         defaultSkillId = state.defaultSkillId,
                         defaultPersonaId = state.defaultPersonaId,
-                        streaming = state.isStreaming,
                         enabled = !state.isLoadingConversations,
-                        onSelect = onSelectAssistantMode,
-                        onReset = onResetAssistantMode,
+                        streaming = state.isStreaming,
+                        onSelectProvider = onSelectProvider,
+                        onSelectModel = onSelectModel,
+                        onManageProviders = onManageProviders,
+                        onSelectAssistantMode = onSelectAssistantMode,
+                        onResetAssistantMode = onResetAssistantMode,
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     state.statusMessage
@@ -259,6 +256,101 @@ fun AlpineChatScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ChatContextControls(
+    providers: List<ConnectedProviderOption>,
+    selectedProfileId: String?,
+    selectedSkillId: String,
+    selectedPersonaId: String,
+    defaultSkillId: String,
+    defaultPersonaId: String,
+    enabled: Boolean,
+    streaming: Boolean,
+    onSelectProvider: (String) -> Unit,
+    onSelectModel: (String, String) -> Unit,
+    onManageProviders: () -> Unit,
+    onSelectAssistantMode: (String, String, Boolean) -> Unit,
+    onResetAssistantMode: (Boolean) -> Unit,
+) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val selectedProvider = providers.firstOrNull { it.profileId == selectedProfileId }
+    val selectedSkill = AssistantCatalog.skill(selectedSkillId)
+    val selectedPersona = AssistantCatalog.persona(selectedPersonaId)
+    val providerSummary = selectedProvider?.let { "${it.label} · ${it.model}" } ?: "LLM 연결 필요"
+    val assistantSummary = "${selectedSkill.title} · ${selectedPersona.title}"
+
+    Column(Modifier.fillMaxWidth()) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp, bottom = 4.dp)
+                .testTag("chat_context_toggle")
+                .clip(RoundedCornerShape(16.dp))
+                .clickable(enabled = enabled) { expanded = !expanded }
+                .semantics {
+                    contentDescription = "대화 설정. $providerSummary, $assistantSummary"
+                    stateDescription = if (expanded) "펼쳐짐" else "접힘"
+                },
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Hub,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.size(8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = providerSummary,
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = assistantSummary,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Outlined.ArrowDropDown,
+                    contentDescription = null,
+                )
+            }
+        }
+        if (expanded) {
+            ProviderSelector(
+                providers = providers,
+                selectedProfileId = selectedProfileId,
+                enabled = providers.isNotEmpty() && enabled,
+                streaming = streaming,
+                onSelect = onSelectProvider,
+                onSelectModel = onSelectModel,
+                onManageProviders = onManageProviders,
+            )
+            AssistantModeControl(
+                selectedSkillId = selectedSkillId,
+                selectedPersonaId = selectedPersonaId,
+                defaultSkillId = defaultSkillId,
+                defaultPersonaId = defaultPersonaId,
+                streaming = streaming,
+                enabled = enabled,
+                onSelect = onSelectAssistantMode,
+                onReset = onResetAssistantMode,
+            )
         }
     }
 }
@@ -818,7 +910,6 @@ private fun ChatComposer(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
             .padding(vertical = 8.dp),
         shape = RoundedCornerShape(28.dp),
         color = MaterialTheme.colorScheme.surface,

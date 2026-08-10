@@ -1,5 +1,8 @@
 package dev.alpine.integrated
 
+import dev.alpine.llm.AnthropicOAuthCompatibilityConfig
+import dev.alpine.llm.AnthropicOAuthCompatibilityRegistry
+import dev.alpine.llm.AnthropicOAuthContract
 import dev.alpine.llm.CodexOAuthCompatibilityConfig
 import dev.alpine.llm.CodexOAuthCompatibilityRegistry
 import dev.alpine.llm.XaiOAuthCompatibilityConfig
@@ -9,6 +12,28 @@ import dev.alpine.llm.XaiOAuthContract
 /** User-approved OpenMinis compatibility boundary for the side-by-side debug package only. */
 class DebugIntegratedApplication : IntegratedApplication() {
     override fun onCreate() {
+        AnthropicOAuthCompatibilityRegistry.installApprovedDebug(
+            AnthropicOAuthCompatibilityConfig(
+                sourceRevision = "OpenMinis@9cf3a855fecd27bb5735b84cacbd56852a3ab8dd",
+                clientId = "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
+                authorizationEndpoint = "https://claude.ai/oauth/authorize",
+                tokenEndpoint = "https://console.anthropic.com/v1/oauth/token",
+                messagesEndpoint = AnthropicOAuthContract.MESSAGES_ENDPOINT,
+                scopes = listOf("org:create_api_key", "user:profile", "user:inference"),
+                callbackPort = 54545,
+                redirectHost = "localhost",
+                redirectPath = "/callback",
+                defaultModel = "claude-sonnet-4-6",
+                modelOptions = listOf(
+                    "claude-fable-5",
+                    "claude-opus-4-8",
+                    "claude-opus-4-6",
+                    "claude-sonnet-5",
+                    "claude-sonnet-4-6",
+                    "claude-haiku-4-5",
+                ),
+            ),
+        )
         CodexOAuthCompatibilityRegistry.installApprovedDebug(
             CodexOAuthCompatibilityConfig(
                 sourceRevision = "OpenMinis@9cf3a855fecd27bb5735b84cacbd56852a3ab8dd",

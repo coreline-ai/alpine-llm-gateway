@@ -3,6 +3,7 @@ package dev.alpine.chat.provider.android.model
 import dev.alpine.llm.CodexOAuthContract
 import dev.alpine.llm.CodexOAuthCompatibilityRegistry
 import dev.alpine.llm.GeminiOAuthContract
+import dev.alpine.llm.AnthropicOAuthCompatibilityRegistry
 import dev.alpine.llm.XaiOAuthCompatibilityRegistry
 import dev.alpine.llm.XaiOAuthContract
 import org.json.JSONObject
@@ -114,6 +115,28 @@ data class ProviderProfile(
         }
         if (type == ProviderType.GEMINI && !inferenceEndpoint.contains("{model}")) {
             put(Field.INFERENCE_ENDPOINT, "Gemini endpoint에 {model} 값을 포함하세요.")
+        }
+        if (type == ProviderType.ANTHROPIC) {
+            AnthropicOAuthCompatibilityRegistry.matching(clientId)?.let { compatibility ->
+                if (authorizationEndpoint != compatibility.authorizationEndpoint) {
+                    put(Field.AUTHORIZATION_ENDPOINT, "Claude debug Authorization endpoint는 OAuth 계약의 고정값을 사용하세요.")
+                }
+                if (tokenEndpoint != compatibility.tokenEndpoint) {
+                    put(Field.TOKEN_ENDPOINT, "Claude debug Token endpoint는 OAuth 계약의 고정값을 사용하세요.")
+                }
+                if (inferenceEndpoint != compatibility.messagesEndpoint) {
+                    put(Field.INFERENCE_ENDPOINT, "Claude debug LLM endpoint는 OAuth 계약의 고정값을 사용하세요.")
+                }
+                if (scopes != compatibility.scopes) {
+                    put(Field.SCOPES, "Claude debug OAuth scopes는 OAuth 계약의 고정값을 사용하세요.")
+                }
+                if (callbackPort != compatibility.callbackPort) {
+                    put(Field.CALLBACK_PORT, "Claude debug callback port는 OAuth 계약의 고정값을 사용하세요.")
+                }
+                if (model !in compatibility.modelOptions) {
+                    put(Field.MODEL, "승인된 debug OAuth 모델을 선택하세요.")
+                }
+            }
         }
         if (type == ProviderType.GEMINI) {
             if (authorizationEndpoint != GeminiOAuthContract.AUTHORIZATION_ENDPOINT) {
@@ -241,6 +264,11 @@ data class ProviderProfile(
         )
 
         fun draft(type: ProviderType, label: String): ProviderProfile {
+            val anthropicCompatibility = if (type == ProviderType.ANTHROPIC) {
+                AnthropicOAuthCompatibilityRegistry.current()
+            } else {
+                null
+            }
             val codexCompatibility = if (type == ProviderType.CODEX) {
                 CodexOAuthCompatibilityRegistry.current()
             } else {
@@ -255,12 +283,14 @@ data class ProviderProfile(
                 label = label,
                 type = type,
                 authorizationEndpoint = when (type) {
+                    ProviderType.ANTHROPIC -> anthropicCompatibility?.authorizationEndpoint.orEmpty()
                     ProviderType.GEMINI -> GeminiOAuthContract.AUTHORIZATION_ENDPOINT
                     ProviderType.CODEX -> CodexOAuthContract.AUTHORIZATION_ENDPOINT
                     ProviderType.XAI -> XaiOAuthContract.AUTHORIZATION_ENDPOINT
                     else -> ""
                 },
                 tokenEndpoint = when (type) {
+                    ProviderType.ANTHROPIC -> anthropicCompatibility?.tokenEndpoint.orEmpty()
                     ProviderType.GEMINI -> GeminiOAuthContract.TOKEN_ENDPOINT
                     ProviderType.CODEX -> CodexOAuthContract.TOKEN_ENDPOINT
                     ProviderType.XAI -> XaiOAuthContract.TOKEN_ENDPOINT
@@ -268,17 +298,23 @@ data class ProviderProfile(
                 },
                 inferenceEndpoint = codexCompatibility?.responsesEndpoint
                     ?: xaiCompatibility?.chatCompletionsEndpoint
+                    ?: anthropicCompatibility?.messagesEndpoint
                     ?: type.inferenceEndpointPlaceholder,
-                clientId = codexCompatibility?.clientId ?: xaiCompatibility?.clientId.orEmpty(),
+                clientId = codexCompatibility?.clientId
+                    ?: xaiCompatibility?.clientId
+                    ?: anthropicCompatibility?.clientId.orEmpty(),
                 scopes = xaiCompatibility?.scopes
+                    ?: anthropicCompatibility?.scopes
                     ?: type.defaultScopes.split(" ").filter(String::isNotBlank),
                 model = when (type) {
+                    ProviderType.ANTHROPIC -> anthropicCompatibility?.defaultModel.orEmpty()
                     ProviderType.GEMINI -> GeminiProfileDefaults.DEFAULT_MODEL
                     ProviderType.CODEX -> codexCompatibility?.defaultModel.orEmpty()
                     ProviderType.XAI -> xaiCompatibility?.defaultModel.orEmpty()
                     else -> ""
                 },
                 callbackPort = when (type) {
+                    ProviderType.ANTHROPIC -> anthropicCompatibility?.callbackPort ?: DEFAULT_CALLBACK_PORT
                     ProviderType.GEMINI -> GeminiOAuthContract.CALLBACK_PORT
                     ProviderType.CODEX -> CodexOAuthContract.CALLBACK_PORT
                     ProviderType.XAI -> XaiOAuthContract.CALLBACK_PORT

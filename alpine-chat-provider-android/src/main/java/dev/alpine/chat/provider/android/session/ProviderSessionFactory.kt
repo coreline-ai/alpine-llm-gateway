@@ -8,6 +8,8 @@ import dev.alpine.chat.feature.backend.ChatBackendException
 import dev.alpine.chat.feature.backend.ChatBackendFailureCode
 import dev.alpine.chat.feature.backend.ChatBackendStreamResult
 import dev.alpine.llm.AnthropicMessagesOAuthAdapter
+import dev.alpine.llm.AnthropicOAuthCompatibilityRegistry
+import dev.alpine.llm.AnthropicOAuthContract
 import dev.alpine.llm.CodexOAuthContract
 import dev.alpine.llm.CodexOAuthCompatibilityRegistry
 import dev.alpine.llm.CodexResponsesOAuthAdapter
@@ -88,6 +90,19 @@ object ProviderSessionFactory {
     }
 
     private fun oauthConfig(profile: ProviderProfile): OAuthProviderConfig {
+        if (profile.type == ProviderType.ANTHROPIC &&
+            AnthropicOAuthCompatibilityRegistry.matching(
+                clientId = profile.clientId,
+                authorizationEndpoint = profile.authorizationEndpoint,
+                tokenEndpoint = profile.tokenEndpoint,
+                messagesEndpoint = profile.inferenceEndpoint,
+            ) != null
+        ) {
+            return AnthropicOAuthContract.providerConfig(
+                providerId = profile.id,
+                clientId = profile.clientId,
+            )
+        }
         if (profile.type == ProviderType.GEMINI) {
             return GeminiOAuthContract.providerConfig(
                 providerId = profile.id,

@@ -2,6 +2,7 @@ package dev.alpine.chat.provider.android.session
 
 import android.app.Activity
 import dev.alpine.llm.OAuthAuthenticationState
+import dev.alpine.llm.AnthropicOAuthCompatibilityRegistry
 import dev.alpine.llm.CodexOAuthCompatibilityRegistry
 import dev.alpine.llm.HostLlmStreamEvent
 import dev.alpine.llm.HostLlmStreamResult
@@ -46,6 +47,12 @@ fun ProviderProfile.toChatBackendDescriptor(): ChatBackendDescriptor = ChatBacke
     label = label,
     model = model,
     modelOptions = when (type) {
+        ProviderType.ANTHROPIC -> AnthropicOAuthCompatibilityRegistry.matching(
+            clientId,
+            authorizationEndpoint,
+            tokenEndpoint,
+            inferenceEndpoint,
+        )?.modelOptions?.let { (it + model).distinct() } ?: listOf(model)
         ProviderType.GEMINI -> (GeminiProfileDefaults.MODELS + model).distinct()
         ProviderType.CODEX -> CodexOAuthCompatibilityRegistry.matching(
             clientId,
@@ -55,7 +62,6 @@ fun ProviderProfile.toChatBackendDescriptor(): ChatBackendDescriptor = ChatBacke
             clientId,
             inferenceEndpoint,
         )?.modelOptions?.let { (it + model).distinct() } ?: listOf(model)
-        ProviderType.ANTHROPIC,
         ProviderType.OPENAI_COMPATIBLE,
         -> listOf(model)
     },

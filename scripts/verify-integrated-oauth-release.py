@@ -49,10 +49,12 @@ APPROVED_OPENMINIS_DEBUG_FRAGMENTS = {
     b"codex_cli_rs",
     b"grok-cli:access",
     b"referrer=minis",
+    b"claude.ai/oauth/authorize",
 }
 APPROVED_OPENMINIS_DEBUG_REGISTRATION_SHA256 = {
     "584341c2f0e88ad1f7c6856553d81dc4776ff42c43951daed3e2d8d91552eaa2",
     "61a78c7973731798b0a57ea32dfdf330dc5f2274df5a85e6798f0c38d66f24ee",
+    "473668f2b13c71009d028ff0ef74c2cf76e71cbdd33b76e69fcc42d7e59aca4b",
 }
 SECRET_PATTERNS = (
     (re.compile(rb"sk-ant-[A-Za-z0-9_-]{20,}"), "Anthropic API key"),

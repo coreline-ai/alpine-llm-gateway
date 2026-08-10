@@ -1,5 +1,8 @@
 package dev.alpine.chat.provider.android.model
 
+import dev.alpine.llm.AnthropicOAuthCompatibilityConfig
+import dev.alpine.llm.AnthropicOAuthCompatibilityRegistry
+import dev.alpine.llm.AnthropicOAuthContract
 import dev.alpine.llm.CodexOAuthContract
 import dev.alpine.llm.CodexOAuthCompatibilityConfig
 import dev.alpine.llm.CodexOAuthCompatibilityRegistry
@@ -19,6 +22,7 @@ import org.junit.Test
 class ProviderProfileTest {
     @After
     fun clearCompatibility() {
+        AnthropicOAuthCompatibilityRegistry.clear()
         CodexOAuthCompatibilityRegistry.clear()
         XaiOAuthCompatibilityRegistry.clear()
     }
@@ -172,6 +176,41 @@ class ProviderProfileTest {
         assertEquals(compatibility.chatCompletionsEndpoint, draft.inferenceEndpoint)
         assertEquals(compatibility.scopes, draft.scopes)
         assertEquals(compatibility.defaultModel, draft.model)
+        assertTrue(draft.validationErrors().isEmpty())
+        assertEquals(compatibility.modelOptions, draft.toChatBackendDescriptor().modelOptions)
+        assertTrue(
+            draft.copy(model = "unknown-model")
+                .validationErrors()
+                .containsKey(ProviderProfile.Field.MODEL),
+        )
+    }
+
+    @Test
+    fun `approved debug compatibility seeds claude registration endpoint and models`() {
+        val compatibility = AnthropicOAuthCompatibilityConfig(
+            sourceRevision = "reference@revision",
+            clientId = "approved-debug-public-client",
+            authorizationEndpoint = "https://auth.example.test/authorize",
+            tokenEndpoint = "https://auth.example.test/token",
+            messagesEndpoint = AnthropicOAuthContract.MESSAGES_ENDPOINT,
+            scopes = listOf("profile", "inference"),
+            callbackPort = 54545,
+            redirectHost = "localhost",
+            redirectPath = "/callback",
+            defaultModel = "claude-current",
+            modelOptions = listOf("claude-current", "claude-fast"),
+        )
+        AnthropicOAuthCompatibilityRegistry.installApprovedDebug(compatibility)
+
+        val draft = ProviderProfile.draft(ProviderType.ANTHROPIC, "Claude")
+
+        assertEquals(compatibility.clientId, draft.clientId)
+        assertEquals(compatibility.authorizationEndpoint, draft.authorizationEndpoint)
+        assertEquals(compatibility.tokenEndpoint, draft.tokenEndpoint)
+        assertEquals(compatibility.messagesEndpoint, draft.inferenceEndpoint)
+        assertEquals(compatibility.scopes, draft.scopes)
+        assertEquals(compatibility.defaultModel, draft.model)
+        assertEquals(compatibility.callbackPort, draft.callbackPort)
         assertTrue(draft.validationErrors().isEmpty())
         assertEquals(compatibility.modelOptions, draft.toChatBackendDescriptor().modelOptions)
         assertTrue(
