@@ -6,9 +6,15 @@ import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Test
 
 class XaiOAuthContractTest {
+    @After
+    fun clearCompatibility() {
+        XaiOAuthCompatibilityRegistry.clear()
+    }
+
     @Test
     fun xaiContractKeepsDiscoveryAndUsesStandardOAuthRequestParameters() {
         val config = XaiOAuthContract.providerConfig("xai-profile", "public-client")
@@ -47,6 +53,52 @@ class XaiOAuthContractTest {
         assertEquals("safe@example.test", token.metadata["email"])
         assertEquals("Safe User", token.metadata["name"])
         assertFalse(token.metadata.values.any { it.contains(idToken) })
+    }
+
+    @Test
+    fun approvedDebugCompatibilityAddsMetadataAndChallengeOnlyToCodeExchange() {
+        val compatibility = XaiOAuthCompatibilityConfig(
+            sourceRevision = "reference@revision",
+            clientId = "approved-debug-public-client",
+            chatCompletionsEndpoint = XaiOAuthContract.CHAT_COMPLETIONS_ENDPOINT,
+            scopes = XaiOAuthContract.SCOPES + "debug.compatibility",
+            defaultModel = "grok-current",
+            modelOptions = listOf("grok-current", "grok-fast"),
+            extraAuthorizationParams = mapOf("approved_flow" to "true"),
+        )
+        XaiOAuthCompatibilityRegistry.installApprovedDebug(compatibility)
+
+        val config = XaiOAuthContract.providerConfig("xai-profile", compatibility.clientId)
+        val codeInput = mapOf(
+            "grant_type" to "authorization_code",
+            "code_verifier" to "verifier",
+        )
+        val refreshInput = mapOf(
+            "grant_type" to "refresh_token",
+            "refresh_token" to "refresh",
+        )
+
+        assertEquals(compatibility.scopes, config.scopes)
+        assertEquals(compatibility.extraAuthorizationParams, config.extraAuthorizationParams)
+        assertEquals(
+            codeInput + mapOf("code_challenge" to "challenge", "code_challenge_method" to "S256"),
+            config.tokenRequestAdapter.adapt(
+                OAuthTokenRequestContext(
+                    grantType = OAuthTokenGrantType.AUTHORIZATION_CODE,
+                    parameters = codeInput,
+                    codeChallenge = "challenge",
+                ),
+            ),
+        )
+        assertEquals(
+            refreshInput,
+            config.tokenRequestAdapter.adapt(
+                OAuthTokenRequestContext(
+                    grantType = OAuthTokenGrantType.REFRESH_TOKEN,
+                    parameters = refreshInput,
+                ),
+            ),
+        )
     }
 
     private fun base64Url(value: String): String = Base64.getUrlEncoder().withoutPadding()

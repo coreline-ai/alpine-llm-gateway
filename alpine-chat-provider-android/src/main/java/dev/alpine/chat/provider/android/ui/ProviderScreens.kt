@@ -75,6 +75,7 @@ import dev.alpine.chat.provider.android.model.ProviderProfile
 import dev.alpine.chat.provider.android.model.ProviderSaveAction
 import dev.alpine.chat.provider.android.model.ProviderType
 import dev.alpine.llm.CodexOAuthCompatibilityRegistry
+import dev.alpine.llm.XaiOAuthCompatibilityRegistry
 import dev.alpine.chat.feature.ui.designsystem.AlpineConfirmDialog
 import dev.alpine.chat.feature.ui.designsystem.AlpineEmptyState
 import dev.alpine.chat.feature.ui.designsystem.AlpinePrimaryAction
@@ -622,16 +623,24 @@ fun ProviderEditScreen(
         mutableStateOf(emptyMap())
     }
     val fixedOAuthContract = initialProfile.type == ProviderType.GEMINI ||
-        initialProfile.type == ProviderType.CODEX
+        initialProfile.type == ProviderType.CODEX ||
+        initialProfile.type == ProviderType.XAI
     val codexCompatibility = CodexOAuthCompatibilityRegistry.matching(
         clientId = initialProfile.clientId,
         responsesEndpoint = initialProfile.inferenceEndpoint,
     )
+    val xaiCompatibility = XaiOAuthCompatibilityRegistry.matching(
+        clientId = initialProfile.clientId,
+        chatCompletionsEndpoint = initialProfile.inferenceEndpoint,
+    )
+    val debugCompatibility = codexCompatibility != null || xaiCompatibility != null
     val fixedInferenceContract = initialProfile.type == ProviderType.GEMINI ||
+        initialProfile.type == ProviderType.XAI ||
         codexCompatibility != null
     val selectableModels = when (initialProfile.type) {
         ProviderType.GEMINI -> GeminiProfileDefaults.MODELS
         ProviderType.CODEX -> codexCompatibility?.modelOptions.orEmpty()
+        ProviderType.XAI -> xaiCompatibility?.modelOptions.orEmpty()
         else -> emptyList()
     }
 
@@ -726,12 +735,12 @@ fun ProviderEditScreen(
                 item {
                     AlpineStepLabel(
                         step = 2,
-                        title = if (codexCompatibility == null) {
+                        title = if (!debugCompatibility) {
                             "앱 소유 OAuth 정보"
                         } else {
                             "승인된 debug OAuth 정보"
                         },
-                        description = if (codexCompatibility == null) {
+                        description = if (!debugCompatibility) {
                             "다른 앱이나 CLI의 Client ID를 복사하지 마세요."
                         } else {
                             "사용자가 승인한 OpenMinis 호환 등록을 debug 앱에서만 사용합니다."
@@ -748,22 +757,22 @@ fun ProviderEditScreen(
                     ProfileTextField(
                         value = clientId, onValueChange = { clientId = it }, label = "OAuth Public Client ID",
                         error = errors[ProviderProfile.Field.CLIENT_ID], tag = "client_id",
-                        readOnly = codexCompatibility != null,
+                        readOnly = debugCompatibility,
                     )
                 }
                 item {
                     AlpineStatusRail(
-                        label = if (codexCompatibility == null) {
+                        label = if (!debugCompatibility) {
                             "앱 소유 registration 필요"
                         } else {
                             "OpenMinis 호환 · DEBUG ONLY"
                         },
-                        message = if (codexCompatibility == null) {
+                        message = if (!debugCompatibility) {
                             "공식 CLI·OpenMinis·다른 앱의 Client ID와 fingerprint를 제품에 포함하지 않습니다."
                         } else {
-                            "승인된 참조 revision의 OAuth/Responses 계약입니다. release에는 포함되지 않습니다."
+                            "승인된 참조 revision의 OAuth 계약입니다. release에는 포함되지 않습니다."
                         },
-                        tone = if (codexCompatibility == null) {
+                        tone = if (!debugCompatibility) {
                             AlpineStatusTone.WARNING
                         } else {
                             AlpineStatusTone.CONNECTED

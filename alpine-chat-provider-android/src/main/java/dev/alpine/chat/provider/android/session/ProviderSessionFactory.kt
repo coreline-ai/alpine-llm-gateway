@@ -29,6 +29,7 @@ import dev.alpine.llm.ProviderCircuitOpenException
 import dev.alpine.llm.ProviderRetryPolicy
 import dev.alpine.llm.ProviderStreamException
 import dev.alpine.llm.ResilientOAuthHttpTransport
+import dev.alpine.llm.XaiOAuthContract
 import dev.alpine.chat.provider.android.model.ProviderProfile
 import dev.alpine.chat.provider.android.model.ProviderType
 import java.io.IOException
@@ -95,6 +96,12 @@ object ProviderSessionFactory {
         }
         if (profile.type == ProviderType.CODEX) {
             return CodexOAuthContract.providerConfig(
+                providerId = profile.id,
+                clientId = profile.clientId,
+            )
+        }
+        if (profile.type == ProviderType.XAI) {
+            return XaiOAuthContract.providerConfig(
                 providerId = profile.id,
                 clientId = profile.clientId,
             )

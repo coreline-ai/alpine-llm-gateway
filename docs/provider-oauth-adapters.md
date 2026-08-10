@@ -24,9 +24,12 @@
 | Anthropic Messages | Messages JSON/SSE 변환과 protocol version header | 승인된 OAuth endpoint·scope·client ID·model·Messages HTTPS endpoint | `NOT_RUN` |
 | xAI Chat Completions | Chat Completions JSON/SSE 변환 | 승인된 OAuth endpoint·scope·client ID·model·HTTPS endpoint | `NOT_RUN` |
 
-`OpenAI Responses`, `Anthropic`, `xAI`는 앱에 소비자 OAuth 또는 CLI compatibility 기본값을
+`OpenAI Responses`, `Anthropic`, `xAI`는 release 앱에 소비자 OAuth 또는 CLI compatibility 기본값을
 제공하지 않는다. 표시된 유형은 user-owned configuration을 보관하고 adapter를 선택하는 기능일
-뿐, Provider가 모바일 public client와 inference grant를 승인했다는 뜻이 아니다.
+뿐, Provider가 모바일 public client와 inference grant를 승인했다는 뜻이 아니다. 사용자가 명시
+승인한 OpenMinis 호환은 `integrated-app/src/debug`의 process-local registry에서만 설치할 수 있고,
+debug APK를 제외한 모든 source/artifact에서는 verifier가 해당 registration·scope·attribution을
+거부한다.
 
 ## 모델 정책
 
@@ -41,12 +44,14 @@
 아래 verifier는 integrated product source와 빌드된 debug APK를 함께 검사한다.
 
 ```bash
-python3.11 scripts/verify-integrated-oauth-release.py --require-default-roots
+python3.11 scripts/verify-integrated-oauth-release.py \
+  --require-default-roots \
+  --allow-approved-openminis-debug
 ```
 
 검사 대상은 다음과 같다.
 
-- consumer endpoint, CLI fingerprint/scope, known copied registration hash
+- consumer endpoint, CLI fingerprint/scope/attribution, known copied registration hash
 - probable Provider API key와 private key
 - demo·runtime probe·bridge probe·sample package가 integrated APK에 섞이는 경우
 

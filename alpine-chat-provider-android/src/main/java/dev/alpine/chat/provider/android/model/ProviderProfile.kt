@@ -3,6 +3,8 @@ package dev.alpine.chat.provider.android.model
 import dev.alpine.llm.CodexOAuthContract
 import dev.alpine.llm.CodexOAuthCompatibilityRegistry
 import dev.alpine.llm.GeminiOAuthContract
+import dev.alpine.llm.XaiOAuthCompatibilityRegistry
+import dev.alpine.llm.XaiOAuthContract
 import org.json.JSONObject
 import java.net.URI
 import java.util.UUID
@@ -45,9 +47,9 @@ enum class ProviderType(
     XAI(
         wireName = "xai",
         displayName = "xAI (승인 필요)",
-        description = "앱 소유 OAuth 등록과 Provider 승인이 필요합니다. CLI scope 기본값은 제공하지 않습니다.",
-        inferenceEndpointPlaceholder = "https://api.x.ai/v1/chat/completions",
-        defaultScopes = "",
+        description = "앱 소유 OAuth 등록과 Provider 승인이 필요합니다. consumer 호환은 debug에서만 명시 승인합니다.",
+        inferenceEndpointPlaceholder = XaiOAuthContract.CHAT_COMPLETIONS_ENDPOINT,
+        defaultScopes = XaiOAuthContract.SCOPES.joinToString(" "),
     );
 
     companion object {
@@ -166,6 +168,39 @@ data class ProviderProfile(
                 put(Field.CALLBACK_PORT, "Codex callback port는 1455를 사용하세요.")
             }
         }
+        if (type == ProviderType.XAI) {
+            XaiOAuthCompatibilityRegistry.matching(clientId, inferenceEndpoint)?.let { compatibility ->
+                if (model !in compatibility.modelOptions) {
+                    put(Field.MODEL, "승인된 debug OAuth 모델을 선택하세요.")
+                }
+            }
+            if (authorizationEndpoint != XaiOAuthContract.AUTHORIZATION_ENDPOINT) {
+                put(
+                    Field.AUTHORIZATION_ENDPOINT,
+                    "xAI Authorization endpoint는 OAuth 계약의 고정값을 사용하세요.",
+                )
+            }
+            if (tokenEndpoint != XaiOAuthContract.TOKEN_ENDPOINT) {
+                put(
+                    Field.TOKEN_ENDPOINT,
+                    "xAI Token endpoint는 OAuth 계약의 고정값을 사용하세요.",
+                )
+            }
+            if (inferenceEndpoint != XaiOAuthContract.CHAT_COMPLETIONS_ENDPOINT) {
+                put(
+                    Field.INFERENCE_ENDPOINT,
+                    "xAI LLM endpoint는 OAuth 계약의 고정값을 사용하세요.",
+                )
+            }
+            val expectedScopes = XaiOAuthCompatibilityRegistry.matching(clientId)?.scopes
+                ?: XaiOAuthContract.SCOPES
+            if (scopes != expectedScopes) {
+                put(Field.SCOPES, "xAI OAuth scopes는 OAuth 계약의 고정값을 사용하세요.")
+            }
+            if (callbackPort != XaiOAuthContract.CALLBACK_PORT) {
+                put(Field.CALLBACK_PORT, "xAI callback port는 56121을 사용하세요.")
+            }
+        }
         if (clientId.isBlank()) put(Field.CLIENT_ID, "OAuth Public Client ID를 입력하세요.")
         if (scopes.none(String::isNotBlank)) put(Field.SCOPES, "OAuth scope를 하나 이상 입력하세요.")
         if (model.isBlank()) put(Field.MODEL, "기본 모델을 선택하거나 입력하세요.")
@@ -206,8 +241,13 @@ data class ProviderProfile(
         )
 
         fun draft(type: ProviderType, label: String): ProviderProfile {
-            val compatibility = if (type == ProviderType.CODEX) {
+            val codexCompatibility = if (type == ProviderType.CODEX) {
                 CodexOAuthCompatibilityRegistry.current()
+            } else {
+                null
+            }
+            val xaiCompatibility = if (type == ProviderType.XAI) {
+                XaiOAuthCompatibilityRegistry.current()
             } else {
                 null
             }
@@ -217,25 +257,31 @@ data class ProviderProfile(
                 authorizationEndpoint = when (type) {
                     ProviderType.GEMINI -> GeminiOAuthContract.AUTHORIZATION_ENDPOINT
                     ProviderType.CODEX -> CodexOAuthContract.AUTHORIZATION_ENDPOINT
+                    ProviderType.XAI -> XaiOAuthContract.AUTHORIZATION_ENDPOINT
                     else -> ""
                 },
                 tokenEndpoint = when (type) {
                     ProviderType.GEMINI -> GeminiOAuthContract.TOKEN_ENDPOINT
                     ProviderType.CODEX -> CodexOAuthContract.TOKEN_ENDPOINT
+                    ProviderType.XAI -> XaiOAuthContract.TOKEN_ENDPOINT
                     else -> ""
                 },
-                inferenceEndpoint = compatibility?.responsesEndpoint
+                inferenceEndpoint = codexCompatibility?.responsesEndpoint
+                    ?: xaiCompatibility?.chatCompletionsEndpoint
                     ?: type.inferenceEndpointPlaceholder,
-                clientId = compatibility?.clientId.orEmpty(),
-                scopes = type.defaultScopes.split(" ").filter(String::isNotBlank),
+                clientId = codexCompatibility?.clientId ?: xaiCompatibility?.clientId.orEmpty(),
+                scopes = xaiCompatibility?.scopes
+                    ?: type.defaultScopes.split(" ").filter(String::isNotBlank),
                 model = when (type) {
                     ProviderType.GEMINI -> GeminiProfileDefaults.DEFAULT_MODEL
-                    ProviderType.CODEX -> compatibility?.defaultModel.orEmpty()
+                    ProviderType.CODEX -> codexCompatibility?.defaultModel.orEmpty()
+                    ProviderType.XAI -> xaiCompatibility?.defaultModel.orEmpty()
                     else -> ""
                 },
                 callbackPort = when (type) {
                     ProviderType.GEMINI -> GeminiOAuthContract.CALLBACK_PORT
                     ProviderType.CODEX -> CodexOAuthContract.CALLBACK_PORT
+                    ProviderType.XAI -> XaiOAuthContract.CALLBACK_PORT
                     else -> DEFAULT_CALLBACK_PORT
                 },
             )

@@ -27,6 +27,7 @@ FORBIDDEN_FRAGMENTS = {
     b"chatgpt.com/backend-api": "private OpenAI consumer endpoint",
     b"codex_cli_rs": "first-party Codex CLI fingerprint",
     b"grok-cli:access": "first-party Grok CLI scope",
+    b"referrer=minis": "OpenMinis xAI consumer attribution",
     b"claude.ai/oauth/authorize": "Claude consumer compatibility endpoint",
     b"dev.alpine.llm.demo": "demo app package in integrated product",
     b"dev/alpine/llm/demo": "demo app package in integrated product",
@@ -46,9 +47,12 @@ FORBIDDEN_FRAGMENTS = {
 APPROVED_OPENMINIS_DEBUG_FRAGMENTS = {
     b"chatgpt.com/backend-api",
     b"codex_cli_rs",
+    b"grok-cli:access",
+    b"referrer=minis",
 }
 APPROVED_OPENMINIS_DEBUG_REGISTRATION_SHA256 = {
     "584341c2f0e88ad1f7c6856553d81dc4776ff42c43951daed3e2d8d91552eaa2",
+    "61a78c7973731798b0a57ea32dfdf330dc5f2274df5a85e6798f0c38d66f24ee",
 }
 SECRET_PATTERNS = (
     (re.compile(rb"sk-ant-[A-Za-z0-9_-]{20,}"), "Anthropic API key"),
@@ -152,7 +156,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--allow-approved-openminis-debug",
         action="store_true",
-        help="Allow only the approved OpenMinis endpoint and CLI fingerprint in debug source/APK paths.",
+        help="Allow only approved OpenMinis consumer OAuth material in debug source/APK paths.",
     )
     return parser.parse_args()
 

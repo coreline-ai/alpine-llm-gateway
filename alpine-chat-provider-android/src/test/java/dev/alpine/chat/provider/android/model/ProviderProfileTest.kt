@@ -4,6 +4,9 @@ import dev.alpine.llm.CodexOAuthContract
 import dev.alpine.llm.CodexOAuthCompatibilityConfig
 import dev.alpine.llm.CodexOAuthCompatibilityRegistry
 import dev.alpine.llm.GeminiOAuthContract
+import dev.alpine.llm.XaiOAuthCompatibilityConfig
+import dev.alpine.llm.XaiOAuthCompatibilityRegistry
+import dev.alpine.llm.XaiOAuthContract
 import dev.alpine.chat.provider.android.session.toChatBackendDescriptor
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -17,6 +20,7 @@ class ProviderProfileTest {
     @After
     fun clearCompatibility() {
         CodexOAuthCompatibilityRegistry.clear()
+        XaiOAuthCompatibilityRegistry.clear()
     }
 
     @Test
@@ -91,6 +95,37 @@ class ProviderProfileTest {
     }
 
     @Test
+    fun `xai draft pins oauth protocol and requires app registration and model`() {
+        val draft = ProviderProfile.draft(ProviderType.XAI, "xAI")
+
+        assertEquals(XaiOAuthContract.AUTHORIZATION_ENDPOINT, draft.authorizationEndpoint)
+        assertEquals(XaiOAuthContract.TOKEN_ENDPOINT, draft.tokenEndpoint)
+        assertEquals(XaiOAuthContract.CHAT_COMPLETIONS_ENDPOINT, draft.inferenceEndpoint)
+        assertEquals(XaiOAuthContract.SCOPES, draft.scopes)
+        assertEquals(XaiOAuthContract.CALLBACK_PORT, draft.callbackPort)
+        assertTrue(draft.validationErrors().containsKey(ProviderProfile.Field.CLIENT_ID))
+        assertTrue(draft.validationErrors().containsKey(ProviderProfile.Field.MODEL))
+    }
+
+    @Test
+    fun `xai rejects modified oauth protocol contract`() {
+        val invalid = validProfile(ProviderType.XAI).copy(
+            authorizationEndpoint = "https://identity.example.test/authorize",
+            tokenEndpoint = "https://identity.example.test/token",
+            inferenceEndpoint = "https://api.example.test/v1/chat/completions",
+            scopes = listOf("openid"),
+            callbackPort = 54545,
+        )
+        val errors = invalid.validationErrors()
+
+        assertTrue(errors.containsKey(ProviderProfile.Field.AUTHORIZATION_ENDPOINT))
+        assertTrue(errors.containsKey(ProviderProfile.Field.TOKEN_ENDPOINT))
+        assertTrue(errors.containsKey(ProviderProfile.Field.INFERENCE_ENDPOINT))
+        assertTrue(errors.containsKey(ProviderProfile.Field.SCOPES))
+        assertTrue(errors.containsKey(ProviderProfile.Field.CALLBACK_PORT))
+    }
+
+    @Test
     fun `approved debug compatibility seeds codex registration endpoint and models`() {
         val compatibility = CodexOAuthCompatibilityConfig(
             sourceRevision = "reference@revision",
@@ -119,9 +154,39 @@ class ProviderProfileTest {
     }
 
     @Test
+    fun `approved debug compatibility seeds xai registration endpoint and models`() {
+        val compatibility = XaiOAuthCompatibilityConfig(
+            sourceRevision = "reference@revision",
+            clientId = "approved-debug-public-client",
+            chatCompletionsEndpoint = XaiOAuthContract.CHAT_COMPLETIONS_ENDPOINT,
+            scopes = XaiOAuthContract.SCOPES + "debug.compatibility",
+            defaultModel = "grok-current",
+            modelOptions = listOf("grok-current", "grok-fast"),
+            extraAuthorizationParams = mapOf("approved_flow" to "true"),
+        )
+        XaiOAuthCompatibilityRegistry.installApprovedDebug(compatibility)
+
+        val draft = ProviderProfile.draft(ProviderType.XAI, "xAI")
+
+        assertEquals(compatibility.clientId, draft.clientId)
+        assertEquals(compatibility.chatCompletionsEndpoint, draft.inferenceEndpoint)
+        assertEquals(compatibility.scopes, draft.scopes)
+        assertEquals(compatibility.defaultModel, draft.model)
+        assertTrue(draft.validationErrors().isEmpty())
+        assertEquals(compatibility.modelOptions, draft.toChatBackendDescriptor().modelOptions)
+        assertTrue(
+            draft.copy(model = "unknown-model")
+                .validationErrors()
+                .containsKey(ProviderProfile.Field.MODEL),
+        )
+    }
+
+    @Test
     fun `configurable provider draft fails closed until host owned oauth data is entered`() {
         ProviderType.entries
-            .filter { it != ProviderType.GEMINI && it != ProviderType.CODEX }
+            .filter {
+                it != ProviderType.GEMINI && it != ProviderType.CODEX && it != ProviderType.XAI
+            }
             .forEach { type ->
             val draft = ProviderProfile.draft(type, type.displayName)
             val errors = draft.validationErrors()
@@ -243,6 +308,12 @@ class ProviderProfileTest {
             ProviderType.CODEX -> draft.copy(
                 id = "profile-${type.wireName}",
                 inferenceEndpoint = "https://relay.example.test/v1/responses",
+                clientId = "host-owned-public-client",
+                model = "test-model",
+                createdAtMs = 1234L,
+            )
+            ProviderType.XAI -> draft.copy(
+                id = "profile-${type.wireName}",
                 clientId = "host-owned-public-client",
                 model = "test-model",
                 createdAtMs = 1234L,
