@@ -12,16 +12,17 @@
 
 | 항목 | 현재 값 |
 |---|---|
-| 원격 기준선 | `main@b81a7d8ee12af72ff95180bfeadabe68e5be950e` |
-| 로컬 기준선 | `main@b81a7d8ee12af72ff95180bfeadabe68e5be950e` |
-| 작업 branch | `codex/model-catalog-hardening-20260814` |
-| 최신 기준선 CI | run [`31358819831`](https://github.com/coreline-ai/alpine-llm-gateway/actions/runs/31358819831), `completed/success` |
-| 현재 working tree CI | `NOT_RUN` — commit·push 전이므로 fail-closed |
-| 공개 배포 | `NO-GO` — 7개 release-blocking gate가 계속 `BLOCKED` |
+| 원격 기준선 | `main@493546fd8efdfee61b04a2d16ad0fd1ef6384c12` |
+| 로컬 기준선 | `main@493546fd8efdfee61b04a2d16ad0fd1ef6384c12` |
+| 통합 source branch | `codex/model-catalog-hardening-20260814` |
+| main CI | run [`31796454558`](https://github.com/coreline-ai/alpine-llm-gateway/actions/runs/31796454558), `completed/success` |
+| topic CI | run [`31795327701`](https://github.com/coreline-ai/alpine-llm-gateway/actions/runs/31795327701), `completed/success` |
+| 현재 evidence 갱신 | commit·push 후 current-head CI 전까지 fail-closed |
+| 공개 배포 | `NO-GO` — CI 외 6개 release-blocking gate가 계속 `BLOCKED` |
 
-run `31358819831`은 `2026-08-10 14:30:38 KST`에 시작해 `14:44:02 KST`에 완료됐다.
-`Python 3.11`과 `Android modules` job이 모두 성공했지만, 이 기준선 성공은 현재 미커밋 변경을
-검증하지 않는다. 상세 범위는 [`distribution/GITHUB_CI_STATUS.md`](distribution/GITHUB_CI_STATUS.md)에 있다.
+run `31796454558`은 `2026-08-14 20:30:01 KST`에 시작해 `20:43:00 KST`에 완료됐다.
+`Python 3.11`과 `Android modules` job이 모두 성공했다. 상세 범위와 선행 topic CI는
+[`distribution/GITHUB_CI_STATUS.md`](distribution/GITHUB_CI_STATUS.md)에 있다.
 
 ## 2. 현재 개발 목표
 
@@ -54,7 +55,7 @@ run `31358819831`은 `2026-08-10 14:30:38 KST`에 시작해 `14:44:02 KST`에 �
 - Claude는 debug compatibility code/unit/build까지만 확인됐고 실계정 E2E는 `NOT_RUN`이다.
 - compact chat context UI는 구현돼 있으나 이번 branch에서 unavailable-model 회귀를 추가 검증한다.
 
-### 현재 branch의 로컬 검증 완료·미커밋 변경
+### `main@493546f`에 반영된 구현
 
 - `ProviderModelCandidate`와 `PROVIDER_APPROVED`/`USER_ADDED`/`LEGACY_MIGRATED` source를 추가했다.
 - `ProviderProfile` JSON에 model catalog를 저장하고 catalog 없는 legacy profile을 migration한다.
@@ -66,8 +67,8 @@ run `31358819831`은 `2026-08-10 14:30:38 KST`에 시작해 `14:44:02 KST`에 �
 - 저장 대화의 unavailable model ID를 보존하고 명시적 재선택 전 Send·Retry를 차단한다.
 - unavailable 안내 UI와 단위/Compose/integrated AndroidTest 회귀를 추가했다.
 
-Phase 1~5 로컬 구현·검증은 완료했다. 다만 변경은 아직 commit·push되지 않았으므로 원격 CI 완료로
-간주하지 않으며 `github_remote_ci`는 계속 `BLOCKED`다.
+Phase 1~5 로컬/Samsung 검증과 topic/main 원격 CI는 완료했다. 현재 evidence 문서 갱신 commit 자체의
+CI를 확인하기 전까지 `github_remote_ci`만 fail-closed `BLOCKED`로 유지한다.
 
 ## 4. Provider evidence 구분
 
@@ -110,7 +111,7 @@ production source, release artifact, public support 표기로 이동하지 않�
 | Android 계획 matrix | unit·routing/backend·integrated debug APK·AndroidTest APK·lint `PASS` |
 | SDK publication | `19개 PASS` |
 | published consumer matrix | `8개 PASS` |
-| license/readiness verifier | `PASS`; 공개 배포는 의도대로 `INTERNAL_ONLY` / 7 release blocker |
+| license/readiness verifier | `PASS`; 공개 배포는 의도대로 `INTERNAL_ONLY`; evidence CI 전 7, 이후에도 외부 blocker 6개 |
 | Samsung Provider test package | `18/18 PASS` — catalog UI, encrypted restore, unavailable model, IME·200% font 포함 |
 | Samsung integrated debug `install -r` | `NOT_RUN/BLOCKED` — 기존 package와 signing signature 불일치 |
 | integrated connected test | `NOT_RUN` — 기존 OAuth/profile/대화 데이터 보호를 위해 uninstall/clear하지 않음 |
@@ -119,25 +120,25 @@ Samsung 결과는 `R3CY40PXCAP`만 사용했다. 다른 연결 기기는 사용�
 
 ## 8. 다음 실행 순서
 
-현재 바로 남은 것은 Phase 6 Git 통합과 current-head 원격 CI다.
+현재 바로 남은 것은 Phase 6 evidence 갱신 commit의 current-head 원격 CI와 gate 상태 정리다.
 
 ```bash
 cd /Volumes/Eprojects/project_202607/alpine-llm-gateway
 
-git diff --stat
-git diff --check
 git status --short --branch
 git rev-list --left-right --count HEAD...origin/main
+gh run list --branch main --limit 3
 ```
 
-staged diff와 filename-only secret scan을 확인한 뒤 topic branch를 commit/push하고 GitHub Actions의
-Python 3.11·Android modules를 확인한다. 원격 CI 전에는 readiness gate를 변경하지 않는다.
+evidence 문서를 commit/push한 뒤 GitHub Actions의 Python 3.11·Android modules를 확인한다.
+그 CI 성공 후에만 `github_remote_ci` gate를 `READY`로 바꾸며 다른 외부 blocker 6개는 유지한다.
 
 ## 9. 인계 체크리스트
 
-- [x] 현재 branch와 `b81a7d8` 기준선을 확인했다.
+- [x] topic branch와 `main@493546f`를 동기화했다.
 - [x] `dev-plan/implement_20260814_190004.md` 체크박스를 실제 결과와 맞췄다.
 - [x] unit/AndroidTest APK compile 이후 전체 local matrix를 실행했다.
 - [x] Samsung 작업은 `R3CY40PXCAP`에 credential-free·non-destructive 범위로만 실행했다.
-- [x] current branch push/CI 전에는 `github_remote_ci`를 `READY`로 바꾸지 않았다.
+- [x] topic/main의 동일 SHA 원격 CI를 모두 확인했다.
+- [x] evidence 갱신 commit CI 전에는 `github_remote_ci`를 `READY`로 바꾸지 않았다.
 - [x] 외부 Provider·법무·Play·파괴 테스트 항목을 `NOT_RUN/BLOCKED`로 유지했다.
