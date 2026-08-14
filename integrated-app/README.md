@@ -59,9 +59,14 @@ Alpine 준비가 dispatch 전에 실패한 경우에도 사용자가 dialog에�
 
 1. `빠른 채팅`에서 `LLM connection` 또는 우측 상단 연결 아이콘을 연다.
 2. Provider profile을 추가하고 **앱 소유·승인된** OAuth public client registration으로 로그인한다.
-3. 빠른 채팅으로 돌아와 계정과 모델을 선택한다.
-4. Skill·Persona를 선택하고 메시지를 전송한다.
-5. 생성 중에는 Stop, redacted 오류에는 허용된 Retry를 사용한다.
+3. profile에서 사용할 모델 ID 후보를 추가·활성화하고 기본 모델을 선택한다.
+4. 빠른 채팅으로 돌아와 계정과 모델을 선택한다.
+5. Skill·Persona를 선택하고 메시지를 전송한다.
+6. 생성 중에는 Stop, redacted 오류에는 허용된 Retry를 사용한다.
+
+모델 후보는 실제 계정 권한을 보장하지 않는다. 저장 대화의 모델이 profile에서 비활성화되면 앱은
+해당 ID를 보존하고 안내를 표시하며 Send·Retry를 차단한다. 사용자가 enabled 후보를 명시적으로
+선택한 뒤에만 새 요청을 보낸다.
 
 OAuth 브라우저가 열린 동안 Activity 또는 app process가 종료되면 이전 Authorization Code + PKCE
 transaction을 자동으로 이어서 교환하지 않는다. 다음 `LLM 연결` 진입에서
@@ -117,6 +122,7 @@ ANDROID_SERIAL=<device-serial> \
 | Workspace SAF·share boundary | **Samsung 6/6 PASS** — bounded `content://` import/export, filename sanitize, oversized export가 destination URI를 열거나 변경하기 전 거부됨, provider I/O stable error, cache FileProvider share publish |
 | Package metadata snapshot UI | PASS — license·payload·network/estimate boundary와 overflowed total bounded guidance AndroidTest 회귀 |
 | Integrated App lint/APK | PASS |
+| 2026-08-14 model catalog branch | **Local compile/unit/lint PASS** — unavailable model restore AndroidTest를 추가·assemble했다. Samsung installed package는 debug signature가 달라 `install -r`가 중단됐고 기존 profile/token/대화 보호를 위해 uninstall/clear 및 connected run은 `NOT_RUN` |
 | Samsung integrated instrumentation | **10/10 PASS** — 기존 채팅 4건 + first-run guide 5건 + 접근성·한글 IME 1건. test setup은 DreamActivity만 wake하며 Keyguard를 우회하지 않음 |
 | Android 12 tablet integrated instrumentation | **10/10 PASS** — 동일 fake Provider 흐름과 200% font guide reachability를 확인. 실제 OAuth, TalkBack gesture, external keyboard·foldable 수동 QA는 `NOT_RUN` |
 | Samsung Demo 전체 회귀 | **35/35 PASS** — Provider·Chat·lifecycle·Markdown·theme |

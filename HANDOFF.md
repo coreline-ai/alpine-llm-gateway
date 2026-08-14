@@ -1,129 +1,143 @@
-# Alpine LLM Gateway — 작업 핸드오프
+# Alpine LLM Gateway — 현재 작업 핸드오프
 
-작성 일시: `2026-08-10 KST`
-대상 작업 트리: `/Volumes/Eprojects/project_202607/alpine-llm-gateway`
+갱신: `2026-08-14 KST`
+작업 트리: `/Volumes/Eprojects/project_202607/alpine-llm-gateway`
 
-이 문서는 다른 작업자/에이전트가 현재 상태를 안전하게 이어받기 위한 인계 문서다. 기준선은 **원격 `main`에 push된 `107ef9e`** 이며, 다음 작업은 이 commit에서 새 branch를 만들어 시작한다.
+이 문서는 다른 작업자/에이전트가 현재 개발을 안전하게 이어받기 위한 **현재 상태 정본**이다.
+과거 계획·handoff 안의 `107ef9e`, `3389fcb`, `NOT_CONFIRMED` 표기는 historical record이며,
+현재 상태와 충돌할 때는 이 문서와
+[`dev-plan/implement_20260814_190004.md`](dev-plan/implement_20260814_190004.md)를 우선한다.
 
-## 1. 제품 및 저장소 경계
+## 1. Git·CI 기준선
 
-| 저장소 | 원격 `main` | 역할 |
-|---|---:|---|
-| [`coreline-ai/alpine-llm-gateway`](https://github.com/coreline-ai/alpine-llm-gateway) | `107ef9e` | Alpine Linux Gateway, Android Runtime SDK, PRoot/PTY, Android Compose 통합 앱 |
-| [`coreline-ai/flutter_mobile_agent`](https://github.com/coreline-ai/flutter_mobile_agent) | `f490713` | Android/iOS Flutter MobileAgent, OAuth/OIDC, BFF, 개발 Keycloak fixture |
+| 항목 | 현재 값 |
+|---|---|
+| 원격 기준선 | `main@b81a7d8ee12af72ff95180bfeadabe68e5be950e` |
+| 로컬 기준선 | `main@b81a7d8ee12af72ff95180bfeadabe68e5be950e` |
+| 작업 branch | `codex/model-catalog-hardening-20260814` |
+| 최신 기준선 CI | run [`31358819831`](https://github.com/coreline-ai/alpine-llm-gateway/actions/runs/31358819831), `completed/success` |
+| 현재 working tree CI | `NOT_RUN` — commit·push 전이므로 fail-closed |
+| 공개 배포 | `NO-GO` — 7개 release-blocking gate가 계속 `BLOCKED` |
 
-### 반드시 지킬 경계
+run `31358819831`은 `2026-08-10 14:30:38 KST`에 시작해 `14:44:02 KST`에 완료됐다.
+`Python 3.11`과 `Android modules` job이 모두 성공했지만, 이 기준선 성공은 현재 미커밋 변경을
+검증하지 않는다. 상세 범위는 [`distribution/GITHUB_CI_STATUS.md`](distribution/GITHUB_CI_STATUS.md)에 있다.
 
-- Alpine 저장소에는 Flutter `MobileAgent` 앱, Flutter plugin, MobileAgent BFF, dev IdP를 다시 추가하지 않는다.
-- Flutter 저장소에는 Alpine Runtime, PRoot, `alpine_llm/`, Android Runtime SDK를 추가하지 않는다.
-- Alpine의 Android 직접 Provider OAuth/Host Bridge와 MobileAgent의 OIDC+BFF 인증 경로는 별개다. token·client registration·credential을 공유하거나 이동하지 않는다.
-- 분리 완료 계획: [`implement_20260809_174953.md`](https://github.com/coreline-ai/alpine-llm-gateway/blob/main/dev-plan/implement_20260809_174953.md)
+## 2. 현재 개발 목표
 
-## 2. 현재 Git 상태 — 시작점
+실행 계획: [`dev-plan/implement_20260814_190004.md`](dev-plan/implement_20260814_190004.md)
 
-### publish된 기준선
+현재 환경에서 먼저 끝낼 범위:
 
-- 현재 기준: `main @ 107ef9e`, `origin/main @ 107ef9e`
-- `107ef9e`는 `8711104` (Flutter 분리 완료 계획) 위로 runtime/OAuth/검증 묶음을 rebase한 commit이다.
-- 이 문서와 구현 묶음은 모두 원격 `main`에 push됐다. 시작 전 `git fetch origin --prune` 후 `git status --short --branch`가 깨끗한지 확인한다.
-- 로컬 `backup/pre-main-push-20260810`은 rebase 전 WIP 보존용 branch다. 원격 main의 대체 기준선으로 사용하지 않는다.
-- 로컬 `separation/flutter-extraction @ 8272079` branch는 과거 분리 작업의 중간 branch다. 원격 `main`은 더 최신의 분리 완료 상태다.
+1. 기준선·CI·Provider 상태 문서 정합성
+2. profile-owned 영속 모델 카탈로그와 legacy migration
+3. Provider 편집 UI의 모델 추가·기본 선택·활성/비활성
+4. enabled 모델 descriptor와 stale session 제거
+5. unavailable 모델의 `no-silent-switch`, Send/Retry 차단
+6. 로컬 전체 검증과 credential-free Samsung UI 회귀
 
-### 시작 규칙
+외부 조건 때문에 후속으로 남기는 범위:
 
-새 구현은 `main`에 직접 쌓지 말고 topic branch에서 시작한다.
+- 앱 소유 registration을 사용한 Provider 공식 login/stream/refresh/logout E2E
+- Samsung reboot·Doze·process kill·network·disk-full·soak
+- x86_64 emulator와 PRoot guest `SIGWINCH`/full-screen TUI
+- 프로젝트 라이선스, exact corresponding source, Play track, release destination
+
+## 3. 현재 구현 상태
+
+### 기준선에 이미 포함된 구현
+
+- `b81a7d8`까지 Codex/xAI/Claude compatibility가 `integrated-app/src/debug`에만 격리돼 있다.
+- Codex와 xAI는 Samsung `R3CY40PXCAP`의 side-by-side debug 앱에서 OAuth 연결과 1턴
+  streaming 성공 evidence가 있다.
+- 이는 debug compatibility evidence이며 앱 소유 registration 기반 공식 product E2E는 아니다.
+- Claude는 debug compatibility code/unit/build까지만 확인됐고 실계정 E2E는 `NOT_RUN`이다.
+- compact chat context UI는 구현돼 있으나 이번 branch에서 unavailable-model 회귀를 추가 검증한다.
+
+### 현재 branch의 로컬 검증 완료·미커밋 변경
+
+- `ProviderModelCandidate`와 `PROVIDER_APPROVED`/`USER_ADDED`/`LEGACY_MIGRATED` source를 추가했다.
+- `ProviderProfile` JSON에 model catalog를 저장하고 catalog 없는 legacy profile을 migration한다.
+- blank·case-insensitive duplicate·malformed candidate를 정규화하고 default/enabled 계약을 검증한다.
+- Provider 편집 화면에 후보 추가, default 선택, 비기본 후보 활성/비활성, entitlement 주의 문구를 추가했다.
+- `ChatBackendDescriptor`에는 enabled 후보만 노출하고 refresh 시 disabled/deleted session cache를 제거한다.
+- session cache key에는 model과 OAuth/transport 설정을 포함하되 catalog metadata는 제외해, catalog 편집은
+  session을 유지하고 endpoint/client/scopes 변경은 stale session을 재사용하지 않게 했다.
+- 저장 대화의 unavailable model ID를 보존하고 명시적 재선택 전 Send·Retry를 차단한다.
+- unavailable 안내 UI와 단위/Compose/integrated AndroidTest 회귀를 추가했다.
+
+Phase 1~5 로컬 구현·검증은 완료했다. 다만 변경은 아직 commit·push되지 않았으므로 원격 CI 완료로
+간주하지 않으며 `github_remote_ci`는 계속 `BLOCKED`다.
+
+## 4. Provider evidence 구분
+
+| Provider | 로컬 adapter/unit | debug compatibility Samsung | 공식 product E2E |
+|---|---|---|---|
+| Codex / OpenAI Responses | `PASS` | OAuth 연결 + 1턴 stream `PASS` | `NOT_RUN` |
+| xAI / Grok | `PASS` | OAuth 연결 + 1턴 stream `PASS` | `NOT_RUN` |
+| Claude / Anthropic | `PASS` | code/build만 확인, 계정 E2E `NOT_RUN` | `NOT_RUN` |
+| Gemini | `PASS` | 이번 branch에서 실행하지 않음 | `NOT_RUN` |
+| OpenAI-compatible | 공통 adapter 있음 | `NOT_RUN` | `NOT_RUN` |
+
+모델 후보는 계정·region·tier·preview lifecycle 권한의 증명이 아니다. debug compatibility 값을
+production source, release artifact, public support 표기로 이동하지 않는다.
+
+## 5. 보안·작업 경계
+
+- OAuth token, authorization code, callback query, PKCE state/verifier, Authorization header,
+  Provider raw body, prompt, account 식별자를 source·log·fixture·handoff에 기록하지 않는다.
+- 다른 앱/공식 CLI의 client ID·scope·fingerprint·endpoint를 production source로 이동하지 않는다.
+- inference 실패, Retry target, 대화 기록을 자동 replay하거나 다른 model/backend로 자동 전송하지 않는다.
+- profile/model catalog 변경은 OAuth identity 변경이 아니며 token 삭제·재로그인을 유발하지 않는다.
+- MobileAgent, MobileAgent BFF, dev IdP를 이 저장소에 다시 추가하지 않는다.
+- PRoot terminal public contract는 계속 `INITIAL_SIZE_ONLY`다.
+
+## 6. Samsung 고정 규칙
+
+- 실제 기기 대상은 Samsung `SM-S931N`, serial `R3CY40PXCAP` 하나로 고정한다.
+- 모든 ADB/Gradle connected 명령은 `ANDROID_SERIAL=R3CY40PXCAP` 또는 `adb -s R3CY40PXCAP`을 명시한다.
+- 다른 연결 기기는 사용하지 않는다.
+- 승인 없이 `pm clear`, uninstall, 계정 삭제, reboot, Doze 강제, 네트워크 차단을 실행하지 않는다.
+- 현재 계획의 기기 범위는 `install -r`과 fake/credential-free profile·model UI 회귀뿐이다.
+
+## 7. 이번 branch 검증 결과
+
+| 범위 | 결과 |
+|---|---|
+| Python 전체 | `114/114 PASS` |
+| UI design contract | `PASS` |
+| production/debug OAuth artifact scan | 각각 `PASS` |
+| Android 계획 matrix | unit·routing/backend·integrated debug APK·AndroidTest APK·lint `PASS` |
+| SDK publication | `19개 PASS` |
+| published consumer matrix | `8개 PASS` |
+| license/readiness verifier | `PASS`; 공개 배포는 의도대로 `INTERNAL_ONLY` / 7 release blocker |
+| Samsung Provider test package | `18/18 PASS` — catalog UI, encrypted restore, unavailable model, IME·200% font 포함 |
+| Samsung integrated debug `install -r` | `NOT_RUN/BLOCKED` — 기존 package와 signing signature 불일치 |
+| integrated connected test | `NOT_RUN` — 기존 OAuth/profile/대화 데이터 보호를 위해 uninstall/clear하지 않음 |
+
+Samsung 결과는 `R3CY40PXCAP`만 사용했다. 다른 연결 기기는 사용하지 않았다.
+
+## 8. 다음 실행 순서
+
+현재 바로 남은 것은 Phase 6 Git 통합과 current-head 원격 CI다.
 
 ```bash
 cd /Volumes/Eprojects/project_202607/alpine-llm-gateway
-git fetch origin --prune
-git switch main
-git pull --ff-only
-git switch -c <topic-name>
+
+git diff --stat
+git diff --check
+git status --short --branch
+git rev-list --left-right --count HEAD...origin/main
 ```
 
-- 충돌 시 Alpine 전용 내용만 유지한다. MobileAgent 전용 path/link/image/CI는 되살리지 않는다.
-- `apps/mobile_agent`, `packages/`, `backend/mobile_agent_bff`는 이 저장소의 tracked source가 아니어야 한다.
+staged diff와 filename-only secret scan을 확인한 뒤 topic branch를 commit/push하고 GitHub Actions의
+Python 3.11·Android modules를 확인한다. 원격 CI 전에는 readiness gate를 변경하지 않는다.
 
-## 3. `107ef9e`에 포함된 구현 묶음
+## 9. 인계 체크리스트
 
-다음 변경은 publish됐다. 상세 체크리스트는 각 `dev-plan/implement_20260809_*.md`를 기준으로 확인한다.
-
-| 영역 | 핵심 변경 위치 | 상태/주의 |
-|---|---|---|
-| PRoot/PTY | `alpine-runtime-android/src/main/cpp/pty_bridge.c`, `ProotProcessLauncher.kt`, `NativePtyBridge.kt` | `forkpty()` 기반 실험·검증 코드가 포함되어 있다. 제품 public contract는 아직 `INITIAL_SIZE_ONLY`를 유지해야 한다. |
-| Gateway recovery | `alpine-llm-bridge/.../AlpineLlmBridgeRecoverySupervisor.kt`, `integrated-app/.../IntegratedAlpineLlmHost.kt` | Stop 이후 자동 복구 restart 경쟁 조건을 막는 generation/lease 보강. |
-| Runtime package 안전성 | `alpine-runtime-api/.../RuntimePackages.kt`, `RuntimePackageInstallerTest.kt`, `RuntimePackagePanel.kt` | `apk --simulate` preflight, metadata bounded-total/overflow 표시, allowlist·승인 경계 유지. |
-| Background service | `alpine-runtime-background-android/.../RuntimeForegroundService.kt` | 마지막 Runtime 종료 뒤 foreground service/notification 제거 계약. |
-| Workspace SAF | `alpine-workspace-android/.../WorkspaceSafTransfer.kt` | export byte 상한과 실패 시 destination 보존 회귀. |
-| Android Provider OAuth | `android/.../HostLlmBridge.kt`, `CodexOAuthContract.kt`, `OAuthLlmSessionTest.kt` | 401 refresh는 다음 사용자 action을 위한 session 갱신만 하며 원 inference POST를 자동 replay하지 않는다. |
-| 기기/Emulator test | `*/src/androidTest/**`, `alpine-runtime-probe/**`, `integrated-app/**` | Samsung/tablet, ARM64 API 26/35, x86_64 emulator gate 관련 instrumentation과 evidence 동기화. |
-| 문서/릴리스 | `README.md`, `distribution/`, `docs/`, `dev-plan/` | current deliverable의 GitHub CI evidence 전까지 release readiness는 fail-closed `BLOCKED`를 유지. |
-
-## 4. 최근 개발 계획 우선순위
-
-| 우선순위 | 문서 | 핵심 결론 |
-|---:|---|---|
-| 1 | [`dev-plan/implement_20260809_174816.md`](dev-plan/implement_20260809_174816.md) | 배포 제외 제품 감사. PRoot dynamic resize는 지원 기능이 아니라 명시된 `INITIAL_SIZE_ONLY` 제약이다. |
-| 2 | [`dev-plan/implement_20260809_082423.md`](dev-plan/implement_20260809_082423.md) | `forkpty()` 기반 PRoot architecture 실험. 검증 성공 전 API/UI capability 승격 금지. |
-| 3 | [`dev-plan/implement_20260809_143000.md`](dev-plan/implement_20260809_143000.md) | x86_64 Android emulator Runtime E2E. 실제 실행 증거와 ARM64 결과를 혼용하지 않는다. |
-| 4 | [`dev-plan/implement_20260809_134000.md`](dev-plan/implement_20260809_134000.md) | Provider 401 refresh 뒤 inference replay 금지. `NEVER_AUTOMATIC` 정책 유지. |
-| 5 | [`dev-plan/implement_20260809_133500.md`](dev-plan/implement_20260809_133500.md) | current deliverable의 GitHub CI는 push/run evidence 전까지 `BLOCKED`. |
-
-## 5. 재검증 순서
-
-`107ef9e`에서는 아래 로컬 검증을 실행했다: UI design contract PASS, Python `unittest discover` **114 PASS**, Android/Kotlin unit test PASS, arm64-v8a/x86_64 native CMake debug build 및 integrated APK build PASS. 다음 변경 후에는 같은 순서를 재실행한다.
-
-```bash
-cd /Volumes/Eprojects/project_202607/alpine-llm-gateway
-
-python3.11 scripts/verify-ui-design-contract.py
-python3.11 -m unittest discover -s tests -v
-python3.11 scripts/verify-proot-terminal-handoff.py --proot-source <pinned-proot-source>
-
-JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
-ANDROID_HOME="$HOME/Library/Android/sdk" \
-./gradlew :alpine-runtime-android:assembleDebug :integrated-app:assembleDebug --no-daemon --stacktrace
-```
-
-현재 worktree에 Android instrumentation 추가 파일이 있으므로, Android device/emulator 검증은 해당 계획 문서의 명시 task와 package cleanup 절차를 따른다. 실제 Provider 계정 OAuth/API, signed release, Play 배포, 실제 iPhone은 자동 검증 완료로 간주하지 않는다.
-
-## 6. MobileAgent를 이어서 작업해야 할 때
-
-Alpine 작업 트리가 아니라 별도 clone에서 시작한다.
-
-```bash
-git clone https://github.com/coreline-ai/flutter_mobile_agent.git
-cd flutter_mobile_agent
-make mobile-analyze
-make mobile-test
-make bff-bootstrap
-make bff-test
-make oauth-release-scan
-```
-
-MobileAgent의 실제 OAuth E2E에는 앱 소유 HTTPS issuer, public native client, BFF, Provider account/secret owner가 필요하다. API key, consumer OAuth endpoint, 다른 CLI/app client ID를 앱 또는 저장소에 넣지 않는다.
-
-## 7. 완료 정의와 외부 조건
-
-### 로컬 코드 범위
-
-- Alpine Runtime/PRoot/Provider 안전 경계 및 automated regression은 `107ef9e`에서 재검증됐다. 이후 변경은 다시 검증해야 한다.
-- PRoot dynamic resize는 acceptance가 없는 한 `INITIAL_SIZE_ONLY` 제약을 유지한다.
-- Provider inference는 idempotency 계약이 확정되기 전 자동 replay하지 않는다.
-
-### 외부 조건 — 완료로 주장 금지
-
-- 실제 Provider OAuth/API E2E 및 account/region/model 권한
-- Samsung reboot/Doze/battery restriction/장시간 soak
-- 실제 iPhone, Play Internal, TestFlight, signing
-- `107ef9e`에 대한 GitHub Actions run evidence
-- 라이선스/notice/legal/release owner 승인
-
-## 8. 인계 확인 체크리스트
-
-- [ ] `git fetch origin --prune` 후 `main @ 107ef9e`를 확인했다.
-- [ ] 새 작업용 topic branch를 만들었다.
-- [ ] Alpine `origin/main`의 `107ef9e` 분리 상태를 기준으로 작업한다.
-- [ ] Flutter 작업은 별도 `flutter_mobile_agent` clone에서 수행한다.
-- [ ] 변경 후 자동 검증과 Android native/integrated APK build를 재실행했다.
-- [ ] 외부 조건을 로컬 PASS 또는 제품 출시 완료로 과장하지 않았다.
+- [x] 현재 branch와 `b81a7d8` 기준선을 확인했다.
+- [x] `dev-plan/implement_20260814_190004.md` 체크박스를 실제 결과와 맞췄다.
+- [x] unit/AndroidTest APK compile 이후 전체 local matrix를 실행했다.
+- [x] Samsung 작업은 `R3CY40PXCAP`에 credential-free·non-destructive 범위로만 실행했다.
+- [x] current branch push/CI 전에는 `github_remote_ci`를 `READY`로 바꾸지 않았다.
+- [x] 외부 Provider·법무·Play·파괴 테스트 항목을 `NOT_RUN/BLOCKED`로 유지했다.

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-08-09T04:16:08Z",
+  "updated_at": "2026-08-14T10:00:04Z",
   "gates": [
     {
       "gate_id": "project_license",
@@ -63,7 +63,8 @@
       "evidence": [
         ".github/workflows/ci.yml",
         "distribution/GITHUB_CI_STATUS.md",
-        "dev-plan/implement_20260809_133500.md"
+        "dev-plan/implement_20260809_133500.md",
+        "dev-plan/implement_20260814_190004.md"
       ]
     },
     {
@@ -90,14 +91,14 @@
         "dev-plan/implement_20260809_064200.md",
         "dev-plan/implement_20260809_063158.md",
         "dev-plan/implement_20260809_044019.md",
-    "dev-plan/implement_20260809_070000.md",
-    "dev-plan/implement_20260809_073000.md",
-    "dev-plan/implement_20260809_071338.md",
-    "dev-plan/implement_20260809_130000.md",
-    "dev-plan/implement_20260809_082423.md",
-    "dev-plan/goal-completion-audit-20260808.md",
-    "docs/adr/0006-single-pty-dynamic-terminal-resize.md",
-    "scripts/verify-proot-terminal-handoff.py"
+        "dev-plan/implement_20260809_070000.md",
+        "dev-plan/implement_20260809_073000.md",
+        "dev-plan/implement_20260809_071338.md",
+        "dev-plan/implement_20260809_130000.md",
+        "dev-plan/implement_20260809_082423.md",
+        "dev-plan/goal-completion-audit-20260808.md",
+        "docs/adr/0006-single-pty-dynamic-terminal-resize.md",
+        "scripts/verify-proot-terminal-handoff.py"
       ]
     },
     {

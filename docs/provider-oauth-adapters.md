@@ -16,13 +16,13 @@
 
 ## Provider별 번들 상태
 
-| Provider 유형 | 앱에 고정된 항목 | 사용자가 입력해야 하는 항목 | 현재 판정 |
-|---|---|---|---|
-| Gemini | Google OAuth endpoint·scope·loopback callback·generateContent protocol | 앱 소유 public client ID, quota project, 계정에서 허용된 model | local adapter/test `PASS`, 실계정 E2E `NOT_RUN` |
-| OpenAI-compatible | OAuth/Chat Completions 공통 adapter | OAuth endpoint·scope·client ID·model·HTTPS endpoint | `NOT_RUN` |
-| OpenAI Responses | Responses JSON/SSE 변환 adapter | 승인된 OAuth endpoint·scope·client ID·model·Responses HTTPS endpoint | `NOT_RUN` |
-| Anthropic Messages | Messages JSON/SSE 변환과 protocol version header | 승인된 OAuth endpoint·scope·client ID·model·Messages HTTPS endpoint | `NOT_RUN` |
-| xAI Chat Completions | Chat Completions JSON/SSE 변환 | 승인된 OAuth endpoint·scope·client ID·model·HTTPS endpoint | `NOT_RUN` |
+| Provider 유형 | 앱에 고정된 항목 | 사용자가 입력해야 하는 항목 | debug compatibility evidence | 공식 product E2E |
+|---|---|---|---|---|
+| Gemini | Google OAuth endpoint·scope·loopback callback·generateContent protocol | 앱 소유 public client ID, quota project, 계정에서 허용된 model | 이번 작업에서 실행하지 않음 | `NOT_RUN` |
+| OpenAI-compatible | OAuth/Chat Completions 공통 adapter | OAuth endpoint·scope·client ID·model·HTTPS endpoint | `NOT_RUN` | `NOT_RUN` |
+| OpenAI Responses / Codex | Responses JSON/SSE 변환 adapter | 승인된 OAuth endpoint·scope·client ID·model·Responses HTTPS endpoint | Samsung debug OAuth + 1턴 stream `PASS` | `NOT_RUN` |
+| Anthropic Messages / Claude | Messages JSON/SSE 변환과 protocol version header | 승인된 OAuth endpoint·scope·client ID·model·Messages HTTPS endpoint | code/unit/build만 `PASS`, 계정 E2E `NOT_RUN` | `NOT_RUN` |
+| xAI Chat Completions / Grok | Chat Completions JSON/SSE 변환 | 승인된 OAuth endpoint·scope·client ID·model·HTTPS endpoint | Samsung debug OAuth + 1턴 stream `PASS` | `NOT_RUN` |
 
 `OpenAI Responses`, `Anthropic`, `xAI`는 release 앱에 소비자 OAuth 또는 CLI compatibility 기본값을
 제공하지 않는다. 표시된 유형은 user-owned configuration을 보관하고 adapter를 선택하는 기능일
@@ -31,11 +31,19 @@
 debug APK를 제외한 모든 source/artifact에서는 verifier가 해당 registration·scope·attribution을
 거부한다.
 
+Samsung debug 결과는 serial `R3CY40PXCAP`의 side-by-side debug package에서 사용자가 승인한
+compatibility로 확인한 제한 증거다. 앱 소유 registration, Provider의 모바일 public-client 승인,
+refresh/logout/Stop/error lifecycle 또는 공개 지원 상태를 증명하지 않는다.
+
 ## 모델 정책
 
 - Gemini의 앱 내 선택 목록은 UI 편의용 후보이며 계정·region·tier 접근 권한의 증명이 아니다.
-- 그 외 Provider는 승인된 model catalog를 번들하지 않고 profile에 사용자가 직접 입력한 model만
-  대화 선택 후보로 노출한다.
+- 각 profile은 기본 model과 로컬 후보 catalog를 저장한다. catalog가 없는 이전 profile은 기존
+  model 하나를 `LEGACY_MIGRATED` 후보로 보존한다.
+- Gemini 외 production profile은 승인된 model catalog를 추측해 번들하지 않고 사용자가 추가한
+  `USER_ADDED` 후보만 노출한다. debug compatibility seed도 entitlement나 release catalog가 아니다.
+- disabled 후보는 새 session option에서 제외한다. 저장 대화가 disabled/삭제 model을 가리키면 model ID를
+  자동 변경하거나 요청을 보내지 않고, 사용자가 enabled 후보를 명시적으로 다시 선택해야 한다.
 - 실제 model list·preview lifecycle·region 권한은 실계정 E2E 당일 확인한다. 확인 전에는
   model 지원을 `NOT_RUN`으로 기록한다.
 

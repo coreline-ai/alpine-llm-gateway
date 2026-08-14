@@ -52,6 +52,7 @@
 - 🔐 **Credential 격리** — OAuth token은 Android Host에만 보관하고 Guest에는 전달하지 않음
 - 🔁 **안전한 라우팅** — dispatch 전 사용자 승인 fallback, dispatch 후 자동 재전송 금지
 - 💬 **공통 채팅 Feature** — 다중 대화, 암호화 저장, 모델, Skill, Persona, Stop과 Retry
+- 🗂️ **Profile 모델 카탈로그** — 사용자 후보 저장·활성화와 unavailable 모델의 자동 치환 차단
 - 📦 **선택형 SDK** — Runtime payload 없이 채팅만, 또는 Runtime·Bridge·UI까지 조립 가능
 - 🧯 **방어적 Gateway** — fail-closed 모델 정책, 응답 크기 제한, retry/circuit breaker, redacted 오류
 - 🧪 **실기기 검증** — Samsung Android 16 arm64에서 통합 채팅과 Runtime/Bridge probe 검증
@@ -261,9 +262,10 @@ ANDROID_SERIAL=<device-serial> ./gradlew :integrated-app:connectedDebugAndroidTe
 
 | 항목 | 상태 | 기준 |
 |---|---|---|
-| Python unit/compile/smoke | ✅ CI PASS | GitHub Actions `Python 3.11` |
+| Python unit/compile/smoke | ✅ CI 기준선 PASS | run `31358819831`, `main@b81a7d8`, GitHub Actions `Python 3.11` |
 | 결정론 Provider fault matrix | ✅ Local PASS | Python 114/114; status·timeout·malformed/oversized SSE·strict UTF-8·no-retry |
-| Android modules·publication matrix | ✅ CI PASS | remote run `30807869557`, commit `3389fcb` |
+| Android modules·publication matrix | ✅ CI 기준선 PASS | remote run `31358819831`, commit `b81a7d8`; 현재 working tree는 원격 CI `NOT_RUN` |
+| 영속 모델 카탈로그·no-silent-switch | ✅ Topic branch Local/Samsung PASS | legacy/malformed migration, enabled descriptor, transport-aware stale cache, unavailable Send/Retry, encrypted restore·IME·200% font; Samsung 격리 test package 18/18. integrated package는 signature 불일치로 데이터 보존을 위해 connected test `NOT_RUN` |
 | 통합 앱 compile·unit·lint·APK | ✅ Local PASS | 2026-08-09 Alpine fallback viewport·접근성·한글 IME 반영 |
 | Samsung Android regression | ✅ PASS | OAuth core 3/3, Provider 12/12, Runtime Compose 10/10, integrated-app 10/10; test setup은 DreamActivity만 wake하고 Keyguard를 우회하지 않음 |
 | Samsung Demo 전체 회귀 | ✅ 35/35 PASS | Provider·Chat·lifecycle·Markdown·theme |
@@ -283,7 +285,8 @@ ANDROID_SERIAL=<device-serial> ./gradlew :integrated-app:connectedDebugAndroidTe
 | bounded Gateway 복구·package mutation·workspace diff | ✅ Local PASS | supervisor는 명시적 Stop/owner 변경 때 recovery lease를 즉시 revoke하고, 이미 시작된 restart도 안정 Stop으로 수렴시킨다. prompt·terminal command·Provider dispatch는 재실행하지 않는다. |
 | Gateway process crash·package network/disk-full | ⏳ `NOT_RUN` | 실제 runtime/repository 조건과 destructive matrix 필요 |
 | Android 12 tablet integrated regression | ✅ PASS | fake Provider 기반 integrated-app 10/10 — approval/decline fallback, Korean IME·TalkBack semantics, compact 200% guide, history·mode flow; manual gesture/contrast QA는 `NOT_RUN` |
-| 실제 Provider 계정 OAuth/API E2E | ⏳ `NOT_RUN` | 앱 소유 registration·계정 승인 필요 |
+| Codex/xAI debug compatibility | ✅ Samsung 제한 증거 | `R3CY40PXCAP` side-by-side debug 앱에서 OAuth 연결 + 1턴 stream PASS; 공식 product 승인 근거 아님 |
+| 실제 Provider 계정 OAuth/API E2E | ⏳ `NOT_RUN` | 앱 소유 registration·계정 승인과 전체 login/Stop/refresh/logout evidence 필요 |
 | x86_64 emulator E2E | ⛔ BLOCKED | 연결된 검증 emulator 없음 |
 | 공개 배포 | ⛔ `NO-GO` | release readiness 10개 gate 중 7개 release blocker BLOCKED — current deliverable의 GitHub remote CI도 미검증 |
 
