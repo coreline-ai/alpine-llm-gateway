@@ -11,6 +11,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
@@ -200,6 +201,56 @@ class IntegratedFastChatInstrumentedTest {
         compose.onNodeWithTag("model_quick_switcher").assertDoesNotExist()
         compose.onNodeWithTag("assistant_mode_selector").assertDoesNotExist()
         compose.onNodeWithTag("message_input").assertIsDisplayed()
+    }
+
+    @Test
+    fun restoredConversationKeepsDisabledModelUntilUserSelectsAnEnabledCandidate() {
+        val profile = geminiProfile("integrated-disabled-model")
+        val scenario = IntegratedProviderScenario(startSignedOut = false, immediate = true)
+        val store = ProviderProfileStore(context)
+        store.upsert(profile)
+        ProviderDependencies.installSessionFactoryForTests { _, selected ->
+            scenario.create(selected)
+        }
+
+        launch()
+        waitForDisplayedText(profile.label)
+        compose.onNodeWithTag("chat_context_toggle").performClick()
+        compose.onNodeWithTag("quick_model_gemini-3.5-flash").performClick()
+        compose.onNodeWithTag("message_input").performTextInput("persist disabled model")
+        compose.onNodeWithTag("send_button").performClick()
+        waitForDisplayedAssistantText("Integrated recovered answer")
+        assertEquals(1, scenario.requestCount.get())
+        closeCurrentActivity()
+
+        val selected = checkNotNull(store.find(profile.id))
+        store.upsert(
+            selected.copy(
+                model = "gemini-3.6-flash",
+                modelCatalog = selected.resolvedModelCatalog().map { candidate ->
+                    if (candidate.modelId == "gemini-3.5-flash") {
+                        candidate.copy(enabled = false)
+                    } else {
+                        candidate
+                    }
+                },
+            ),
+        )
+
+        launch()
+        compose.onNodeWithTag("unavailable_model_notice").assertIsDisplayed()
+        compose.onNodeWithText("선택한 모델을 사용할 수 없습니다").assertExists()
+        compose.onNodeWithTag("message_input").assertIsNotEnabled()
+        compose.onNodeWithTag("send_button").assertIsNotEnabled()
+        assertEquals(1, scenario.requestCount.get())
+
+        compose.onNodeWithTag("chat_context_toggle").performClick()
+        compose.onNodeWithTag("quick_model_gemini-3.6-flash").performClick()
+        compose.onNodeWithTag("unavailable_model_notice").assertDoesNotExist()
+        compose.onNodeWithTag("message_input").performTextInput("explicit replacement model")
+        compose.onNodeWithTag("send_button").performClick()
+        compose.waitUntil(5_000) { scenario.requestCount.get() == 2 }
+        assertEquals(2, scenario.requestCount.get())
     }
 
     @Test

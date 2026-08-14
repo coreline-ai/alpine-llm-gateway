@@ -258,6 +258,129 @@ class ProviderProfileTest {
     }
 
     @Test
+    fun `legacy profile without catalog migrates its selected model`() {
+        val legacy = validProfile(ProviderType.OPENAI_COMPATIBLE).toJson().apply {
+            remove("model_catalog")
+            put("model", " test-model ")
+        }
+        val restored = ProviderProfile.fromJson(legacy)
+
+        assertEquals(
+            listOf(
+                ProviderModelCandidate(
+                    modelId = "test-model",
+                    source = ProviderModelSource.LEGACY_MIGRATED,
+                ),
+            ),
+            restored.modelCatalog,
+        )
+        assertEquals("test-model", restored.model)
+        assertEquals(listOf("test-model"), restored.enabledModelIds())
+        assertTrue(restored.validationErrors().isEmpty())
+        assertTrue(restored.toJson().has("model_catalog"))
+    }
+
+    @Test
+    fun `catalog round trip normalizes blank and case insensitive duplicates`() {
+        val profile = validProfile(ProviderType.OPENAI_COMPATIBLE).copy(
+            model = "Model-A",
+            modelCatalog = listOf(
+                ProviderModelCandidate(" Model-A ", ProviderModelSource.USER_ADDED),
+                ProviderModelCandidate("model-a", ProviderModelSource.PROVIDER_APPROVED),
+                ProviderModelCandidate(" ", ProviderModelSource.USER_ADDED),
+                ProviderModelCandidate("model-b", ProviderModelSource.USER_ADDED, enabled = false),
+            ),
+        )
+
+        assertEquals(listOf("Model-A"), profile.enabledModelIds())
+        val restored = ProviderProfile.fromJson(profile.toJson())
+        assertEquals(
+            listOf(
+                ProviderModelCandidate("Model-A", ProviderModelSource.USER_ADDED),
+                ProviderModelCandidate("model-b", ProviderModelSource.USER_ADDED, enabled = false),
+            ),
+            restored.modelCatalog,
+        )
+        assertTrue(restored.validationErrors().isEmpty())
+        assertTrue(
+            profile.copy(model = "model-a")
+                .validationErrors()
+                .containsKey(ProviderProfile.Field.MODEL),
+        )
+        assertTrue(
+            profile.copy(model = " Model-A ")
+                .validationErrors()
+                .containsKey(ProviderProfile.Field.MODEL),
+        )
+    }
+
+    @Test
+    fun `disabled or missing default is rejected and catalog edits do not require reauthentication`() {
+        val original = validProfile(ProviderType.OPENAI_COMPATIBLE).copy(
+            modelCatalog = listOf(
+                ProviderModelCandidate("test-model", ProviderModelSource.USER_ADDED),
+                ProviderModelCandidate("other-model", ProviderModelSource.USER_ADDED),
+            ),
+        )
+        val disabled = original.copy(
+            modelCatalog = original.modelCatalog.map { candidate ->
+                if (candidate.modelId == original.model) candidate.copy(enabled = false) else candidate
+            },
+        )
+        val allDisabled = original.copy(
+            modelCatalog = original.modelCatalog.map { it.copy(enabled = false) },
+        )
+        val missing = original.copy(model = "missing-model")
+
+        assertTrue(disabled.validationErrors().containsKey(ProviderProfile.Field.MODEL))
+        assertTrue(allDisabled.enabledModelIds().isEmpty())
+        assertTrue(allDisabled.validationErrors().containsKey(ProviderProfile.Field.MODEL))
+        assertFalse(disabled.requiresReauthenticationComparedTo(original))
+        assertFalse(missing.containsEnabledModel("missing-model"))
+        assertTrue(missing.validationErrors().containsKey(ProviderProfile.Field.MODEL))
+        assertFalse(missing.requiresReauthenticationComparedTo(original))
+    }
+
+    @Test
+    fun `malformed catalog entries preserve a valid legacy default without dropping valid candidates`() {
+        val json = validProfile(ProviderType.OPENAI_COMPATIBLE).toJson().apply {
+            put(
+                "model_catalog",
+                org.json.JSONArray()
+                    .put(
+                        JSONObject()
+                            .put("model_id", "other-model")
+                            .put("source", ProviderModelSource.USER_ADDED.wireName),
+                    )
+                    .put(JSONObject().put("model_id", "test-model").put("source", "unknown"))
+                    .put(JSONObject().put("model_id", " ").put("source", "user_added"))
+                    .put("not-an-object"),
+            )
+        }
+
+        val restored = ProviderProfile.fromJson(json)
+
+        assertEquals(listOf("other-model", "test-model"), restored.enabledModelIds())
+        assertEquals(ProviderModelSource.LEGACY_MIGRATED, restored.modelCatalog.last().source)
+        assertTrue(restored.validationErrors().isEmpty())
+    }
+
+    @Test
+    fun `draft catalogs seed only Gemini unless an approved debug registry is installed`() {
+        val gemini = ProviderProfile.draft(ProviderType.GEMINI, "Gemini")
+        val configurable = listOf(
+            ProviderType.ANTHROPIC,
+            ProviderType.CODEX,
+            ProviderType.XAI,
+            ProviderType.OPENAI_COMPATIBLE,
+        ).map { ProviderProfile.draft(it, it.displayName) }
+
+        assertEquals(GeminiProfileDefaults.MODELS, gemini.enabledModelIds())
+        assertTrue(gemini.modelCatalog.all { it.source == ProviderModelSource.PROVIDER_APPROVED })
+        assertTrue(configurable.all { it.modelCatalog.isEmpty() })
+    }
+
+    @Test
     fun `profile requires https public client scopes and model`() {
         val invalid = validProfile(ProviderType.OPENAI_COMPATIBLE).copy(
             authorizationEndpoint = "http://provider.example/auth",
@@ -349,12 +472,14 @@ class ProviderProfileTest {
                 inferenceEndpoint = "https://relay.example.test/v1/responses",
                 clientId = "host-owned-public-client",
                 model = "test-model",
+                modelCatalog = legacyModelCatalog("test-model"),
                 createdAtMs = 1234L,
             )
             ProviderType.XAI -> draft.copy(
                 id = "profile-${type.wireName}",
                 clientId = "host-owned-public-client",
                 model = "test-model",
+                modelCatalog = legacyModelCatalog("test-model"),
                 createdAtMs = 1234L,
             )
             else -> draft.copy(
@@ -365,6 +490,7 @@ class ProviderProfileTest {
                 clientId = "host-owned-public-client",
                 scopes = listOf("openid", "profile", "offline_access"),
                 model = "test-model",
+                modelCatalog = legacyModelCatalog("test-model"),
                 createdAtMs = 1234L,
             )
         }

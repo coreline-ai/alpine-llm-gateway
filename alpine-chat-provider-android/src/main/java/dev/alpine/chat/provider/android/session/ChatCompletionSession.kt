@@ -2,16 +2,11 @@ package dev.alpine.chat.provider.android.session
 
 import android.app.Activity
 import dev.alpine.llm.OAuthAuthenticationState
-import dev.alpine.llm.AnthropicOAuthCompatibilityRegistry
-import dev.alpine.llm.CodexOAuthCompatibilityRegistry
 import dev.alpine.llm.HostLlmStreamEvent
 import dev.alpine.llm.HostLlmStreamResult
-import dev.alpine.llm.XaiOAuthCompatibilityRegistry
 import dev.alpine.chat.feature.backend.ChatBackendDescriptor
 import dev.alpine.chat.feature.backend.ChatBackendSession
-import dev.alpine.chat.provider.android.model.GeminiProfileDefaults
 import dev.alpine.chat.provider.android.model.ProviderProfile
-import dev.alpine.chat.provider.android.model.ProviderType
 import kotlinx.coroutines.flow.map
 
 interface ChatCompletionSession : ChatBackendSession {
@@ -46,23 +41,5 @@ fun ProviderProfile.toChatBackendDescriptor(): ChatBackendDescriptor = ChatBacke
     profileId = id,
     label = label,
     model = model,
-    modelOptions = when (type) {
-        ProviderType.ANTHROPIC -> AnthropicOAuthCompatibilityRegistry.matching(
-            clientId,
-            authorizationEndpoint,
-            tokenEndpoint,
-            inferenceEndpoint,
-        )?.modelOptions?.let { (it + model).distinct() } ?: listOf(model)
-        ProviderType.GEMINI -> (GeminiProfileDefaults.MODELS + model).distinct()
-        ProviderType.CODEX -> CodexOAuthCompatibilityRegistry.matching(
-            clientId,
-            inferenceEndpoint,
-        )?.modelOptions?.let { (it + model).distinct() } ?: listOf(model)
-        ProviderType.XAI -> XaiOAuthCompatibilityRegistry.matching(
-            clientId,
-            inferenceEndpoint,
-        )?.modelOptions?.let { (it + model).distinct() } ?: listOf(model)
-        ProviderType.OPENAI_COMPATIBLE,
-        -> listOf(model)
-    },
+    modelOptions = enabledModelIds(),
 )

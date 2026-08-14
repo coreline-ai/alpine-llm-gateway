@@ -1,38 +1,57 @@
 package dev.alpine.chat.provider.android.ui
 
 import android.app.Activity
+import android.annotation.SuppressLint
 import android.content.Intent
+import android.os.Build
 import android.os.SystemClock
+import android.view.KeyEvent
+import android.view.WindowInsets
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipe
+import androidx.compose.ui.test.performTextClearance
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.filters.SdkSuppress
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
 import androidx.test.runner.lifecycle.Stage
 import dev.alpine.chat.feature.backend.ChatBackendStreamResult
+import dev.alpine.chat.feature.model.ChatMessage
+import dev.alpine.chat.feature.model.ChatRole
+import dev.alpine.chat.feature.ui.ChatUiState
+import dev.alpine.chat.feature.ui.ConnectedProviderOption
+import dev.alpine.chat.feature.ui.screens.chat.AlpineChatScreen
 import dev.alpine.chat.feature.ui.theme.AlpineProductTheme
 import dev.alpine.chat.provider.android.model.ProviderProfile
+import dev.alpine.chat.provider.android.model.ProviderModelSource
 import dev.alpine.chat.provider.android.model.ProviderSaveAction
 import dev.alpine.chat.provider.android.model.ProviderType
 import dev.alpine.chat.provider.android.session.ChatCompletionSession
@@ -44,6 +63,7 @@ import dev.alpine.llm.OAuthAuthenticationState
 import dev.alpine.llm.OAuthException
 import dev.alpine.llm.OAuthFailureKind
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -233,6 +253,73 @@ class ProviderScreensInstrumentedTest {
     }
 
     @Test
+    fun configurableProviderAddsPersistsAndDisablesNonDefaultModelCandidates() {
+        var saved: ProviderProfile? = null
+        val profile = ProviderProfile.draft(ProviderType.OPENAI_COMPATIBLE, "Custom OAuth")
+        render {
+            AlpineProductTheme {
+                ProviderEditScreen(
+                    initialProfile = profile,
+                    isEditing = false,
+                    onBack = {},
+                    onSave = { edited, _ ->
+                        saved = edited
+                        emptyMap()
+                    },
+                )
+            }
+        }
+
+        scrollEditorTo("model_candidate_input")
+        scrollEditorTo("add_model_candidate")
+        compose.onNodeWithTag("add_model_candidate").performClick()
+        scrollEditorTo("model_candidate_input")
+        assertTrue(
+            compose.onAllNodesWithText("추가할 모델 ID를 입력하세요.")
+                .fetchSemanticsNodes()
+                .isNotEmpty(),
+        )
+        compose.onNodeWithTag("model_candidate_input").performTextInput(" model-alpha ")
+        scrollEditorTo("add_model_candidate")
+        compose.onNodeWithTag("add_model_candidate").performClick()
+        scrollEditorTo("model_candidate_model-alpha")
+        compose.onNodeWithTag("model_candidate_model-alpha").assertExists()
+        scrollEditorTo("toggle_model_model-alpha")
+        compose.onNodeWithTag("toggle_model_model-alpha").assertIsNotEnabled()
+
+        scrollEditorTo("model_candidate_input")
+        compose.onNodeWithTag("model_candidate_input").performTextInput("MODEL-ALPHA")
+        scrollEditorTo("add_model_candidate")
+        compose.onNodeWithTag("add_model_candidate").performClick()
+        assertTrue(
+            compose.onAllNodesWithText("이미 추가된 모델 ID입니다.")
+                .fetchSemanticsNodes()
+                .isNotEmpty(),
+        )
+        scrollEditorTo("model_candidate_input")
+        compose.onNodeWithTag("model_candidate_input").performTextClearance()
+        compose.onNodeWithTag("model_candidate_input").performTextInput("model-beta")
+        scrollEditorTo("add_model_candidate")
+        compose.onNodeWithTag("add_model_candidate").performClick()
+        scrollEditorTo("toggle_model_model-beta")
+        compose.onNodeWithTag("toggle_model_model-beta").performClick()
+        compose.onNodeWithText("사용자 추가 · 사용 중지").assertExists()
+
+        scrollEditorTo("save_for_later")
+        compose.onNodeWithTag("save_for_later").performClick()
+        compose.runOnIdle {
+            assertEquals("model-alpha", saved?.model)
+            assertEquals(
+                listOf(
+                    Triple("model-alpha", ProviderModelSource.USER_ADDED, true),
+                    Triple("model-beta", ProviderModelSource.USER_ADDED, false),
+                ),
+                saved?.modelCatalog?.map { Triple(it.modelId, it.source, it.enabled) },
+            )
+        }
+    }
+
+    @Test
     fun codexEditorUsesOAuthFieldsAndPinsTheSafeContract() {
         val profile = ProviderProfile.draft(ProviderType.CODEX, "OpenAI Responses")
         render {
@@ -248,12 +335,14 @@ class ProviderScreensInstrumentedTest {
 
         compose.onNodeWithTag("client_id").assertExists()
         compose.onNodeWithTag("api_key").assertDoesNotExist()
-        compose.onNodeWithTag("model").assertExists()
+        scrollEditorTo("model_candidate_input")
+        compose.onNodeWithTag("model").assertDoesNotExist()
+        compose.onNodeWithTag("model_candidate_input").assertExists()
+        scrollEditorTo("authorization_endpoint")
         compose.onNodeWithTag("authorization_endpoint")
-            .performScrollTo()
             .assertTextContains(CodexOAuthContract.AUTHORIZATION_ENDPOINT)
+        scrollEditorTo("callback_port")
         compose.onNodeWithTag("callback_port")
-            .performScrollTo()
             .assertTextContains(CodexOAuthContract.CALLBACK_PORT.toString())
     }
 
@@ -396,6 +485,105 @@ class ProviderScreensInstrumentedTest {
         compose.runOnIdle { assertEquals(ProviderType.XAI, selected) }
     }
 
+    @Test
+    fun compactChatKeepsMessagesAndComposerInsideParentAtTwoHundredPercentFont() {
+        render {
+            CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
+                CompactChatUnderTest(Modifier.width(360.dp).height(800.dp))
+            }
+        }
+
+        compose.onNodeWithTag("chat_context_toggle").performClick()
+        compose.onNodeWithTag("provider_selector").assertIsDisplayed()
+        compose.onNodeWithTag("model_quick_switcher").assertIsDisplayed()
+        compose.onNodeWithTag("assistant_mode_selector").assertIsDisplayed()
+        compose.onNodeWithTag("messages_list").assertIsDisplayed()
+        compose.onNodeWithTag("message_input").assertIsDisplayed()
+
+        assertCompactChatBounds()
+    }
+
+    @Test
+    @SdkSuppress(minSdkVersion = Build.VERSION_CODES.R)
+    fun compactChatKeepsComposerVisibleWhenImeOpensAndClosesAtTwoHundredPercentFont() {
+        render {
+            CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
+                CompactChatUnderTest(Modifier.fillMaxSize())
+            }
+        }
+
+        compose.onNodeWithTag("message_input").performClick()
+        compose.waitUntil(ACTIVITY_LIFECYCLE_TIMEOUT_MS) { isImeVisible() }
+        compose.onNodeWithTag("message_input").assertIsDisplayed()
+        assertCompactChatBounds()
+
+        instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        compose.waitUntil(ACTIVITY_LIFECYCLE_TIMEOUT_MS) { !isImeVisible() }
+        compose.onNodeWithTag("message_input").assertIsDisplayed()
+        assertCompactChatBounds()
+    }
+
+    @Composable
+    private fun CompactChatUnderTest(modifier: Modifier) {
+        Box(modifier = modifier.testTag("compact_chat_root")) {
+            AlpineProductTheme {
+                AlpineChatScreen(
+                    state = ChatUiState(
+                        activeConversationId = "conversation",
+                        conversationTitle = "긴 대화 제목과 큰 글꼴 검증",
+                        messages = listOf(
+                            ChatMessage(
+                                role = ChatRole.ASSISTANT,
+                                text = "큰 글꼴에서도 메시지 목록과 입력창이 겹치지 않습니다.",
+                            ),
+                        ),
+                        providers = listOf(
+                            ConnectedProviderOption(
+                                profileId = "provider",
+                                label = "긴 이름의 Provider",
+                                model = "model-a",
+                                modelOptions = listOf("model-a", "model-b"),
+                            ),
+                        ),
+                        selectedProfileId = "provider",
+                        selectedModel = "model-a",
+                    ),
+                    onSelectProvider = {},
+                    onSelectModel = { _, _ -> },
+                    onSelectAssistantMode = { _, _, _ -> },
+                    onResetAssistantMode = {},
+                    onNewChat = {},
+                    onSelectConversation = {},
+                    onRenameConversation = { _, _ -> },
+                    onDeleteConversation = {},
+                    onManageProviders = {},
+                    onDraftChange = {},
+                    onSend = {},
+                    onStop = {},
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+    }
+
+    private fun assertCompactChatBounds() {
+        val parent = compose.onNodeWithTag("compact_chat_root").fetchSemanticsNode().boundsInRoot
+        val messages = compose.onNodeWithTag("messages_list").fetchSemanticsNode().boundsInRoot
+        val input = compose.onNodeWithTag("message_input").fetchSemanticsNode().boundsInRoot
+        assertTrue(messages.left >= parent.left && messages.right <= parent.right)
+        assertTrue(messages.top >= parent.top && messages.bottom <= parent.bottom)
+        assertTrue(input.left >= parent.left && input.right <= parent.right)
+        assertTrue(input.top >= parent.top && input.bottom <= parent.bottom)
+        assertTrue(messages.bottom <= input.top)
+    }
+
+    @SuppressLint("NewApi")
+    private fun isImeVisible(): Boolean = currentActivity
+        ?.window
+        ?.decorView
+        ?.rootWindowInsets
+        ?.isVisible(WindowInsets.Type.ime()) == true
+
     private fun render(content: @Composable () -> Unit) {
         val activity = checkNotNull(currentActivity)
         instrumentation.runOnMainSync {
@@ -414,6 +602,36 @@ class ProviderScreensInstrumentedTest {
                 true
             }.getOrDefault(false)
         }
+    }
+
+    private fun scrollEditorTo(tag: String) {
+        repeat(8) {
+            val found = runCatching {
+                compose.onNodeWithTag(tag).assertExists()
+                true
+            }.getOrDefault(false)
+            if (found) return
+            compose.onNodeWithTag("provider_edit_screen").performTouchInput {
+                swipe(
+                    start = Offset(center.x, visibleSize.height * 0.72f),
+                    end = Offset(center.x, visibleSize.height * 0.28f),
+                )
+            }
+        }
+        repeat(12) {
+            val found = runCatching {
+                compose.onNodeWithTag(tag).assertExists()
+                true
+            }.getOrDefault(false)
+            if (found) return
+            compose.onNodeWithTag("provider_edit_screen").performTouchInput {
+                swipe(
+                    start = Offset(center.x, visibleSize.height * 0.28f),
+                    end = Offset(center.x, visibleSize.height * 0.72f),
+                )
+            }
+        }
+        compose.onNodeWithTag(tag).assertExists()
     }
 
     private fun finishLingeringProviderTestActivities() {

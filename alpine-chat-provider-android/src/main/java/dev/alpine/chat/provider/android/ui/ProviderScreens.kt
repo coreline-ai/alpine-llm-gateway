@@ -70,7 +70,8 @@ import androidx.compose.ui.semantics.testTagsAsResourceId
 import dev.alpine.chat.provider.android.session.ProviderConnection
 import dev.alpine.chat.provider.android.session.ProviderConnectionIssue
 import dev.alpine.chat.provider.android.session.ProviderConnectionState
-import dev.alpine.chat.provider.android.model.GeminiProfileDefaults
+import dev.alpine.chat.provider.android.model.ProviderModelCandidate
+import dev.alpine.chat.provider.android.model.ProviderModelSource
 import dev.alpine.chat.provider.android.model.ProviderProfile
 import dev.alpine.chat.provider.android.model.ProviderSaveAction
 import dev.alpine.chat.provider.android.model.ProviderType
@@ -85,6 +86,7 @@ import dev.alpine.chat.feature.ui.designsystem.AlpineSectionCard
 import dev.alpine.chat.feature.ui.designsystem.AlpineStatusRail
 import dev.alpine.chat.feature.ui.designsystem.AlpineStatusTone
 import dev.alpine.chat.feature.ui.designsystem.AlpineStepLabel
+import java.util.Locale
 
 private val ContentMaxWidth = 840.dp
 
@@ -105,6 +107,31 @@ private val ProviderValidationErrorsSaver = listSaver<
             val message = entry.getOrNull(1) ?: return@mapNotNull null
             field to message
         }.toMap()
+    },
+)
+
+private val ProviderModelCatalogSaver = listSaver<
+    List<ProviderModelCandidate>,
+    String,
+>(
+    save = { candidates ->
+        candidates.flatMap { candidate ->
+            listOf(candidate.modelId, candidate.source.wireName, candidate.enabled.toString())
+        }
+    },
+    restore = { saved ->
+        saved.chunked(3).mapNotNull { entry ->
+            val modelId = entry.getOrNull(0)?.takeIf(String::isNotBlank)
+                ?: return@mapNotNull null
+            val source = entry.getOrNull(1)
+                ?.let(ProviderModelSource::fromWireName)
+                ?: return@mapNotNull null
+            ProviderModelCandidate(
+                modelId = modelId,
+                source = source,
+                enabled = entry.getOrNull(2)?.toBooleanStrictOrNull() ?: true,
+            )
+        }
     },
 )
 
@@ -613,6 +640,13 @@ fun ProviderEditScreen(
     var clientId by rememberSaveable(initialProfile.id) { mutableStateOf(initialProfile.clientId) }
     var scopes by rememberSaveable(initialProfile.id) { mutableStateOf(initialProfile.scopes.joinToString(" ")) }
     var model by rememberSaveable(initialProfile.id) { mutableStateOf(initialProfile.model) }
+    var modelCatalog by rememberSaveable(
+        initialProfile.id,
+        stateSaver = ProviderModelCatalogSaver,
+    ) {
+        mutableStateOf(initialProfile.resolvedModelCatalog())
+    }
+    var newModelId by rememberSaveable(initialProfile.id) { mutableStateOf("") }
     var callbackPort by rememberSaveable(initialProfile.id) { mutableStateOf(initialProfile.callbackPort.toString()) }
     var googleProjectId by rememberSaveable(initialProfile.id) { mutableStateOf(initialProfile.googleProjectId.orEmpty()) }
     var showProtocolDetails by rememberSaveable(initialProfile.id) { mutableStateOf(true) }
@@ -646,13 +680,8 @@ fun ProviderEditScreen(
     val fixedInferenceContract = initialProfile.type == ProviderType.GEMINI ||
         initialProfile.type == ProviderType.XAI ||
         codexCompatibility != null || anthropicCompatibility != null
-    val selectableModels = when (initialProfile.type) {
-        ProviderType.ANTHROPIC -> anthropicCompatibility?.modelOptions.orEmpty()
-        ProviderType.GEMINI -> GeminiProfileDefaults.MODELS
-        ProviderType.CODEX -> codexCompatibility?.modelOptions.orEmpty()
-        ProviderType.XAI -> xaiCompatibility?.modelOptions.orEmpty()
-        else -> emptyList()
-    }
+    val enabledModels = modelCatalog.filter(ProviderModelCandidate::enabled)
+        .map(ProviderModelCandidate::modelId)
 
     val editedProfile = initialProfile.copy(
         label = label.trim(),
@@ -662,10 +691,11 @@ fun ProviderEditScreen(
         clientId = clientId.trim(),
         scopes = scopes.trim().split(Regex("\\s+")).filter(String::isNotBlank),
         model = model.trim(),
+        modelCatalog = modelCatalog,
         callbackPort = callbackPort.trim().toIntOrNull() ?: 0,
         googleProjectId = googleProjectId.trim().ifBlank { null },
     )
-    val hasUnsavedChanges = editedProfile != initialProfile
+    val hasUnsavedChanges = editedProfile != initialProfile || newModelId.isNotBlank()
     fun save(action: ProviderSaveAction) { errors = onSave(editedProfile, action) }
     fun requestBack() {
         if (hasUnsavedChanges) {
@@ -805,19 +835,95 @@ fun ProviderEditScreen(
                     )
                 }
                 item {
-                    if (selectableModels.isNotEmpty()) {
+                    if (enabledModels.isNotEmpty()) {
                         ProviderModelSelector(
                             value = model,
-                            models = selectableModels,
+                            models = enabledModels,
                             onValueChange = { model = it },
                             error = errors[ProviderProfile.Field.MODEL],
                         )
                     } else {
-                        ProfileTextField(
-                            value = model, onValueChange = { model = it }, label = "기본 모델",
-                            error = errors[ProviderProfile.Field.MODEL], tag = "model",
+                        AlpineStatusRail(
+                            label = "활성 모델 필요",
+                            message = errors[ProviderProfile.Field.MODEL]
+                                ?: "모델 ID를 추가한 뒤 기본 모델을 선택하세요.",
+                            tone = AlpineStatusTone.WARNING,
                         )
                     }
+                }
+                item {
+                    ProfileTextField(
+                        value = newModelId,
+                        onValueChange = { newModelId = it },
+                        label = "모델 ID 추가",
+                        tag = "model_candidate_input",
+                        error = errors[ProviderProfile.Field.MODEL],
+                    )
+                }
+                item {
+                    FilledTonalButton(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("add_model_candidate")
+                            .semantics {
+                                contentDescription = "모델 후보 추가"
+                                stateDescription = if (newModelId.isBlank()) {
+                                    "모델 ID 입력 필요"
+                                } else {
+                                    "추가 준비됨"
+                                }
+                            },
+                        onClick = {
+                            val candidate = newModelId.trim()
+                            when {
+                                candidate.isEmpty() -> {
+                                    errors = errors + (
+                                        ProviderProfile.Field.MODEL to "추가할 모델 ID를 입력하세요."
+                                    )
+                                }
+                                modelCatalog.any { it.modelId.equals(candidate, ignoreCase = true) } -> {
+                                    errors = errors + (
+                                        ProviderProfile.Field.MODEL to "이미 추가된 모델 ID입니다."
+                                    )
+                                }
+                                else -> {
+                                    modelCatalog = modelCatalog + ProviderModelCandidate(
+                                        modelId = candidate,
+                                        source = ProviderModelSource.USER_ADDED,
+                                    )
+                                    if (model.isBlank()) model = candidate
+                                    newModelId = ""
+                                    errors = errors - ProviderProfile.Field.MODEL
+                                }
+                            }
+                        },
+                    ) {
+                        Text("모델 추가")
+                    }
+                }
+                items(modelCatalog, key = { it.modelId.lowercase(Locale.ROOT) }) { candidate ->
+                    ProviderModelCandidateRow(
+                        candidate = candidate,
+                        isDefault = candidate.modelId.equals(model, ignoreCase = true),
+                        onToggle = {
+                            modelCatalog = modelCatalog.map { current ->
+                                if (current.modelId.equals(candidate.modelId, ignoreCase = true)) {
+                                    current.copy(enabled = !current.enabled)
+                                } else {
+                                    current
+                                }
+                            }
+                        },
+                    )
+                }
+                item {
+                    Text(
+                        text = "모델 후보는 계정·지역·요금제의 실제 사용 권한을 보장하지 않습니다.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.testTag("model_catalog_disclaimer"),
+                    )
                 }
                 item {
                     ProtocolSectionHeader(
@@ -934,6 +1040,81 @@ private fun ProviderModelSelector(
             }
         }
     }
+}
+
+@Composable
+private fun ProviderModelCandidateRow(
+    candidate: ProviderModelCandidate,
+    isDefault: Boolean,
+    onToggle: () -> Unit,
+) {
+    val toggleEnabled = !isDefault || !candidate.enabled
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("model_candidate_${candidate.modelId}")
+            .semantics {
+                contentDescription = "${candidate.modelId} 모델 후보"
+                stateDescription = buildString {
+                    append(if (candidate.enabled) "사용 중" else "사용 중지")
+                    if (isDefault) append(", 기본 모델")
+                    append(", ${candidate.source.displayLabel()}")
+                }
+            },
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant,
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(candidate.modelId, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = buildString {
+                        append(candidate.source.displayLabel())
+                        if (isDefault) append(" · 기본 모델")
+                        if (!candidate.enabled) append(" · 사용 중지")
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TextButton(
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .testTag("toggle_model_${candidate.modelId}")
+                    .semantics {
+                        contentDescription = if (candidate.enabled) {
+                            "${candidate.modelId} 모델 사용 중지"
+                        } else {
+                            "${candidate.modelId} 모델 다시 사용"
+                        }
+                        stateDescription = if (!toggleEnabled) {
+                            "기본 모델은 사용 중지할 수 없음"
+                        } else if (candidate.enabled) {
+                            "사용 중"
+                        } else {
+                            "사용 중지"
+                        }
+                    },
+                enabled = toggleEnabled,
+                onClick = onToggle,
+            ) {
+                Text(if (candidate.enabled) "사용 중지" else "다시 사용")
+            }
+        }
+    }
+}
+
+private fun ProviderModelSource.displayLabel(): String = when (this) {
+    ProviderModelSource.PROVIDER_APPROVED -> "Provider 승인 후보"
+    ProviderModelSource.USER_ADDED -> "사용자 추가"
+    ProviderModelSource.LEGACY_MIGRATED -> "기존 설정에서 이전"
 }
 
 @Composable

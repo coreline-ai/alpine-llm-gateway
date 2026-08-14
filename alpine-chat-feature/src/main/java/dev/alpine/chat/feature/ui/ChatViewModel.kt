@@ -59,6 +59,7 @@ data class ChatUiState(
     val providers: List<ConnectedProviderOption> = emptyList(),
     val selectedProfileId: String? = null,
     val selectedModel: String? = null,
+    val unavailableModel: String? = null,
     val executionMode: ChatExecutionMode = ChatExecutionMode.FAST_CHAT,
     val selectedSkillId: String = AssistantSelection.DEFAULT_SKILL_ID,
     val selectedPersonaId: String = AssistantSelection.DEFAULT_PERSONA_ID,
@@ -160,9 +161,11 @@ class ChatViewModel(
         if (isLoading) return
         val option = providerOptions.firstOrNull { it.profileId == profileId } ?: return
         updateActiveConversation { current ->
-            val model = current.selectedModel
-                ?.takeIf { current.selectedProfileId == profileId && it in option.modelOptions }
-                ?: option.model
+            val model = if (current.selectedProfileId == profileId) {
+                current.selectedModel ?: option.model
+            } else {
+                option.model
+            }
             current.copy(
                 selectedProfileId = profileId,
                 selectedModel = model,
@@ -255,12 +258,18 @@ class ChatViewModel(
     fun newConversation() {
         if (isLoading) return
         val active = snapshot.activeConversation
+        val option = providerOptions.firstOrNull { it.profileId == active.selectedProfileId }
+            ?: providerOptions.firstOrNull()
         snapshot = repository.create(
             snapshot = snapshot,
-            selectedProfileId = active.selectedProfileId
-                ?: providerOptions.firstOrNull()?.profileId,
+            selectedProfileId = option?.profileId,
             selectedModel = active.selectedModel
-                ?: providerOptions.firstOrNull()?.model,
+                ?.takeIf {
+                    option != null &&
+                        active.selectedProfileId == option.profileId &&
+                        it in option.modelOptions
+                }
+                ?: option?.model,
             executionMode = active.executionMode,
             assistantSelection = defaultAssistantSelection,
         )
@@ -295,9 +304,17 @@ class ChatViewModel(
         val previousActive = snapshot.activeConversation
         snapshot = repository.delete(snapshot, id)
         if (snapshot.conversations.size == 1 && snapshot.activeConversation.isCompletelyEmpty()) {
-            val fallback = providerOptions.firstOrNull()
-            val selectedProfile = previousActive.selectedProfileId ?: fallback?.profileId
-            val selectedModel = previousActive.selectedModel ?: fallback?.model
+            val fallback = providerOptions.firstOrNull {
+                it.profileId == previousActive.selectedProfileId
+            } ?: providerOptions.firstOrNull()
+            val selectedProfile = fallback?.profileId
+            val selectedModel = previousActive.selectedModel
+                ?.takeIf {
+                    fallback != null &&
+                        previousActive.selectedProfileId == fallback.profileId &&
+                        it in fallback.modelOptions
+                }
+                ?: fallback?.model
             snapshot = repository.update(
                 snapshot,
                 snapshot.activeConversation.copy(
@@ -318,10 +335,14 @@ class ChatViewModel(
         val prompt = text.trim()
         val conversation = snapshot.activeConversation
         val selectedModel = conversation.selectedModel
+        val selectedOption = providerOptions.firstOrNull {
+            it.profileId == conversation.selectedProfileId
+        }
         if (
             isLoading ||
             prompt.isEmpty() ||
             activeJobs.containsKey(conversation.id) ||
+            selectedModel !in selectedOption?.modelOptions.orEmpty() ||
             conversation.selectedProfileId != session.descriptor.profileId ||
             selectedModel != session.descriptor.model
         ) {
@@ -372,8 +393,12 @@ class ChatViewModel(
         val context = runtimeStates[conversation.id]?.failureContext ?: return
         val target = context.retryTarget ?: return
         val retrySession = session ?: context.session
+        val selectedOption = providerOptions.firstOrNull {
+            it.profileId == conversation.selectedProfileId
+        }
         if (
             activeJobs.containsKey(conversation.id) ||
+            conversation.selectedModel !in selectedOption?.modelOptions.orEmpty() ||
             conversation.selectedProfileId != target.profileId ||
             conversation.selectedModel != target.model ||
             retrySession.descriptor.profileId != target.profileId ||
@@ -764,11 +789,15 @@ class ChatViewModel(
         if (providerOptions.isEmpty()) return source
         var updated = source
         source.conversations.forEach { conversation ->
-            val option = providerOptions.firstOrNull { it.profileId == conversation.selectedProfileId }
-                ?: providerOptions.first()
-            val model = conversation.selectedModel
-                ?.takeIf { conversation.selectedProfileId == option.profileId && it in option.modelOptions }
-                ?: option.model
+            val selectedOption = providerOptions.firstOrNull {
+                it.profileId == conversation.selectedProfileId
+            }
+            val option = selectedOption ?: providerOptions.first()
+            val model = when {
+                selectedOption == null -> option.model
+                conversation.selectedModel == null -> option.model
+                else -> conversation.selectedModel
+            }
             if (
                 conversation.selectedProfileId != option.profileId ||
                 conversation.selectedModel != model
@@ -837,9 +866,10 @@ class ChatViewModel(
         val activeIsStreaming = activeJobs.containsKey(active.id)
         val backgroundGenerationCount = activeJobs.size - if (activeIsStreaming) 1 else 0
         val selectedOption = providerOptions.firstOrNull { it.profileId == active.selectedProfileId }
-        val selectedModel = active.selectedModel
-            ?.takeIf { model -> selectedOption?.modelOptions?.contains(model) == true }
-            ?: selectedOption?.model
+        val selectedModel = active.selectedModel ?: selectedOption?.model
+        val unavailableModel = selectedModel?.takeIf { model ->
+            selectedOption != null && model !in selectedOption.modelOptions
+        }
         val projectedProviders = providerOptions.map { option ->
             if (option.profileId == selectedOption?.profileId && selectedModel != null) {
                 option.copy(model = selectedModel)
@@ -857,6 +887,7 @@ class ChatViewModel(
             providers = projectedProviders,
             selectedProfileId = selectedOption?.profileId,
             selectedModel = selectedModel,
+            unavailableModel = unavailableModel,
             executionMode = active.executionMode,
             selectedSkillId = active.selectedSkillId,
             selectedPersonaId = active.selectedPersonaId,

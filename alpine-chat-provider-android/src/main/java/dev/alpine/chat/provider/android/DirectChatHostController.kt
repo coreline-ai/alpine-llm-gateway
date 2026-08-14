@@ -3,6 +3,8 @@ package dev.alpine.chat.provider.android
 import android.content.Context
 import dev.alpine.chat.feature.ui.ChatViewModel
 import dev.alpine.chat.provider.android.data.ProviderProfileStore
+import dev.alpine.chat.provider.android.model.ProviderProfile
+import dev.alpine.chat.provider.android.model.ProviderType
 import dev.alpine.chat.provider.android.session.ChatCompletionSession
 import dev.alpine.chat.provider.android.session.ConnectedProviderRegistry
 import dev.alpine.chat.provider.android.session.toChatBackendDescriptor
@@ -19,14 +21,25 @@ class DirectChatHostController(
 ) : AutoCloseable {
     private val appContext = context.applicationContext
     private val store = ProviderProfileStore(appContext)
+    private val modelSessions = mutableMapOf<ProviderSessionKey, ChatCompletionSession>()
     private val registry = ConnectedProviderRegistry { profile ->
-        ProviderDependencies.createSession(appContext, profile)
+        modelSessions.getOrPut(ProviderSessionKey.from(profile, profile.model)) {
+            ProviderDependencies.createSession(appContext, profile)
+        }
     }
     private var sessions: Map<String, ChatCompletionSession> = emptyMap()
-    private val modelSessions = mutableMapOf<String, ChatCompletionSession>()
 
     fun refreshConnections() {
-        val connections = registry.snapshot(store.load())
+        val profiles = store.load()
+        val enabledSessionKeys = profiles.flatMap { profile ->
+            profile.enabledModelIds().map { model -> ProviderSessionKey.from(profile, model) }
+        }.toSet()
+        evictStaleSessionEntries(
+            cache = modelSessions,
+            enabledKeys = enabledSessionKeys,
+            onEvict = ChatCompletionSession::cancelAuthorization,
+        )
+        val connections = registry.snapshot(profiles)
         sessions = connections.associate { it.profile.id to it.session }
         viewModel.updateConnections(connections.map { it.asChatBackendConnection() })
     }
@@ -56,7 +69,7 @@ class DirectChatHostController(
         val storedProfile = store.find(profileId) ?: return null
         if (model !in storedProfile.toChatBackendDescriptor().modelOptions) return null
         val profile = storedProfile.copy(model = model)
-        val key = "$profileId\u0000$model"
+        val key = ProviderSessionKey.from(profile, model)
         return modelSessions.getOrPut(key) {
             ProviderDependencies.createSession(appContext, profile)
         }
@@ -68,5 +81,44 @@ class DirectChatHostController(
             .forEach(ChatCompletionSession::cancelAuthorization)
         sessions = emptyMap()
         modelSessions.clear()
+    }
+}
+
+/** Cache identity for every profile field captured by a Provider session, excluding catalog metadata. */
+internal data class ProviderSessionKey(
+    val profileId: String,
+    val model: String,
+    val type: ProviderType,
+    val authorizationEndpoint: String,
+    val tokenEndpoint: String,
+    val inferenceEndpoint: String,
+    val clientId: String,
+    val scopes: List<String>,
+    val callbackPort: Int,
+    val googleProjectId: String?,
+) {
+    companion object {
+        fun from(profile: ProviderProfile, model: String) = ProviderSessionKey(
+            profileId = profile.id,
+            model = model,
+            type = profile.type,
+            authorizationEndpoint = profile.authorizationEndpoint,
+            tokenEndpoint = profile.tokenEndpoint,
+            inferenceEndpoint = profile.inferenceEndpoint,
+            clientId = profile.clientId,
+            scopes = profile.scopes,
+            callbackPort = profile.callbackPort,
+            googleProjectId = profile.googleProjectId,
+        )
+    }
+}
+
+internal fun <K, T> evictStaleSessionEntries(
+    cache: MutableMap<K, T>,
+    enabledKeys: Set<K>,
+    onEvict: (T) -> Unit,
+) {
+    (cache.keys - enabledKeys).forEach { key ->
+        cache.remove(key)?.let(onEvict)
     }
 }

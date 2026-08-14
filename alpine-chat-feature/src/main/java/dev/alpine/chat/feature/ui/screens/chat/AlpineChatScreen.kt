@@ -179,6 +179,7 @@ fun AlpineChatScreen(
                     ChatComposer(
                         value = state.draft,
                         enabled = state.selectedProfileId != null &&
+                            state.unavailableModel == null &&
                             !state.isLoadingConversations,
                         streaming = state.isStreaming,
                         generationCapacityAvailable = state.generationCapacityAvailable,
@@ -220,7 +221,10 @@ fun AlpineChatScreen(
                     state.statusMessage
                         ?.takeIf { state.selectedProfileId != null || state.messages.isNotEmpty() }
                         ?.let { message -> StatusMessage(message) }
-                    failure?.let { visibleFailure ->
+                    state.unavailableModel?.let { unavailable ->
+                        UnavailableModelNotice(unavailable)
+                    }
+                    failure?.takeIf { state.unavailableModel == null }?.let { visibleFailure ->
                         FailureAction(
                             failure = visibleFailure,
                             onAction = {
@@ -256,6 +260,29 @@ fun AlpineChatScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun UnavailableModelNotice(model: String) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 8.dp)
+            .testTag("unavailable_model_notice")
+            .semantics { liveRegion = LiveRegionMode.Polite },
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.error),
+    ) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Text("선택한 모델을 사용할 수 없습니다", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "모델 $model 설정이 비활성화되었습니다. 대화 설정을 펼쳐 새 모델을 선택하세요.",
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }

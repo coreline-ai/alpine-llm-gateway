@@ -6,6 +6,7 @@ import dev.alpine.llm.GeminiOAuthContract
 import dev.alpine.llm.AnthropicOAuthCompatibilityRegistry
 import dev.alpine.llm.XaiOAuthCompatibilityRegistry
 import dev.alpine.llm.XaiOAuthContract
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URI
 import java.util.UUID
@@ -70,6 +71,7 @@ data class ProviderProfile(
     val clientId: String,
     val scopes: List<String>,
     val model: String,
+    val modelCatalog: List<ProviderModelCandidate> = emptyList(),
     val callbackPort: Int = DEFAULT_CALLBACK_PORT,
     /**
      * Binary/source compatibility only for profiles compiled before the direct-OAuth cleanup.
@@ -80,6 +82,19 @@ data class ProviderProfile(
     val googleProjectId: String? = null,
     val createdAtMs: Long = System.currentTimeMillis(),
 ) {
+    /** Normalized local candidates. Empty pre-catalog objects are repaired from [model]. */
+    fun resolvedModelCatalog(): List<ProviderModelCandidate> {
+        val normalized = normalizeModelCatalog(modelCatalog)
+        if (normalized.isNotEmpty()) return normalized
+        return legacyModelCatalog(model)
+    }
+
+    fun enabledModelIds(): List<String> = resolvedModelCatalog()
+        .filter(ProviderModelCandidate::enabled)
+        .map(ProviderModelCandidate::modelId)
+
+    fun containsEnabledModel(modelId: String): Boolean = modelId in enabledModelIds()
+
     fun requiresReauthenticationComparedTo(previous: ProviderProfile): Boolean =
         type != previous.type ||
             authorizationEndpoint != previous.authorizationEndpoint ||
@@ -98,6 +113,19 @@ data class ProviderProfile(
         .put("client_id", clientId)
         .put("scopes", scopes.joinToString(" "))
         .put("model", model)
+        .put(
+            "model_catalog",
+            JSONArray().apply {
+                resolvedModelCatalog().forEach { candidate ->
+                    put(
+                        JSONObject()
+                            .put("model_id", candidate.modelId)
+                            .put("source", candidate.source.wireName)
+                            .put("enabled", candidate.enabled),
+                    )
+                }
+            },
+        )
         .put("callback_port", callbackPort)
         .putOpt("google_project_id", googleProjectId)
         .put("created_at_ms", createdAtMs)
@@ -227,6 +255,12 @@ data class ProviderProfile(
         if (clientId.isBlank()) put(Field.CLIENT_ID, "OAuth Public Client ID를 입력하세요.")
         if (scopes.none(String::isNotBlank)) put(Field.SCOPES, "OAuth scope를 하나 이상 입력하세요.")
         if (model.isBlank()) put(Field.MODEL, "기본 모델을 선택하거나 입력하세요.")
+        if (model.isNotBlank() && !containsEnabledModel(model)) {
+            put(Field.MODEL, "기본 모델은 활성화된 모델 후보에서 선택하세요.")
+        }
+        if (enabledModelIds().isEmpty()) {
+            put(Field.MODEL, "활성화된 모델 후보를 하나 이상 추가하세요.")
+        }
         if (callbackPort !in 1..65533) {
             put(Field.CALLBACK_PORT, "Callback port는 1~65533 범위로 입력하세요.")
         }
@@ -246,22 +280,31 @@ data class ProviderProfile(
     companion object {
         const val DEFAULT_CALLBACK_PORT = 54545
 
-        fun fromJson(json: JSONObject): ProviderProfile = ProviderProfile(
-            id = json.getString("id"),
-            label = json.getString("label"),
-            type = ProviderType.fromWireName(json.getString("type")),
-            authorizationEndpoint = json.getString("authorization_endpoint"),
-            tokenEndpoint = json.getString("token_endpoint"),
-            inferenceEndpoint = json.getString("inference_endpoint"),
-            clientId = json.getString("client_id"),
-            scopes = json.optString("scopes")
-                .split(Regex("\\s+"))
-                .filter(String::isNotBlank),
-            model = json.getString("model"),
-            callbackPort = json.optInt("callback_port", DEFAULT_CALLBACK_PORT),
-            googleProjectId = json.optString("google_project_id").ifBlank { null },
-            createdAtMs = json.optLong("created_at_ms", System.currentTimeMillis()),
-        )
+        fun fromJson(json: JSONObject): ProviderProfile {
+            val model = json.getString("model").trim()
+            val catalog = if (json.has("model_catalog")) {
+                parseModelCatalog(json.optJSONArray("model_catalog"), model)
+            } else {
+                legacyModelCatalog(model)
+            }
+            return ProviderProfile(
+                id = json.getString("id"),
+                label = json.getString("label"),
+                type = ProviderType.fromWireName(json.getString("type")),
+                authorizationEndpoint = json.getString("authorization_endpoint"),
+                tokenEndpoint = json.getString("token_endpoint"),
+                inferenceEndpoint = json.getString("inference_endpoint"),
+                clientId = json.getString("client_id"),
+                scopes = json.optString("scopes")
+                    .split(Regex("\\s+"))
+                    .filter(String::isNotBlank),
+                model = model,
+                modelCatalog = catalog,
+                callbackPort = json.optInt("callback_port", DEFAULT_CALLBACK_PORT),
+                googleProjectId = json.optString("google_project_id").ifBlank { null },
+                createdAtMs = json.optLong("created_at_ms", System.currentTimeMillis()),
+            )
+        }
 
         fun draft(type: ProviderType, label: String): ProviderProfile {
             val anthropicCompatibility = if (type == ProviderType.ANTHROPIC) {
@@ -278,6 +321,28 @@ data class ProviderProfile(
                 XaiOAuthCompatibilityRegistry.current()
             } else {
                 null
+            }
+            val defaultModel = when (type) {
+                ProviderType.ANTHROPIC -> anthropicCompatibility?.defaultModel.orEmpty()
+                ProviderType.GEMINI -> GeminiProfileDefaults.DEFAULT_MODEL
+                ProviderType.CODEX -> codexCompatibility?.defaultModel.orEmpty()
+                ProviderType.XAI -> xaiCompatibility?.defaultModel.orEmpty()
+                else -> ""
+            }
+            val modelCatalog = when (type) {
+                ProviderType.GEMINI -> GeminiProfileDefaults.MODELS.map { modelId ->
+                    ProviderModelCandidate(modelId, ProviderModelSource.PROVIDER_APPROVED)
+                }
+                ProviderType.ANTHROPIC -> anthropicCompatibility?.modelOptions.orEmpty().map { modelId ->
+                    ProviderModelCandidate(modelId, ProviderModelSource.USER_ADDED)
+                }
+                ProviderType.CODEX -> codexCompatibility?.modelOptions.orEmpty().map { modelId ->
+                    ProviderModelCandidate(modelId, ProviderModelSource.USER_ADDED)
+                }
+                ProviderType.XAI -> xaiCompatibility?.modelOptions.orEmpty().map { modelId ->
+                    ProviderModelCandidate(modelId, ProviderModelSource.USER_ADDED)
+                }
+                ProviderType.OPENAI_COMPATIBLE -> emptyList()
             }
             return ProviderProfile(
                 label = label,
@@ -306,13 +371,8 @@ data class ProviderProfile(
                 scopes = xaiCompatibility?.scopes
                     ?: anthropicCompatibility?.scopes
                     ?: type.defaultScopes.split(" ").filter(String::isNotBlank),
-                model = when (type) {
-                    ProviderType.ANTHROPIC -> anthropicCompatibility?.defaultModel.orEmpty()
-                    ProviderType.GEMINI -> GeminiProfileDefaults.DEFAULT_MODEL
-                    ProviderType.CODEX -> codexCompatibility?.defaultModel.orEmpty()
-                    ProviderType.XAI -> xaiCompatibility?.defaultModel.orEmpty()
-                    else -> ""
-                },
+                model = defaultModel,
+                modelCatalog = modelCatalog,
                 callbackPort = when (type) {
                     ProviderType.ANTHROPIC -> anthropicCompatibility?.callbackPort ?: DEFAULT_CALLBACK_PORT
                     ProviderType.GEMINI -> GeminiOAuthContract.CALLBACK_PORT
@@ -331,6 +391,42 @@ data class ProviderProfile(
                 return "${label}에는 사용자 정보 없이 HTTPS URL을 사용하세요."
             }
             return null
+        }
+
+        private fun parseModelCatalog(array: JSONArray?, legacyModel: String): List<ProviderModelCandidate> {
+            if (array == null) return legacyModelCatalog(legacyModel)
+            var malformedItemFound = false
+            val candidates = buildList {
+                repeat(array.length()) { index ->
+                    val item = array.optJSONObject(index)
+                    if (item == null) {
+                        malformedItemFound = true
+                        return@repeat
+                    }
+                    val modelId = item.optString("model_id").trim()
+                    val source = ProviderModelSource.fromWireName(item.optString("source"))
+                    if (modelId.isEmpty() || source == null) {
+                        malformedItemFound = true
+                        return@repeat
+                    }
+                    add(
+                        ProviderModelCandidate(
+                            modelId = modelId,
+                            source = source,
+                            enabled = item.optBoolean("enabled", true),
+                        ),
+                    )
+                }
+            }
+            val normalized = normalizeModelCatalog(candidates)
+            if (
+                malformedItemFound &&
+                legacyModel.isNotBlank() &&
+                normalized.none { it.modelId.equals(legacyModel.trim(), ignoreCase = true) }
+            ) {
+                return normalized + legacyModelCatalog(legacyModel)
+            }
+            return normalized.ifEmpty { legacyModelCatalog(legacyModel) }
         }
     }
 }

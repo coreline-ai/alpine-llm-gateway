@@ -160,6 +160,130 @@ class ChatGenerationStateTest {
     }
 
     @Test
+    fun `unavailable model is preserved and blocks dispatch until explicit selection`() = runTest(
+        context = dispatcher,
+    ) {
+        val repository = ConversationRepository(
+            clock = { 100L },
+            idFactory = { "conversation" },
+        )
+        val session = ScriptedSession("model-a")
+        val viewModel = ChatViewModel(repository)
+        viewModel.updateConnections(
+            listOf(
+                ChatBackendConnection(
+                    descriptor = session.descriptor,
+                    state = ChatBackendConnectionState.AVAILABLE,
+                    session = session,
+                ),
+            ),
+        )
+        viewModel.selectModel("provider", "model-b")
+        assertEquals("model-b", viewModel.state.value.selectedModel)
+
+        val modelARemains = session.descriptor.copy(
+            model = "model-a",
+            modelOptions = listOf("model-a"),
+        )
+        session.updateDescriptor(modelARemains)
+        viewModel.updateConnections(
+            listOf(
+                ChatBackendConnection(
+                    descriptor = modelARemains,
+                    state = ChatBackendConnectionState.AVAILABLE,
+                    session = session,
+                ),
+            ),
+        )
+
+        assertEquals("model-b", viewModel.state.value.selectedModel)
+        assertEquals("model-b", viewModel.state.value.unavailableModel)
+        viewModel.send("must not dispatch", session)
+        runCurrent()
+        assertEquals(0, session.requestCount.get())
+
+        viewModel.selectModel("provider", "model-a")
+        assertEquals(null, viewModel.state.value.unavailableModel)
+        viewModel.send("explicitly selected", session)
+        runCurrent()
+        assertEquals(1, session.requestCount.get())
+    }
+
+    @Test
+    fun `unavailable retry target is not replayed and replacement model sends only a new request`() = runTest(
+        context = dispatcher,
+    ) {
+        val repository = ConversationRepository(
+            clock = { 100L },
+            idFactory = { "conversation" },
+        )
+        val session = ScriptedSession("model-b")
+        val viewModel = ChatViewModel(repository)
+        viewModel.updateConnections(
+            listOf(
+                ChatBackendConnection(
+                    descriptor = session.descriptor,
+                    state = ChatBackendConnectionState.AVAILABLE,
+                    session = session,
+                ),
+            ),
+        )
+        viewModel.send("turn-6", session)
+        runCurrent()
+        assertEquals(1, session.requestCount.get())
+        assertTrue(viewModel.state.value.failure != null)
+
+        val modelARemains = session.descriptor.copy(
+            model = "model-a",
+            modelOptions = listOf("model-a"),
+        )
+        session.updateDescriptor(modelARemains)
+        viewModel.updateConnections(
+            listOf(
+                ChatBackendConnection(
+                    descriptor = modelARemains,
+                    state = ChatBackendConnectionState.AVAILABLE,
+                    session = session,
+                ),
+            ),
+        )
+        assertEquals("model-b", viewModel.state.value.unavailableModel)
+
+        viewModel.retry()
+        runCurrent()
+        assertEquals(1, session.requestCount.get())
+
+        viewModel.selectModel("provider", "model-a")
+        viewModel.send("replacement request", session)
+        runCurrent()
+        assertEquals(2, session.requestCount.get())
+    }
+
+    @Test
+    fun `missing profile still falls back while unavailable model does not`() = runTest(
+        context = dispatcher,
+    ) {
+        val repository = ConversationRepository(
+            clock = { 100L },
+            idFactory = { "conversation" },
+        )
+        val first = CompletingSession("profile-a", "model-a")
+        val second = CompletingSession("profile-b", "model-b")
+        val viewModel = ChatViewModel(repository)
+        viewModel.updateConnections(
+            listOf(first.connection(), second.connection()),
+        )
+        viewModel.selectProvider("profile-b")
+        assertEquals("profile-b", viewModel.state.value.selectedProfileId)
+
+        viewModel.updateConnections(listOf(first.connection()))
+
+        assertEquals("profile-a", viewModel.state.value.selectedProfileId)
+        assertEquals("model-a", viewModel.state.value.selectedModel)
+        assertEquals(null, viewModel.state.value.unavailableModel)
+    }
+
+    @Test
     fun `background completion becomes unread until its conversation is selected`() = runTest(
         context = dispatcher,
     ) {
@@ -295,11 +419,20 @@ class ChatGenerationStateTest {
         }
     }
 
-    private class CompletingSession : ChatBackendSession {
+    private class CompletingSession(
+        profileId: String = "provider",
+        model: String = "model",
+    ) : ChatBackendSession {
         override val descriptor = ChatBackendDescriptor(
-            profileId = "provider",
+            profileId = profileId,
             label = "Provider",
-            model = "model",
+            model = model,
+        )
+
+        fun connection() = ChatBackendConnection(
+            descriptor = descriptor,
+            state = ChatBackendConnectionState.AVAILABLE,
+            session = this,
         )
 
         override suspend fun stream(requestJson: String) = ChatBackendStreamResult(
@@ -308,7 +441,7 @@ class ChatGenerationStateTest {
     }
 
     private class ScriptedSession(model: String) : ChatBackendSession {
-        override val descriptor = ChatBackendDescriptor(
+        override var descriptor = ChatBackendDescriptor(
             profileId = "provider",
             label = "Fake Provider",
             model = model,
@@ -317,6 +450,10 @@ class ChatGenerationStateTest {
         val requestCount = AtomicInteger()
         val requestJson = mutableListOf<String>()
         private var failedTurnSixOnce = false
+
+        fun updateDescriptor(descriptor: ChatBackendDescriptor) {
+            this.descriptor = descriptor
+        }
 
         override suspend fun stream(requestJson: String): ChatBackendStreamResult {
             this.requestJson += requestJson
