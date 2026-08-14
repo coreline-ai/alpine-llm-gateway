@@ -12,16 +12,17 @@
 
 | 항목 | 현재 값 |
 |---|---|
-| 원격 기준선 | `main@493546fd8efdfee61b04a2d16ad0fd1ef6384c12` |
-| 로컬 기준선 | `main@493546fd8efdfee61b04a2d16ad0fd1ef6384c12` |
+| 원격 기준선 | `main@a1985f335276d238293463bce863b2480fd795be` |
+| 로컬 기준선 | `main@a1985f335276d238293463bce863b2480fd795be` |
 | 통합 source branch | `codex/model-catalog-hardening-20260814` |
-| main CI | run [`31796454558`](https://github.com/coreline-ai/alpine-llm-gateway/actions/runs/31796454558), `completed/success` |
+| main evidence CI | run [`31797601916`](https://github.com/coreline-ai/alpine-llm-gateway/actions/runs/31797601916), `completed/success` |
+| main 구현 CI | run [`31796454558`](https://github.com/coreline-ai/alpine-llm-gateway/actions/runs/31796454558), `completed/success` |
 | topic CI | run [`31795327701`](https://github.com/coreline-ai/alpine-llm-gateway/actions/runs/31795327701), `completed/success` |
-| 현재 evidence 갱신 | commit·push 후 current-head CI 전까지 fail-closed |
+| `github_remote_ci` | `READY` — evidence commit 자체 CI까지 성공 |
 | 공개 배포 | `NO-GO` — CI 외 6개 release-blocking gate가 계속 `BLOCKED` |
 
-run `31796454558`은 `2026-08-14 20:30:01 KST`에 시작해 `20:43:00 KST`에 완료됐다.
-`Python 3.11`과 `Android modules` job이 모두 성공했다. 상세 범위와 선행 topic CI는
+run `31797601916`은 `2026-08-14 20:46:56 KST`에 시작해 `21:03:04 KST`에 완료됐다.
+evidence commit 자체의 `Python 3.11`과 `Android modules` job이 모두 성공했다. 구현 commit과 선행 topic CI는
 [`distribution/GITHUB_CI_STATUS.md`](distribution/GITHUB_CI_STATUS.md)에 있다.
 
 ## 2. 현재 개발 목표
@@ -67,8 +68,8 @@ run `31796454558`은 `2026-08-14 20:30:01 KST`에 시작해 `20:43:00 KST`에 �
 - 저장 대화의 unavailable model ID를 보존하고 명시적 재선택 전 Send·Retry를 차단한다.
 - unavailable 안내 UI와 단위/Compose/integrated AndroidTest 회귀를 추가했다.
 
-Phase 1~5 로컬/Samsung 검증과 topic/main 원격 CI는 완료했다. 현재 evidence 문서 갱신 commit 자체의
-CI를 확인하기 전까지 `github_remote_ci`만 fail-closed `BLOCKED`로 유지한다.
+Phase 1~5 로컬/Samsung 검증, topic/main 구현 CI, evidence commit CI를 완료했다.
+`github_remote_ci`는 `READY`이며 외부 조건이 필요한 release blocker 6개는 계속 `BLOCKED`다.
 
 ## 4. Provider evidence 구분
 
@@ -111,7 +112,7 @@ production source, release artifact, public support 표기로 이동하지 않�
 | Android 계획 matrix | unit·routing/backend·integrated debug APK·AndroidTest APK·lint `PASS` |
 | SDK publication | `19개 PASS` |
 | published consumer matrix | `8개 PASS` |
-| license/readiness verifier | `PASS`; 공개 배포는 의도대로 `INTERNAL_ONLY`; evidence CI 전 7, 이후에도 외부 blocker 6개 |
+| license/readiness verifier | `PASS`; 공개 배포는 의도대로 `INTERNAL_ONLY`; 외부 blocker 6개 |
 | Samsung Provider test package | `18/18 PASS` — catalog UI, encrypted restore, unavailable model, IME·200% font 포함 |
 | Samsung integrated debug `install -r` | `NOT_RUN/BLOCKED` — 기존 package와 signing signature 불일치 |
 | integrated connected test | `NOT_RUN` — 기존 OAuth/profile/대화 데이터 보호를 위해 uninstall/clear하지 않음 |
@@ -120,7 +121,7 @@ Samsung 결과는 `R3CY40PXCAP`만 사용했다. 다른 연결 기기는 사용�
 
 ## 8. 다음 실행 순서
 
-현재 바로 남은 것은 Phase 6 evidence 갱신 commit의 current-head 원격 CI와 gate 상태 정리다.
+현재 환경에서 가능한 Phase 1~6은 완료했다. 다음 작업은 진입 조건을 확보한 Phase 7~10이다.
 
 ```bash
 cd /Volumes/Eprojects/project_202607/alpine-llm-gateway
@@ -130,8 +131,8 @@ git rev-list --left-right --count HEAD...origin/main
 gh run list --branch main --limit 3
 ```
 
-evidence 문서를 commit/push한 뒤 GitHub Actions의 Python 3.11·Android modules를 확인한다.
-그 CI 성공 후에만 `github_remote_ci` gate를 `READY`로 바꾸며 다른 외부 blocker 6개는 유지한다.
+Provider 앱 소유 registration·테스트 계정, Samsung 파괴 테스트 승인, x86_64 emulator,
+라이선스/source/Play/release owner가 준비된 항목부터 계획의 Phase 7~10을 진행한다.
 
 ## 9. 인계 체크리스트
 
@@ -140,5 +141,5 @@ evidence 문서를 commit/push한 뒤 GitHub Actions의 Python 3.11·Android mod
 - [x] unit/AndroidTest APK compile 이후 전체 local matrix를 실행했다.
 - [x] Samsung 작업은 `R3CY40PXCAP`에 credential-free·non-destructive 범위로만 실행했다.
 - [x] topic/main의 동일 SHA 원격 CI를 모두 확인했다.
-- [x] evidence 갱신 commit CI 전에는 `github_remote_ci`를 `READY`로 바꾸지 않았다.
+- [x] evidence 갱신 commit CI 성공 후에만 `github_remote_ci`를 `READY`로 변경했다.
 - [x] 외부 Provider·법무·Play·파괴 테스트 항목을 `NOT_RUN/BLOCKED`로 유지했다.

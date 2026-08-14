@@ -262,7 +262,7 @@ ANDROID_SERIAL=<device-serial> ./gradlew :integrated-app:connectedDebugAndroidTe
 
 | 항목 | 상태 | 기준 |
 |---|---|---|
-| Python unit/compile/smoke | ✅ CI PASS | run `31796454558`, `main@493546f`, GitHub Actions `Python 3.11` |
+| Python unit/compile/smoke | ✅ CI PASS | evidence run `31797601916`, `main@a1985f3`; 구현 run `31796454558`, `main@493546f` |
 | 결정론 Provider fault matrix | ✅ Local PASS | Python 114/114; status·timeout·malformed/oversized SSE·strict UTF-8·no-retry |
 | Android modules·publication matrix | ✅ CI PASS | remote main run `31796454558`, topic run `31795327701`, 동일 commit `493546f` |
 | 영속 모델 카탈로그·no-silent-switch | ✅ Main/CI/Local/Samsung PASS | legacy/malformed migration, enabled descriptor, transport-aware stale cache, unavailable Send/Retry, encrypted restore·IME·200% font; Samsung 격리 test package 18/18. integrated package는 signature 불일치로 데이터 보존을 위해 connected test `NOT_RUN` |
@@ -288,9 +288,9 @@ ANDROID_SERIAL=<device-serial> ./gradlew :integrated-app:connectedDebugAndroidTe
 | Codex/xAI debug compatibility | ✅ Samsung 제한 증거 | `R3CY40PXCAP` side-by-side debug 앱에서 OAuth 연결 + 1턴 stream PASS; 공식 product 승인 근거 아님 |
 | 실제 Provider 계정 OAuth/API E2E | ⏳ `NOT_RUN` | 앱 소유 registration·계정 승인과 전체 login/Stop/refresh/logout evidence 필요 |
 | x86_64 emulator E2E | ⛔ BLOCKED | 연결된 검증 emulator 없음 |
-| 공개 배포 | ⛔ `NO-GO` | 구현 commit의 원격 CI는 통과했지만 evidence 갱신 commit CI 전까지 GitHub gate는 fail-closed이며, 이후에도 외부 조건 release blocker 6개가 남음 |
+| 공개 배포 | ⛔ `NO-GO` | `github_remote_ci`는 evidence commit CI까지 통과해 `READY`; 외부 조건 release blocker 6개가 남음 |
 
-Remote CI의 최신 성공은 원격 `main@493546f` 기준입니다. 이후 evidence 문서 변경도 Push 후 해당 current-head workflow가 성공하기 전에는 원격 CI로 검증된 것으로 간주하지 않습니다.
+Remote CI의 최신 성공은 evidence commit `main@a1985f3`의 run `31797601916`입니다. 이후 변경도 Push 후 해당 current-head workflow가 성공하기 전에는 원격 CI로 검증된 것으로 간주하지 않습니다.
 
 ## ⚠️ 현재 제한
 
