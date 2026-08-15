@@ -214,6 +214,14 @@ production APK/AAB를 생성할 수 있으며, 증거 Gate를 `PASS`로 바꾸�
 scripts/build-current-state-public-release.sh --unsigned-candidate
 ```
 
+macOS에서 production signing material은 repository 밖 Application Support와 Keychain에 보관한다.
+다음 경로는 debug key를 사용하지 않으며 signed APK/AAB의 인증서가 동일한지도 검증한다.
+
+```bash
+scripts/configure-macos-release-signing.sh
+scripts/build-current-state-signed-release-macos.sh
+```
+
 credential, thread/turn 경계, 검증·rollback 절차는
 [Codex App Server Android 통합](docs/codex-appserver-integration.md)을 따른다.
 

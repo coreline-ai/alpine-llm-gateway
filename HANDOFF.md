@@ -216,9 +216,10 @@ readiness verifier 현재 결과: `13 Gate / 11 BLOCKED / 9 release blocker`, `r
   scripts/build-current-state-public-release.sh --unsigned-candidate
   ```
 
-- unsigned 검증 산출물: `dist/current-state-public-release/`
-- unsigned APK SHA-256: `fe848583764c968621d1f826337e662ed5117bbfd97fa1869ff20c5e25736b12`
-- unsigned AAB SHA-256: `84676f7d5c016a492c24b0168f34f9b9540b870d6d3454849e5c90c1aee4c798`
+- pre-signing 검증 candidate APK SHA-256:
+  `fe848583764c968621d1f826337e662ed5117bbfd97fa1869ff20c5e25736b12`
+- pre-signing 검증 candidate AAB SHA-256:
+  `84676f7d5c016a492c24b0168f34f9b9540b870d6d3454849e5c90c1aee4c798`
 - 실제 upload는 debug key를 대체 사용하지 않으며 다음 네 환경 변수로 durable release key를 주입한다.
 
   ```text
@@ -228,8 +229,14 @@ readiness verifier 현재 결과: `13 Gate / 11 BLOCKED / 9 release blocker`, `r
   ALPINE_RELEASE_KEY_PASSWORD
   ```
 
-- 서명값과 배포 destination credential은 현재 shell에 없으므로 local candidate 생성 이후 실제 외부
-  upload 단계는 아직 실행되지 않았다.
+- macOS 정본은 `scripts/configure-macos-release-signing.sh`이 repository 밖 Application Support에 PKCS12
+  key를 두고 비밀번호를 Keychain에만 저장한다. `scripts/build-current-state-signed-release-macos.sh`은 해당
+  값을 process-local 환경으로 주입한 뒤 APK/AAB signer fingerprint 일치까지 확인한다.
+- v0.3.0 release certificate SHA-256:
+  `32364f692c1b3151a409720fcd3e6f86d17658bf7e60e90e15fa2955d4f1fcdd`
+
+- durable release key와 Keychain secret은 구성됐다. signed artifact는 위 macOS build wrapper로 생성하고
+  채널별 destination credential을 연결해 upload한다.
 
 미완료 증거 항목:
 

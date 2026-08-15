@@ -71,6 +71,11 @@ if [[ "$SIGNING_CONFIGURED" == true && ! -f "$ALPINE_RELEASE_KEYSTORE" ]]; then
 fi
 
 cd "$PROJECT_DIR"
+if [[ "$SIGNING_CONFIGURED" == true && -n "$(git status --porcelain --untracked-files=normal)" ]]; then
+  echo "SIGNED_RELEASE_REQUIRES_CLEAN_WORKTREE" >&2
+  exit 2
+fi
+SOURCE_COMMIT="$(git rev-parse HEAD)"
 "$PYTHON_BIN" scripts/verify-current-state-release-decision.py --check-evidence >/dev/null
 "$PYTHON_BIN" scripts/verify-release-readiness.py \
   distribution/release-readiness.json \
@@ -126,17 +131,39 @@ if [[ "$SIGNING_CONFIGURED" == true ]]; then
     exit 4
   fi
   rm -f "$AAB_VERIFY_OUTPUT"
+  APK_CERT_OUTPUT="$(mktemp)"
+  AAB_CERT_OUTPUT="$(mktemp)"
+  "$APKSIGNER" verify --print-certs "$APK" >"$APK_CERT_OUTPUT"
+  "$JAVA_HOME/bin/keytool" -J-Duser.language=en -printcert -jarfile "$AAB" >"$AAB_CERT_OUTPUT"
+  APK_CERT_SHA256="$(
+    awk -F ': ' '/Signer #1 certificate SHA-256 digest/ {print $2; exit}' "$APK_CERT_OUTPUT" |
+      tr '[:upper:]' '[:lower:]'
+  )"
+  AAB_CERT_SHA256="$(
+    sed -n 's/^[[:space:]]*SHA256: //p' "$AAB_CERT_OUTPUT" |
+      head -1 |
+      tr -d ':' |
+      tr '[:upper:]' '[:lower:]'
+  )"
+  rm -f "$APK_CERT_OUTPUT" "$AAB_CERT_OUTPUT"
+  if [[ ! "$APK_CERT_SHA256" =~ ^[0-9a-f]{64}$ ]] ||
+     [[ "$APK_CERT_SHA256" != "$AAB_CERT_SHA256" ]]; then
+    echo "RELEASE_SIGNING_CERTIFICATE_MISMATCH" >&2
+    exit 4
+  fi
   APK_NAME="alpine-ai-workspace-current-state-signed.apk"
   AAB_NAME="alpine-ai-workspace-current-state-signed.aab"
   SIGNED=true
   ARTIFACT_UPLOAD_READY=true
   REASON="DESTINATION_REQUIRED"
+  SIGNING_CERTIFICATE_JSON="\"$APK_CERT_SHA256\""
 else
   APK_NAME="alpine-ai-workspace-current-state-unsigned.apk"
   AAB_NAME="alpine-ai-workspace-current-state-unsigned.aab"
   SIGNED=false
   ARTIFACT_UPLOAD_READY=false
   REASON="RELEASE_SIGNING_AND_DESTINATION_REQUIRED"
+  SIGNING_CERTIFICATE_JSON=null
 fi
 
 cp "$APK" "$OUTPUT_DIR/$APK_NAME"
@@ -151,8 +178,10 @@ cat > "$OUTPUT_DIR/manifest.json" <<EOF
   "schema_version": 1,
   "decision_mode": "CURRENT_STATE_OWNER_DECISION",
   "distribution_authorized": true,
+  "source_commit": "$SOURCE_COMMIT",
   "evidence_ready": false,
   "signed": $SIGNED,
+  "signing_certificate_sha256": $SIGNING_CERTIFICATE_JSON,
   "artifact_upload_ready": $ARTIFACT_UPLOAD_READY,
   "destination_configured": false,
   "upload_ready": false,

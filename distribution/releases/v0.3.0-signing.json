@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "release": "v0.3.0",
+  "application_id": "dev.alpine.integrated",
+  "key_alias": "alpine-ai-workspace-upload",
+  "key_algorithm": "RSA_4096",
+  "signature_algorithm": "SHA384withRSA",
+  "certificate_sha256": "32364f692c1b3151a409720fcd3e6f86d17658bf7e60e90e15fa2955d4f1fcdd",
+  "private_key_custody": "LOCAL_MACOS_KEYCHAIN",
+  "private_material_in_repository": false,
+  "backup_required": true
+}
