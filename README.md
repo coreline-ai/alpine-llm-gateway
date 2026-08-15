@@ -30,7 +30,9 @@
 </div>
 
 > [!IMPORTANT]
-> 현재 `0.3.0`은 프로젝트 소유자의 `PROCEED_CURRENT_STATE` 결정으로 **현재 상태 공개 배포가 승인**되었습니다. 미실행 검증과 미승인 legal/source 항목은 감사 기록에서 `NOT_RUN`/`BLOCKED`로 유지하며, 실제 Android upload에는 별도 release signing key와 destination credential이 필요합니다.
+> 현재 `0.3.0`은 프로젝트 소유자의 `PROCEED_CURRENT_STATE` 결정으로 **현재 상태 공개 배포가 승인**되었습니다. 미실행 검증과 미승인 legal/source 항목은 감사 기록에서 `NOT_RUN`/`BLOCKED`로 유지합니다. Production signing과 GitHub Release 게시를 완료했고 Google Play는 developer account 등록 완료 후 이어서 배포합니다.
+
+Production-signed v0.3.0 artifact는 [GitHub Release](https://github.com/coreline-ai/alpine-llm-gateway/releases/tag/v0.3.0)에 게시했다. 현재 repository가 private이므로 다운로드 범위는 repository 접근 사용자이며, Google Play 공개는 developer account 등록 완료 후 진행한다.
 
 ## ✨ 프로젝트 개요
 

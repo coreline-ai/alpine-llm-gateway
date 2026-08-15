@@ -235,8 +235,21 @@ readiness verifier 현재 결과: `13 Gate / 11 BLOCKED / 9 release blocker`, `r
 - v0.3.0 release certificate SHA-256:
   `32364f692c1b3151a409720fcd3e6f86d17658bf7e60e90e15fa2955d4f1fcdd`
 
-- durable release key와 Keychain secret은 구성됐다. signed artifact는 위 macOS build wrapper로 생성하고
-  채널별 destination credential을 연결해 upload한다.
+- durable release key와 Keychain secret을 구성하고 signed APK/AAB를 생성했다.
+- signed APK SHA-256:
+  `6173d23517ba6a2715098022c145cebb6c6b08193c01d6df8204f1eee0e263d6`
+- signed AAB SHA-256:
+  `b022a218d02eb7ba3d767014030239399dcd97b02f85768ad5b268927c6a4358`
+- release source: `v0.3.0@a4ccd4ff56338511a63ff75734d53695e285e5e5`
+- remote CI run `31866945292`: Python/Android 전체 `SUCCESS`
+- GitHub Release: `https://github.com/coreline-ai/alpine-llm-gateway/releases/tag/v0.3.0`
+  - production-signed APK/AAB, SHA256SUMS, build manifest, publication record 5개 업로드 완료
+  - repository가 private이므로 배포 범위는 `REPOSITORY_ACCESS`
+- Samsung production package에 signed APK 설치와 signed AAB 4-split update를 모두 완료했다.
+  versionCode `1`, signer fingerprint 일치, 기존 로그인된 `.codexdebug` package 보존을 확인했다.
+- Play submission local package는 `dist/play-submission-v0.3.0/`에 AAB, ko-KR listing, icon과 15개
+  screenshot으로 준비했다. Chrome Play Console은 로그인됐지만 developer account 생성 화면이므로 계정 유형,
+  조직 정보와 등록 절차를 사용자가 완료해야 Play upload가 가능하다.
 
 미완료 증거 항목:
 

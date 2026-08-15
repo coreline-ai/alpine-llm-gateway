@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "release": "v0.3.0",
+  "source_commit": "a4ccd4ff56338511a63ff75734d53695e285e5e5",
+  "remote_ci": {
+    "run_id": 31866945292,
+    "state": "SUCCESS"
+  },
+  "signing_certificate_sha256": "32364f692c1b3151a409720fcd3e6f86d17658bf7e60e90e15fa2955d4f1fcdd",
+  "artifacts": {
+    "apk_sha256": "6173d23517ba6a2715098022c145cebb6c6b08193c01d6df8204f1eee0e263d6",
+    "aab_sha256": "b022a218d02eb7ba3d767014030239399dcd97b02f85768ad5b268927c6a4358"
+  },
+  "github_release": {
+    "published": true,
+    "published_at": "2026-08-15T05:59:28Z",
+    "url": "https://github.com/coreline-ai/alpine-llm-gateway/releases/tag/v0.3.0",
+    "repository_visibility": "PRIVATE",
+    "distribution_scope": "REPOSITORY_ACCESS",
+    "asset_count": 5
+  },
+  "samsung_delivery": {
+    "signed_apk_install": "PASS",
+    "signed_aab_split_install": "PASS",
+    "installed_split_count": 4,
+    "version_code": 1,
+    "signing_certificate_match": true,
+    "existing_codexdebug_package_preserved": true
+  },
+  "play_submission": {
+    "local_package_prepared": true,
+    "developer_account_state": "CREATION_REQUIRED",
+    "published": false
+  }
+}
