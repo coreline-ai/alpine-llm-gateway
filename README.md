@@ -1,70 +1,100 @@
 <div align="center">
   <a href="https://github.com/coreline-ai/alpine-llm-gateway">
-    <img src="branding/alpine-fold-play-512.png" width="112" alt="Alpine AI Workspace icon">
+    <img src="branding/alpine-fold-play-512.png" width="120" alt="Alpine AI Workspace 로고">
   </a>
 
   <h1>Alpine AI Workspace</h1>
 
-  <p><strong>Android 외부 LLM 채팅과 로컬 Alpine Linux 작업 환경을 하나의 모듈형 워크스페이스로 결합합니다.</strong></p>
-  <p>빠른 채팅은 Android에서 Provider에 직접 연결하고, Alpine 작업 모드는 PRoot·Python Gateway·터미널·패키지 도구를 사용합니다.</p>
+  <p><strong>Android LLM 채팅과 로컬 Alpine Linux 작업 환경을 하나의 안전한 모듈형 워크스페이스로.</strong></p>
+  <p>빠른 Provider 채팅, 공식 Codex App Server 로그인, PRoot Runtime, Python Gateway와 재사용 Android SDK를 한 저장소에서 개발합니다.</p>
 
   <p>
-    <a href="https://github.com/coreline-ai/alpine-llm-gateway/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/coreline-ai/alpine-llm-gateway/actions/workflows/ci.yml/badge.svg?branch=main"></a>
-    <img alt="Version 0.3.0" src="https://img.shields.io/badge/version-0.3.0-B9F227?style=flat-square&labelColor=10120F">
-    <img alt="Android API 26+" src="https://img.shields.io/badge/Android-API%2026%2B-3DDC84?style=flat-square&logo=android&logoColor=white">
-    <img alt="Kotlin 2.2.21" src="https://img.shields.io/badge/Kotlin-2.2.21-7F52FF?style=flat-square&logo=kotlin&logoColor=white">
-    <img alt="OAuth 2.0 with PKCE" src="https://img.shields.io/badge/auth-OAuth%202.0%20%2B%20PKCE-4F46E5?style=flat-square">
-    <img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white">
-    <img alt="Alpine 3.21.3" src="https://img.shields.io/badge/Alpine-3.21.3-0D597F?style=flat-square&logo=alpinelinux&logoColor=white">
-    <img alt="Current-state distribution authorized" src="https://img.shields.io/badge/distribution-OWNER%20AUTHORIZED-2563EB?style=flat-square">
+    <a href="https://github.com/coreline-ai/alpine-llm-gateway/actions/workflows/ci.yml"><img alt="GitHub Actions CI" height="28" src="https://github.com/coreline-ai/alpine-llm-gateway/actions/workflows/ci.yml/badge.svg?branch=main&event=push"></a>
+    <img alt="Internal development" src="https://img.shields.io/badge/status-INTERNAL%20DEVELOPMENT-F59E0B?style=for-the-badge&logo=github&logoColor=white">
+    <img alt="Version 0.3.0" src="https://img.shields.io/badge/version-0.3.0-B9F227?style=for-the-badge&logo=semver&logoColor=10120F&labelColor=10120F">
+    <img alt="License not declared" src="https://img.shields.io/badge/license-NOT%20DECLARED-D73A49?style=for-the-badge&logo=opensourceinitiative&logoColor=white">
   </p>
 
   <p>
-    <a href="#screens">앱 화면</a> ·
-    <a href="#quick-start">빠른 시작</a> ·
-    <a href="#architecture">아키텍처</a> ·
-    <a href="#modules">모듈</a> ·
-    <a href="#verification">검증</a> ·
-    <a href="#docs">문서</a>
+    <img alt="Android API 26+" src="https://img.shields.io/badge/Android-API%2026%2B-3DDC84?style=flat-square&logo=android&logoColor=white">
+    <img alt="Target SDK 36" src="https://img.shields.io/badge/target%20SDK-36-3DDC84?style=flat-square&logo=android&logoColor=white">
+    <img alt="Kotlin 2.2.21" src="https://img.shields.io/badge/Kotlin-2.2.21-7F52FF?style=flat-square&logo=kotlin&logoColor=white">
+    <img alt="Jetpack Compose" src="https://img.shields.io/badge/Jetpack-Compose-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white">
+    <img alt="Gradle 8.11.1" src="https://img.shields.io/badge/Gradle-8.11.1-02303A?style=flat-square&logo=gradle&logoColor=white">
+    <img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white">
+    <img alt="Alpine Linux 3.21.3" src="https://img.shields.io/badge/Alpine-3.21.3-0D597F?style=flat-square&logo=alpinelinux&logoColor=white">
+    <img alt="Codex App Server 0.147.0" src="https://img.shields.io/badge/Codex%20App%20Server-0.147.0-101010?style=flat-square&logo=openai&logoColor=white">
+    <img alt="ARM64 verified" src="https://img.shields.io/badge/ARM64-Samsung%20verified-0091BD?style=flat-square&logo=arm&logoColor=white">
+  </p>
+
+  <p>
+    <a href="#overview"><strong>개요</strong></a> ·
+    <a href="#status"><strong>현재 상태</strong></a> ·
+    <a href="#screens"><strong>화면</strong></a> ·
+    <a href="#architecture"><strong>아키텍처</strong></a> ·
+    <a href="#modules"><strong>모듈</strong></a> ·
+    <a href="#quick-start"><strong>빠른 시작</strong></a> ·
+    <a href="#verification"><strong>검증</strong></a> ·
+    <a href="#roadmap"><strong>로드맵</strong></a> ·
+    <a href="#docs"><strong>문서</strong></a>
   </p>
 </div>
 
 > [!IMPORTANT]
-> 현재 `0.3.0`은 프로젝트 소유자의 `PROCEED_CURRENT_STATE` 결정으로 **현재 상태 공개 배포가 승인**되었습니다. 미실행 검증과 미승인 legal/source 항목은 감사 기록에서 `NOT_RUN`/`BLOCKED`로 유지합니다. Production signing과 GitHub Release 게시를 완료했고 Google Play는 developer account 등록 완료 후 이어서 배포합니다.
+> **현재 제품은 공개 배포 예정이 없는 내부 개발·검증 단계입니다.** 핵심 로그인·채팅·Runtime 기술 검증은 진행됐지만 GUI/UX가 배포 기준에 도달하지 않았습니다. 별도 지시 전까지 Google Play 등록, 신규 공개 릴리스, 추가 배포를 진행하지 않습니다.
 
-Production-signed v0.3.0 artifact는 [GitHub Release](https://github.com/coreline-ai/alpine-llm-gateway/releases/tag/v0.3.0)에 게시했다. 현재 repository가 private이므로 다운로드 범위는 repository 접근 사용자이며, Google Play 공개는 developer account 등록 완료 후 진행한다.
+> [!WARNING]
+> 저장소 루트 `LICENSE`가 아직 없습니다. 이 README와 저장소 접근 권한은 프로젝트 코드의 공개 사용·수정·재배포 허가를 부여하지 않습니다.
 
-## ✨ 프로젝트 개요
+<a id="overview"></a>
+## 🧭 프로젝트 개요
 
-`alpine-llm-gateway`는 다음 네 가지 제품·SDK 경계를 한 저장소에서 관리합니다.
+`alpine-llm-gateway`는 Android 앱, 재사용 SDK, Alpine Runtime과 Python Gateway를 하나의 검증 가능한 경계로 묶습니다. 사용자 요청은 **Android 직접 Provider**, **Alpine 작업 환경**, **공식 Codex App Server** 중 명시적으로 선택된 경로로만 실행되며, dispatch 이후 자동 재전송이나 조용한 backend 전환을 허용하지 않습니다.
 
-| 영역 | 역할 | 현재 위치 |
+| 제품 경계 | 역할 | 현재 구현 |
 |---|---|---|
-| **Alpine AI Workspace** | 빠른 채팅과 Alpine 작업 모드를 한 Android 앱에서 제공 | `:integrated-app` |
-| **재사용 Android SDK** | 채팅, OAuth Provider, Runtime, Bridge, 터미널, Workspace를 선택 조립 | 19개 AAR/JAR 모듈 |
-| **Python Gateway** | Alpine 안에서 Provider 차이를 숨기는 dependency-free gateway와 `llmctl` | `alpine_llm/` |
+| 📱 **Alpine AI Workspace** | 빠른 채팅과 Alpine 작업 모드를 제공하는 Compose 앱 | `:integrated-app`, API 26–36 |
+| 🧩 **재사용 Android SDK** | Chat·OAuth·Runtime·Bridge·Workspace를 선택 조립 | Gradle 28개 모듈, publication artifact 19개 |
+| 🐧 **Alpine Runtime** | PRoot, PTY, package allowlist, workspace와 lifecycle | Alpine `3.21.3`, ARM64 중심 |
+| 🐍 **Python Gateway** | Provider 차이를 숨기는 dependency-free gateway와 CLI | Python `3.11+`, `llm-gatewayd`, `llmctl` |
+| 🤖 **Codex Agent** | 앱 소유 OAuth client ID 없이 공식 ChatGPT browser login | Codex App Server `0.147.0`, feature 기본 OFF |
 
-`integrated-app`과 `demo-chatbot`은 **서로 다른 Android 앱**입니다. 이 README의 화면은 Android 통합 제품인 `dev.alpine.integrated`를 기준으로 합니다.
+### 왜 이 구조인가
 
-### 핵심 특징
+- ⚡ **빠른 응답** — 일반 대화는 Android에서 Provider HTTPS로 직접 전송합니다.
+- 🐧 **로컬 작업성** — Linux 도구가 필요한 요청만 Alpine Runtime과 Python Gateway를 사용합니다.
+- 🔐 **Credential 격리** — Android credential은 Host에 남고 Alpine Guest에는 전달되지 않습니다.
+- 🧯 **Fail-closed 라우팅** — 모델, backend, approval 또는 stream 경계가 불명확하면 자동 보정하지 않습니다.
+- 🧱 **선택형 SDK** — Runtime payload 없이 Chat만, 또는 Runtime·Bridge·UI까지 필요한 만큼 조립합니다.
+- 🧪 **증거 중심 개발** — unit/lint/artifact scan과 Samsung 실기기 결과를 `PASS`·`NOT_RUN`·`BLOCKED`로 구분합니다.
 
-- ⚡ **빠른 채팅 모드** — Android OAuth/Keystore에서 Provider를 직접 호출
-- 🐧 **Alpine 작업 모드** — Alpine 3.21.3, PRoot, Python Gateway, 터미널과 패키지 도구
-- 🖥️ **안전한 ANSI terminal** — bounded scrollback, ANSI colour·cursor·clear·alternate screen, raw output 없는 종료 code 요약
-- 🔐 **Credential 격리** — OAuth token은 Android Host에만 보관하고 Guest에는 전달하지 않음
-- 🔁 **안전한 라우팅** — dispatch 전 사용자 승인 fallback, dispatch 후 자동 재전송 금지
-- 💬 **공통 채팅 Feature** — 다중 대화, 암호화 저장, 모델, Skill, Persona, Stop과 Retry
-- 🗂️ **Profile 모델 카탈로그** — 사용자 후보 저장·활성화와 unavailable 모델의 자동 치환 차단
-- 📦 **선택형 SDK** — Runtime payload 없이 채팅만, 또는 Runtime·Bridge·UI까지 조립 가능
-- 🧯 **방어적 Gateway** — fail-closed 모델 정책, 응답 크기 제한, retry/circuit breaker, redacted 오류
-- 🧪 **실기기 검증** — Samsung Android 16 arm64에서 통합 채팅과 Runtime/Bridge probe 검증
+<a id="status"></a>
+## 🚦 현재 개발 상태
+
+| 영역 | 상태 | 현재 판정 |
+|---|---|---|
+| 공식 Codex App Server 로그인 | ✅ `PASS` | Samsung에서 browser callback, account/model, credential refresh와 cold start 유지 확인 |
+| Codex 채팅 lifecycle | ✅ `PASS` | multi-turn, stream, Stop, no-replay, controlled restart, Activity recreation 확인 |
+| 기존 Provider·Alpine 회귀 | ✅ `PASS` | 확장 ON/OFF 각각 `1821/1821`, Python 최종 `148/148`, pytest `155/155` |
+| Runtime·PTY·Bridge | ✅ `PASS` | ARM64 Samsung에서 PRoot, initial PTY size, Gateway lifecycle, repair/restart 확인 |
+| SDK publication matrix | ✅ `PASS` | publication `19/19`, 외부 consumer 조합 `8/8` |
+| GUI/UX | 🚧 `REDESIGN REQUIRED` | token·접근성 자동 계약은 통과했지만 정보 구조·시각 위계·핵심 흐름 재설계 필요 |
+| ARM64 16 KiB 실제 실행 | ⛔ `BLOCKED` | 현재 검증 Samsung은 4 KiB page; static ELF/zipalign만 PASS |
+| 배포 | ⏸️ `NO_DEPLOYMENT_PLANNED` | private `v0.3.0` 산출물은 내부 검증 이력으로만 보존 |
+
+- **최신 원격 성공 기준선:** `main@f26931a`, GitHub Actions run `31875767445`
+- **검증 release source:** `v0.3.0@a4ccd4f`, run `31866945292`
+- **고정 실기기 기준:** Samsung `SM-S931N`, Android 16/API 36, `arm64-v8a`
+- **다음 제품 우선순위:** GUI/UX 감사 → 정보 구조와 디자인 방향 확정 → 핵심 화면 개편 → Samsung 사용성·접근성 회귀
+
+Production-signed `v0.3.0` APK/AAB와 [private GitHub Release](https://github.com/coreline-ai/alpine-llm-gateway/releases/tag/v0.3.0)는 이미 생성된 **내부 검증 증거**입니다. 산출물 존재는 현재 배포 의사를 의미하지 않습니다. 상세 정본은 [HANDOFF.md](HANDOFF.md)를 따릅니다.
 
 <a id="screens"></a>
 ## 📱 앱 화면
 
-실제 Android 실기기에서 캡처한 **공개 가능한 핵심 화면 15개**입니다. 2026-08-09에 첫 실행 안내, Provider 빈 상태, Alpine Gateway 준비 상태, Runtime 설치 대시보드와 terminal 명령 패널을 추가했습니다. OAuth 계정·client ID·token·기기 serial·실사용 terminal 출력은 포함하지 않았습니다.
+현재 내부 개발 빌드에서 캡처한 **공개 가능한 핵심 화면 15개**입니다. 기능 위치를 설명하는 개발 증거이며 최종 GUI 시안이 아닙니다. OAuth 계정·client ID·token·기기 serial·실사용 terminal 출력은 포함하지 않았습니다.
 
-캡처는 각 기기의 원본 비율을 보존합니다. Samsung 기준 `1080 × 2340` 10개와 PD20 기준 `1080 × 2160` 7개이며, 이미지를 누르면 원본을 볼 수 있습니다.
+캡처는 각 기기의 원본 비율을 보존합니다. Samsung 기준 `1080 × 2340` 10개와 PD20 기준 `1080 × 2160` 5개이며, 이미지를 누르면 원본을 볼 수 있습니다.
 
 <details open>
 <summary><strong>공개 가능한 핵심 화면 갤러리 펼치기</strong></summary>
@@ -109,68 +139,101 @@ Production-signed v0.3.0 artifact는 [GitHub Release](https://github.com/corelin
 
 ## 🧭 두 가지 실행 모드
 
-| 모드 | 실행 경로 | 적합한 작업 | Runtime 필요 |
+| 모드 | 실행 경로 | 적합한 작업 | 추가 실행 조건 |
 |---|---|---|---|
-| **빠른 채팅** | Android → OAuth session → Provider HTTPS | 일반 대화, 빠른 응답, Runtime 장애 시 독립 사용 | 아니요 |
-| **Alpine 작업** | Android → PRoot/Alpine → Python Gateway → loopback Host Bridge → Provider HTTPS | 터미널, Python, Git, 패키지, Linux 기반 Skill과 자동화 | 예 |
+| ⚡ **빠른 채팅** | Android → OAuth session → Provider HTTPS | 일반 대화, 빠른 응답, Runtime 장애와 독립된 채팅 | 없음 |
+| 🐧 **Alpine 작업** | Android → PRoot/Alpine → Python Gateway → Host Bridge → Provider HTTPS | 터미널, Python, Git, 허용 패키지와 Linux 기반 작업 | Alpine Runtime |
+| 🤖 **Codex Agent** | Android → app-private Codex App Server → official ChatGPT login/API | 공식 Codex agent multi-turn과 Stop | pinned ARM64 artifact |
 
-두 모드는 동일한 대화·모델·Skill·Persona 상태를 사용합니다. Alpine 준비 실패 시 fallback은 Provider dispatch 전에 사용자가 승인한 **해당 요청 한 번**만 빠른 채팅으로 전송하며, 첫 Provider dispatch 또는 delta 이후에는 중복 비용을 막기 위해 다른 backend로 자동 전환하지 않습니다.
+빠른 채팅과 Alpine 작업 모드는 같은 대화·모델·Skill·Persona 상태를 사용합니다. Alpine 준비 실패 시 fallback은 **Provider dispatch 전** 사용자가 승인한 요청 한 번에만 적용합니다. 첫 Provider dispatch나 stream delta 이후에는 중복 전송과 중복 비용을 막기 위해 다른 backend로 자동 전환하지 않습니다.
 
-첫 실행에서는 두 모드의 실행 경로, 준비 조건, 기능, 제한과 복구 방법을 비교하는 안내가 자동으로 열립니다. `빠른 채팅으로 시작` 또는 `Alpine 작업으로 시작`을 명시적으로 선택해야 완료되며, `나중에`로 닫으면 다음 새 실행에서 다시 표시됩니다. 완료 후에도 상단 모드 선택 옆 `안내` 버튼으로 언제든 다시 열 수 있습니다. 안내에서 Alpine 작업을 선택해도 Runtime 설치나 시작은 자동 실행하지 않습니다.
+Codex Agent는 direct Provider profile과 분리된 synthetic connection입니다. Android 앱은 외부 `client_id`/`client_secret`을 소유하거나 token exchange를 직접 구현하지 않고, 공식 App Server가 browser callback·credential refresh·logout을 소유합니다.
 
 <a id="architecture"></a>
-## 🏗 아키텍처
+## 🏗️ 아키텍처
 
 ```mermaid
 flowchart LR
-    UI["Alpine AI Workspace<br/>Compose UI"]
-    ROUTER["Safe Chat Router<br/>request ledger"]
-    DIRECT["Fast Chat Backend"]
-    HOST["Android OAuth · Keystore<br/>Provider session"]
+    UI["Alpine AI Workspace<br/>Jetpack Compose"]
+    ROUTER["Safe Chat Router<br/>request ledger · no replay"]
     PROVIDER["External LLM Provider<br/>HTTPS"]
 
-    RUNTIME["Runtime Host<br/>install · health · recovery"]
-    GUEST["PRoot · Alpine 3.21.3<br/>PTY · apk · workspace"]
-    GATEWAY["Python Gateway · llmctl<br/>127.0.0.1:8787"]
-    BRIDGE["Host Bridge<br/>TTL capability · loopback"]
+    subgraph FAST["⚡ Fast Chat"]
+      DIRECT["Direct Backend"]
+      AUTH["Android OAuth · Keystore"]
+      DIRECT --> AUTH
+    end
+
+    subgraph WORK["🐧 Alpine Work"]
+      HOST["Runtime Host"]
+      GUEST["PRoot · Alpine 3.21.3<br/>PTY · apk · workspace"]
+      GATEWAY["Python Gateway · llmctl"]
+      BRIDGE["Loopback Host Bridge<br/>TTL capability"]
+      HOST --> GUEST --> GATEWAY --> BRIDGE
+    end
+
+    subgraph CODEX["🤖 Codex Agent"]
+      CODEX_BACKEND["Codex Chat Backend"]
+      APP_SERVER["Codex App Server 0.147.0<br/>app-private CODEX_HOME"]
+      CODEX_BACKEND --> APP_SERVER
+    end
 
     UI --> ROUTER
-    ROUTER --> DIRECT --> HOST --> PROVIDER
-    ROUTER --> RUNTIME --> GUEST --> GATEWAY --> BRIDGE --> HOST
+    ROUTER --> DIRECT
+    ROUTER --> HOST
+    ROUTER --> CODEX_BACKEND
+    AUTH --> PROVIDER
+    BRIDGE --> AUTH
+    APP_SERVER --> PROVIDER
 ```
 
-### Credential 경계
+### 🔐 보안과 credential 경계
 
-1. OAuth access/refresh token은 Android Keystore-backed store에만 저장합니다.
-2. OAuth lifecycle marker에는 profile/attempt ID와 상태·시각만 저장하며 token·code·PKCE state/verifier는 포함하지 않습니다.
-3. Activity 재생성·process death 뒤에는 이전 OAuth transaction을 자동 재개하지 않고 폐기한 뒤 명시적 재로그인을 요구합니다.
-4. Alpine Guest에는 token 대신 loopback endpoint와 짧은 TTL capability 파일만 제공합니다.
-5. Host Bridge는 bounded concurrency, timeout, request ID, redacted error와 health metric을 적용합니다.
-6. Python Gateway는 기본 `127.0.0.1` bind, 모델 allowlist, 입력·출력·SSE 크기 제한을 적용합니다.
-7. 패키지 install/delete/update는 exact allowlist와 사용자 승인 뒤 동일한 고정 `apk --simulate` argv를 먼저 실행합니다. 사전 확인이 실패하거나 timeout이면 실제 mutation은 보내지 않습니다. 통과한 이름만 `apk add`/`del`/지정 `upgrade`로 실행하며 whole-system update·자동 retry는 제공하지 않습니다.
+| 경계 | 강제 규칙 |
+|---|---|
+| Android Provider OAuth | access/refresh token은 Keystore-backed store에만 보관하고 Guest로 전달하지 않음 |
+| OAuth lifecycle | process death 뒤 이전 authorization transaction을 자동 재개하지 않고 명시적 재로그인 요구 |
+| Codex Agent | App Server가 credential을 소유하며 Android는 `auth.json`, token, callback query를 읽거나 로그하지 않음 |
+| Alpine Guest | Host credential 대신 loopback endpoint와 짧은 TTL capability만 사용 |
+| Host Bridge | loopback-only, bounded concurrency/timeout/request size, redacted error |
+| Python Gateway | `127.0.0.1` 기본 bind, model allowlist, body/SSE 크기 제한, bounded retry |
+| Package mutation | exact allowlist + 사용자 승인 + 동일 argv `apk --simulate` 성공 뒤에만 실행 |
+| Streaming | delta 시작 뒤 retry·replay·backend fallback 금지 |
 
 <a id="modules"></a>
-## 🧩 모듈 구성
+## 🧩 모듈 맵
 
-| 그룹 | 주요 모듈 | 책임 |
-|---|---|---|
-| Chat | `alpine-chat-feature`, `alpine-chat-routing` | 대화 상태, 암호화 저장, UI, backend 중립 계약 |
-| Provider | `alpine-chat-provider-android`, `android` | OAuth profile CRUD, Keystore, Provider adapter |
-| Backend | `alpine-chat-backend-direct`, `alpine-chat-backend-alpine`, `alpine-chat-backend-codex` | 빠른 채팅, Gateway, 별도 Codex Agent 경로 연결 |
-| Runtime | `alpine-runtime-api`, `-android`, `-host`, `-ui-compose` | 설치, 실행, 복구, PTY, 터미널, 패키지 상태 |
-| Artifact | `alpine-runtime-pack-bundled`, `-pack-x86_64`, `-artifact-play`, `alpine-codex-appserver-pack-android` | rootfs·PRoot·loader와 optional pinned Codex executable의 checksum/SBOM |
-| LLM Bridge | `alpine-llm-bridge`, `alpine-llm-gateway-pack-bundled` | capability, Host Bridge와 Python Gateway lifecycle |
-| Workspace | `alpine-workspace-api`, `alpine-workspace-android` | app-private 경로, quota, bounded atomic file 작업 |
-| Background/Test | `alpine-runtime-background-android`, `alpine-runtime-testkit` | FGS/WorkManager 정책과 결정적 fake runtime |
+> Gradle 프로젝트는 **28개 모듈**로 구성되며, 재사용 publication 기준은 **19개 AAR/JAR**입니다. 제품 앱, probe와 sample은 publication SDK 수에 포함하지 않습니다.
 
-전체 artifact 역할과 권장 조합은 [Alpine Runtime SDK 모듈 가이드](docs/alpine-runtime-sdk-modules.md)를 참고하세요.
+| 그룹 | 아이콘 | 주요 모듈 | 책임 |
+|---|:---:|---|---|
+| Product UI | 📱 | `integrated-app`, `alpine-chat-feature` | Compose shell, 대화, History, Skill, Persona, 상태 UI |
+| Routing | 🧭 | `alpine-chat-routing` | backend-neutral request ledger, fallback 승인, no-replay |
+| Provider | 🔑 | `alpine-chat-provider-android`, `android` | OAuth profile CRUD, Keystore, Provider adapter |
+| Backends | 🔀 | `alpine-chat-backend-direct`, `-alpine`, `-codex` | Direct·Gateway·Codex Agent 연결 |
+| Codex | 🤖 | `alpine-codex-appserver-android`, `-pack-android` | pinned executable, stdio JSONL/RPC, auth와 lifecycle |
+| Runtime | 🐧 | `alpine-runtime-api`, `-android`, `-host`, `-ui-compose` | install, health, recovery, PTY, terminal, package UI |
+| Artifacts | 📦 | `alpine-runtime-pack-bundled`, `-pack-x86_64`, `-artifact-play` | rootfs·PRoot·loader, checksum, inventory, delivery boundary |
+| Bridge | 🌉 | `alpine-llm-bridge`, `alpine-llm-gateway-pack-bundled` | TTL capability, Host Bridge, bundled Python Gateway |
+| Workspace | 🗂️ | `alpine-workspace-api`, `alpine-workspace-android` | app-private quota, bounded atomic import/export/share |
+| Background/Test | 🧪 | `alpine-runtime-background-android`, `alpine-runtime-testkit` | FGS/WorkManager policy와 deterministic fake runtime |
+
+전체 artifact 역할과 소비자 조합은 [Runtime SDK 모듈 가이드](docs/alpine-runtime-sdk-modules.md)를 확인하세요.
 
 <a id="quick-start"></a>
 ## 🚀 빠른 시작
 
-### Android 통합 앱
+### 요구사항
 
-요구사항: JDK 17, Android SDK 36, Android 8.0(API 26) 이상
+| 도구 | 기준 | 비고 |
+|---|---:|---|
+| JDK | `17` | Android/Gradle build |
+| Android SDK | `36` | min SDK `26`, target/compile SDK `36` |
+| Gradle | wrapper `8.11.1` | 시스템 Gradle 대신 `./gradlew` 사용 |
+| Python | `3.11+` | Gateway, verifier와 packaging script |
+| Android device | API 26+ | 주 검증 기준은 Samsung Android 16 ARM64 |
+
+### 📱 Android 통합 앱
 
 ```bash
 git clone https://github.com/coreline-ai/alpine-llm-gateway.git
@@ -180,56 +243,37 @@ cd alpine-llm-gateway
 adb install -r integrated-app/build/outputs/apk/debug/integrated-app-debug.apk
 ```
 
-앱 실행 후:
+앱 실행 흐름:
 
-1. 첫 실행 안내에서 두 모드를 비교하고 시작 모드를 선택합니다.
-2. `빠른 채팅`에서 `LLM connection`을 엽니다.
-3. 앱 소유·승인된 OAuth public client registration으로 profile을 만듭니다.
-4. 로그인 후 Provider와 모델을 선택합니다.
-5. Alpine 기능은 `Alpine 작업 → 터미널·도구 → 설치` 순서로 준비합니다.
-6. Gateway health가 정상이면 Gateway 채팅, 터미널과 허용 패키지 설치를 사용할 수 있습니다.
+1. 첫 실행 안내에서 `빠른 채팅`과 `Alpine 작업`의 차이를 확인합니다.
+2. `LLM 연결`에서 앱 소유·승인된 Provider registration으로 profile을 만듭니다.
+3. 로그인 뒤 Provider와 모델을 명시적으로 선택합니다.
+4. Linux 기능은 `Alpine 작업 → 터미널·도구 → Runtime 설치` 순서로 준비합니다.
+5. Gateway health가 정상일 때 채팅, terminal과 allowlist package 작업을 사용합니다.
 
-> [!CAUTION]
-> 다른 앱이나 공식 CLI의 public client ID·fingerprint를 복사해 제품에 포함하지 마세요. 현재 Android direct OAuth 화면의 Anthropic/Codex/xAI 항목은 compatibility/reference 경로이며 공식 제품 승인을 의미하지 않습니다.
+> **보안 주의 —** 다른 앱이나 공식 CLI의 OAuth client identity·fingerprint를 복사해 Android direct Provider에 포함하지 마세요. Anthropic/Codex/xAI direct OAuth 유형은 compatibility/reference 경로이며 공식 제품 승인을 의미하지 않습니다.
 
-### Codex Agent 내부 검증 build
+### 🤖 Codex Agent 내부 검증 build
 
-공식 Codex App Server가 소유하는 ChatGPT login은 기존 direct Provider profile과 별도인
-`Codex Agent (ChatGPT 로그인)`으로 구현되어 있으며 기본 build에서는 OFF다. pinned arm64 artifact를 로컬에
-provision한 뒤 내부 Samsung 검증 build에서만 명시적으로 켠다.
+공식 Codex App Server 경로는 기본 build에서 OFF입니다. 저장소 밖에서 확보한 **고정 버전 ARM64 artifact**를 import한 뒤 내부 검증 package에서만 켭니다.
 
 ```bash
-python3.11 scripts/import-codex-appserver-artifact.py /path/to/openai-codex-0.147.0-linux-arm64.tgz
-./gradlew :integrated-app:assembleDebug -PcodexAppServerEnabled=true
+python3.11 scripts/import-codex-appserver-artifact.py   /path/to/openai-codex-0.147.0-linux-arm64.tgz
+
+./gradlew :integrated-app:assembleDebug   -PcodexAppServerEnabled=true
 ```
 
-동일한 내부 검증 package를 data clear 없이 feature OFF로 복귀시키는 APK는 다음처럼 별도로 빌드한다.
+동일 package/data/signature 경계의 feature-OFF rollback build:
 
 ```bash
-./gradlew :integrated-app:assembleDebug -PcodexAppServerRollbackBuild=true
+./gradlew :integrated-app:assembleDebug   -PcodexAppServerRollbackBuild=true
 ```
 
-ON switch는 기본적으로 fail-closed다. 프로젝트 소유자의 명시적 현재 상태 배포 결정 경로에서는 Codex ON
-production APK/AAB를 생성할 수 있으며, 증거 Gate를 `PASS`로 바꾸지 않는다.
+과거 production/signing 경로는 재현성을 위해 남아 있지만 현재 `NO_DEPLOYMENT_PLANNED` 상태에서는 실행하지 않습니다. 상세 계약은 [Codex App Server 통합 문서](docs/codex-appserver-integration.md)를 따릅니다.
 
-```bash
-scripts/build-current-state-public-release.sh --unsigned-candidate
-```
+### 🐍 Python Gateway
 
-macOS에서 production signing material은 repository 밖 Application Support와 Keychain에 보관한다.
-다음 경로는 debug key를 사용하지 않으며 signed APK/AAB의 인증서가 동일한지도 검증한다.
-
-```bash
-scripts/configure-macos-release-signing.sh
-scripts/build-current-state-signed-release-macos.sh
-```
-
-credential, thread/turn 경계, 검증·rollback 절차는
-[Codex App Server Android 통합](docs/codex-appserver-integration.md)을 따른다.
-
-### Python Gateway
-
-요구사항: Python 3.11 이상. 런타임 의존성은 Python 표준 라이브러리만 사용합니다.
+런타임 의존성 없이 Python 표준 라이브러리만 사용합니다.
 
 ```bash
 python3.11 -m venv .venv
@@ -238,11 +282,10 @@ pip install -e .
 
 cp config.example.json config.json
 export LLM_API_KEY="..."
-
 llm-gatewayd serve --config config.json
 ```
 
-다른 터미널에서:
+다른 terminal에서:
 
 ```bash
 llmctl models
@@ -250,9 +293,21 @@ llmctl run --model auto --prompt "Alpine에서 동작하는지 설명해줘"
 llmctl run --model auto --prompt "스트리밍 테스트" --stream --format jsonl
 ```
 
-공통 입력은 OpenAI-compatible message 형식이며 Provider native request 변환은 Gateway가 담당합니다. `stream`은 JSON Boolean만 허용하고, `allowed_models`가 비어 있거나 요청 모델이 허용되지 않으면 `allow_passthrough: true`를 명시하지 않는 한 fail-closed 처리합니다.
+공통 입력은 OpenAI-compatible message 형식입니다. `allowed_models`가 비어 있거나 요청 모델이 허용되지 않으면 `allow_passthrough: true`를 명시하지 않는 한 fail-closed 처리합니다.
 
-## 🛡 Gateway 안전 기본값
+### 자주 쓰는 명령
+
+| 목적 | 명령 |
+|---|---|
+| Python unit | `python3.11 -m unittest discover -s tests -v` |
+| Python pytest | `python3.11 -m pytest -q` |
+| 통합 앱 build | `./gradlew :integrated-app:assembleDebug` |
+| 통합 앱 lint | `./gradlew :integrated-app:lintDebug` |
+| UI/README 계약 | `python3.11 scripts/verify-ui-design-contract.py` |
+| release readiness 감사 | `python3.11 scripts/verify-release-readiness.py distribution/release-readiness.json --check-evidence` |
+| 내부 SDK 검증 | `./scripts/release-local.sh` |
+
+## 🛡️ Gateway 안전 기본값
 
 | 설정 | 기본값 | 의미 |
 |---|---:|---|
@@ -263,127 +318,133 @@ llmctl run --model auto --prompt "스트리밍 테스트" --stream --format json
 | `provider_retry_max_backoff_seconds` | 8초 | backoff와 `Retry-After` 상한 |
 | `provider_circuit_failure_threshold` | 5 | circuit open 연속 실패 기준 |
 | `provider_circuit_recovery_seconds` | 30초 | half-open probe 대기시간 |
-| `allow_passthrough` | `false` | 모델 allowlist 우회 기본 차단 |
+| `allow_passthrough` | `false` | model allowlist 우회 기본 차단 |
 
-Streaming은 Provider HTTP 연결·status 단계까지만 재시도합니다. stream이 열린 뒤에는 delta 중복을 막기 위해 재시도하지 않고 redacted SSE error event와 `[DONE]`으로 종료합니다.
+Streaming은 Provider HTTP 연결·status 단계까지만 재시도합니다. stream이 열린 뒤에는 delta 중복을 막기 위해 retry하지 않고 redacted SSE error event와 `[DONE]`으로 종료합니다.
 
 <a id="verification"></a>
 ## 🧪 검증
 
-### 자주 사용하는 로컬 검증
+### 핵심 검증 요약
 
-```bash
-python3 -m unittest discover -s tests -v
-
-./gradlew \
-  :alpine-chat-feature:testDebugUnitTest \
-  :alpine-runtime-ui-compose:testDebugUnitTest \
-  :integrated-app:assembleDebug \
-  :integrated-app:assembleDebugAndroidTest \
-  :integrated-app:lintDebug
-```
-
-Samsung 실기기 통합 E2E:
-
-```bash
-ANDROID_SERIAL=<device-serial> ./gradlew :integrated-app:connectedDebugAndroidTest
-```
-
-내부 SDK release bundle 전체 검증:
-
-```bash
-./scripts/release-local.sh
-```
-
-### 현재 검증 상태
-
-| 항목 | 상태 | 기준 |
+| 검증 축 | 결과 | 최신 근거 |
 |---|---|---|
-| Python unit/compile/smoke | ✅ CI PASS | evidence run `31797601916`, `main@a1985f3`; 구현 run `31796454558`, `main@493546f` |
-| 결정론 Provider fault matrix | ✅ Local PASS | Python 114/114; status·timeout·malformed/oversized SSE·strict UTF-8·no-retry |
-| Android modules·publication matrix | ✅ CI PASS | remote main run `31796454558`, topic run `31795327701`, 동일 commit `493546f` |
-| 영속 모델 카탈로그·no-silent-switch | ✅ Main/CI/Local/Samsung PASS | legacy/malformed migration, enabled descriptor, transport-aware stale cache, unavailable Send/Retry, encrypted restore·IME·200% font; Samsung 격리 test package 18/18. integrated package는 signature 불일치로 데이터 보존을 위해 connected test `NOT_RUN` |
-| 통합 앱 compile·unit·lint·APK | ✅ Local PASS | 2026-08-09 Alpine fallback viewport·접근성·한글 IME 반영 |
-| Samsung Android regression | ✅ PASS | OAuth core 3/3, Provider 12/12, Runtime Compose 10/10, integrated-app 10/10; test setup은 DreamActivity만 wake하고 Keyguard를 우회하지 않음 |
-| Samsung Demo 전체 회귀 | ✅ 35/35 PASS | Provider·Chat·lifecycle·Markdown·theme |
-| Samsung OAuth lifecycle | ✅ Local PASS | OAuth core 3건 + Provider 12건 + 복구 3건 + credential-free `am force-stop` cold start |
-| Samsung Provider 변경 회귀 | ✅ 25/25 PASS | OAuth 저장소 3건 + Provider 12건 + Integrated 10건 |
-| Integrated APK OAuth/app boundary scan | ✅ Local PASS | production source·APK에서 consumer/CLI fingerprint·known copied registration/API key/private key·demo/probe/sample package를 fail-closed 검사 |
-| arm64 Runtime·PTY·Bridge·Gateway probe | ✅ PASS | Samsung actual PRoot: initial `stty size=28 96`, fail-closed `INITIAL_SIZE_ONLY`/`TERMINAL_RESIZE_UNSUPPORTED`, terminal exit event, Host lifecycle `STARTED:3`/`STOPPED:3`, restart/repair healthy |
-| forkpty direct PTY safety / PRoot signal gap | ⚠️ Fail-closed verified | native shell 3/3: kernel `SIGWINCH`, input, unsafe input rejection, exec/terminate lifecycle PASS; unpatched PRoot: dynamic `stty`/input/repeat/storm/close PASS but guest `SIGWINCH` trap 미수신 → `DYNAMIC` 미승격 |
-| ANSI terminal screen renderer·exit summary | ✅ Local PASS | colour·cursor·clear·alternate screen·CJK·raw output 없는 마지막 종료 code unit regression + integrated compile |
-| Developer tool fixed smoke workflow | ✅ Local PASS | reusable direct argv Python·Git·SSH·Node profile + API/Host regression; actual repository install은 `NOT_RUN` |
-| Runtime Compose package/tool action | ✅ Samsung PASS | 10/10 — terminal accessibility/한글 IME·Enter/Tab/Esc/Ctrl+C external key regression·exit summary·confirmed SIGTERM/SIGKILL, fixed Git smoke, package snapshot/workspace action forwarding, simulation failure와 oversized snapshot total의 bounded guidance |
-| Android 12 tablet Runtime Compose | ✅ PASS | 8/8 — scroll container 안에서 package 검토와 workspace import/export/share action이 실제 터치 target으로 노출되고 terminal key regression이 통과 |
-| Foreground-service process lease | ✅ Samsung PASS | background unit 4/4 + Samsung module instrumentation 1/1 — terminal·command의 마지막 `STOPPED` 뒤 FGS state/service와 test-only permission의 app-owned notification 제거 확인; OEM Doze/reboot는 `NOT_RUN` |
-| Package metadata snapshot·simulation | ✅ Local/Samsung PASS | exact allowlist·approval 뒤 fixed `apk --simulate` failure·timeout·transport error는 mutation 없이 `PREFLIGHT_FAILED`; snapshot license·payload estimate는 표시용이며 byte total overflow는 exact total 대신 bounded 안내를 보인다. live index freshness·network·dependency total·disk-full은 `NOT_RUN` |
-| README UI 갤러리·design contract | ✅ Local PASS | 15개 실제 Android PNG, 원본 기기 해상도 허용 목록·경로·미리보기 너비 및 안전 PNG chunk 검사 |
-| Workspace SAF·share boundary | ✅ Samsung PASS | 6/6 — test `content://` import/export, 이름 정규화, export size cap·oversize destination 보존, provider 오류 축소, app-private atomic share file; DocumentsUI full manual flow는 `NOT_RUN` |
-| bounded Gateway 복구·package mutation·workspace diff | ✅ Local PASS | supervisor는 명시적 Stop/owner 변경 때 recovery lease를 즉시 revoke하고, 이미 시작된 restart도 안정 Stop으로 수렴시킨다. prompt·terminal command·Provider dispatch는 재실행하지 않는다. |
-| Gateway process crash·package network/disk-full | ⏳ `NOT_RUN` | 실제 runtime/repository 조건과 destructive matrix 필요 |
-| Android 12 tablet integrated regression | ✅ PASS | fake Provider 기반 integrated-app 10/10 — approval/decline fallback, Korean IME·TalkBack semantics, compact 200% guide, history·mode flow; manual gesture/contrast QA는 `NOT_RUN` |
-| Codex/xAI debug compatibility | ✅ Samsung 제한 증거 | `R3CY40PXCAP` side-by-side debug 앱에서 OAuth 연결 + 1턴 stream PASS; 공식 product 승인 근거 아님 |
-| 실제 Provider 계정 OAuth/API E2E | ⏳ `NOT_RUN` | 앱 소유 registration·계정 승인과 전체 login/Stop/refresh/logout evidence 필요 |
-| x86_64 emulator E2E | ⛔ BLOCKED | 연결된 검증 emulator 없음 |
-| 공개 배포 결정 | ✅ `CURRENT_STATE_OWNER_AUTHORIZED` | 현재 상태 진행 승인; 미완료 증거와 실제 signing/destination 입력은 별도 추적 |
+| GitHub Actions | ✅ `SUCCESS` | `main@f26931a`, run `31875767445` |
+| Python | ✅ `PASS` | unittest `148/148`, pytest `155/155` |
+| Android Codex ON/OFF | ✅ `PASS` | 각각 `1821/1821` task |
+| Default feature-OFF release | ✅ `PASS` | `595/595`, Codex binary 부재 |
+| SDK publication/consumer | ✅ `PASS` | `19/19`, `8/8` |
+| Samsung Codex account/chat | ✅ `PASS` | callback, refresh, multi-turn, Stop, restart, lifecycle |
+| Samsung AAB delivery | ✅ `PASS` | ARM64 4 split, signer와 login/data 유지 |
+| UI 자동 계약 | ✅ `PASS` | token, screenshot metadata/CRC, semantics·IME·200% font |
+| GUI 제품 품질 | 🚧 `REDESIGN REQUIRED` | 소유자 시각·사용성 검토 미승인 |
 
-Remote CI의 최신 성공은 evidence commit `main@a1985f3`의 run `31797601916`입니다. 이후 변경도 Push 후 해당 current-head workflow가 성공하기 전에는 원격 CI로 검증된 것으로 간주하지 않습니다.
+### 로컬 회귀
 
-## ⚠️ 현재 제한
+```bash
+python3.11 -m unittest discover -s tests -v
+python3.11 -m pytest -q
+python3.11 scripts/verify-ui-design-contract.py
 
-- arm64-v8a는 제품 검증 대상이며 x86_64 pack은 emulator E2E 전까지 실험 상태입니다.
-- production terminal은 `forkpty()` direct-exec를 우선 사용합니다. Samsung native shell fixture는
-  `TIOCSWINSZ → SIGWINCH → 이후 input`과 child lifecycle을 통과했습니다. 같은 direct topology의 unpatched
-  PRoot는 guest `stty` dynamic/repeat/storm·input·close는 통과했지만 guest foreground shell `SIGWINCH` trap은
-  받지 못했습니다. 이 expected-negative diagnostic은 제품 기능이 아니며, 제품 터미널은 실행 중 동적 resize를
-  계속 `INITIAL_SIZE_ONLY`로 명시합니다. physical rotation과 `vi`/`nano`/`top` full TUI는 `NOT_RUN`입니다.
+./gradlew   :alpine-chat-feature:testDebugUnitTest   :alpine-runtime-ui-compose:testDebugUnitTest   :integrated-app:assembleDebug   :integrated-app:assembleDebugAndroidTest   :integrated-app:lintDebug
+```
 
-- Probe-only relay24는 host-master resize와 post-launch signal 없이 private memfd winsize 경로를 검증했지만,
-  Samsung에서 PRoot guest read/apply와 이후 input 재개에 실패했습니다. 같은 private request를 validate/ack만
-  하는 no-write control도 input을 재개하지 못했습니다. 따라서 Android 직접 Provider/Alpine 생산 앱은 계속
-  `INITIAL_SIZE_ONLY` terminal contract를 유지합니다.
-- 이어진 base-PRoot control은 `TIOCGWINSZ`를 전부 피할 때만 여러 input batch가 유지되고, `stty size` 뒤
-  별도 input batch가 재개되지 않는 현상을 보였습니다. 정확한 source-level 원인이 해결될 때까지 full-screen
-  TUI·dynamic resize·input replay/retry는 지원하지 않습니다.
-- 실제 Provider direct OAuth는 앱 소유 registration과 inference 사용 승인이 필요합니다.
-- 별도 Codex Agent는 앱 소유 OAuth registration을 복사하지 않고 공식 App Server login을 사용합니다.
-  Samsung 공식 account/chat lifecycle은 PASS했고, 16 KiB device E2E와 unsigned source tag/SBOM/license
-  legal review는 현재 상태 배포 결정과 분리된 미완료 증거로 유지합니다.
-- Gemini 외 direct Provider는 승인된 model catalog를 번들하지 않으며, 앱 소유자가 입력한 model만 후보로 노출합니다.
-- Play Asset Delivery 전체 E2E는 signed AAB와 Play test track이 필요합니다.
-- Provider OAuth의 credential-free Activity 재생성·`am force-stop` 복구는 통과했지만, 실제 계정 browser callback 도중 process kill과 Runtime 재부팅·Doze 검증은 승인 창이 필요합니다.
-- Workspace는 app-private bounded text file과 one-shot SAF transfer를 지원합니다. 실제 DocumentsUI에서 선택한 파일을 import → 편집 → 실행 중 terminal과 연결 → export/share하는 수동 사용성 흐름은 Runtime 설치 후 별도 검증이 필요합니다.
-- Chat·History·Assistant의 한국어 semantics와 48dp·한글 IME 자동 검증은 통과했지만 실제 TalkBack 음성·focus gesture와 Switch Access는 수동 QA가 필요합니다.
-- 루트 프로젝트 `LICENSE`와 Alpine package-level exact source mirror는 아직 없으며, 현재 상태 배포 결정이
-  이 미완료 사실을 `PASS`로 변경하지 않습니다.
+Samsung 실기기는 serial을 명시해 다른 연결 기기를 실수로 사용하지 않습니다.
 
-전체 gate는 [SDK publication과 배포 가이드](docs/sdk-publication-and-distribution.md)와 [release readiness](distribution/release-readiness.json)에서 확인할 수 있습니다.
+```bash
+ANDROID_SERIAL=<approved-device-serial>   ./gradlew :integrated-app:connectedDebugAndroidTest
+```
+
+<details>
+<summary><strong>📋 상세 검증 매트릭스 펼치기</strong></summary>
+
+| 항목 | 상태 | 범위 |
+|---|---|---|
+| 결정론 Provider fault matrix | ✅ PASS | status·timeout·malformed/oversized SSE·strict UTF-8·no-retry |
+| 모델 카탈로그·no-silent-switch | ✅ PASS | migration, stale cache, unavailable Send/Retry, encrypted restore |
+| Samsung OAuth lifecycle | ✅ PASS | Activity recreation, encrypted pending transaction 폐기, cold start |
+| Integrated OAuth/app boundary scan | ✅ PASS | copied client identity/API key/private key와 sample package 차단 |
+| ARM64 Runtime·PTY·Bridge | ✅ PASS | PRoot, initial PTY, lifecycle, repair/restart, bounded terminal |
+| Package/workspace | ✅ PASS | allowlist, simulate-before-mutation, quota, atomic SAF/share 경계 |
+| Background lease | ✅ PASS | 마지막 owner 종료 뒤 FGS/service/notification 정리 |
+| Codex security scan | ✅ PASS | Android `client_id`/`client_secret` 0건, auth/token 파일 비노출 |
+| Codex process ownership | ✅ PASS | controlled restart 뒤 singleton, orphan 없음 |
+| 16 KiB actual device | ⛔ BLOCKED | static alignment PASS, `PAGE_SIZE=16384` ARM64 환경 필요 |
+| Logout + feature-OFF device rollback | ⏳ APPROVAL REQUIRED | 로그인 제거와 앱 상태 변경이 있어 명시 승인 필요 |
+| Doze/reboot/network loss/low storage | ⏳ NOT_RUN | 별도 파괴 테스트 승인 필요 |
+| x86_64 Runtime E2E | ⛔ BLOCKED | 지원 artifact는 실험 상태, emulator evidence 없음 |
+| Legal/provenance | ⛔ BLOCKED | root license, exact source mirror와 reviewer 결정 필요 |
+
+</details>
+
+현재 README 수정은 최신 성공 commit 이후의 작업입니다. commit/push 뒤 해당 HEAD의 workflow가 성공하기 전까지 새 문서 상태를 원격 CI 검증 완료로 간주하지 않습니다.
+
+<a id="roadmap"></a>
+## 🗺️ 로드맵과 현재 제한
+
+### P0 — GUI/UX 전면 개선
+
+1. 핵심 사용자 목표와 모든 화면·상태·navigation을 전수 감사합니다.
+2. 첫 실행 → Codex 로그인 → 대화, Runtime 준비 → 작업 흐름의 정보 구조를 다시 설계합니다.
+3. typography, spacing, colour, elevation, component와 action hierarchy를 재정의합니다.
+4. shell·채팅·로그인·History를 우선 개편한 뒤 Runtime·terminal·package·workspace로 확장합니다.
+5. Samsung 실기기에서 한국어 IME, 200% font, TalkBack, Switch Access와 오류 복구 흐름을 검증합니다.
+
+### 기술 제한과 추후 조건
+
+| 우선순위 | 항목 | 현재 경계 |
+|---:|---|---|
+| P0 | GUI/UX | 자동 contract PASS와 제품 품질 승인은 별개; 현재 재설계 필요 |
+| P1 | Terminal resize | initial size만 지원; full-screen `vi`/`nano`/`top`과 dynamic SIGWINCH 미지원 |
+| P1 | 실제 Provider | 앱 소유 registration, model catalog와 계정별 E2E 필요 |
+| P1 | ARM64 16 KiB | static alignment만 PASS, 실제 16 KiB page device 필요 |
+| P1 | Lifecycle destructive matrix | logout, OFF rollback, Doze, reboot, network loss, low storage는 승인 필요 |
+| P2 | x86_64 | emulator E2E 전까지 실험 상태 |
+| 보류 | Play/공개 배포 | 현재 계획 없음; 새 소유자 지시와 readiness 재감사 필요 |
+| 보류 | License/source | 루트 LICENSE, Alpine package exact source mirror와 법무 검토 필요 |
 
 <a id="docs"></a>
 ## 📚 문서 지도
 
-| 문서 | 내용 |
-|---|---|
-| [통합 앱 가이드](integrated-app/README.md) | 빠른 채팅·Alpine 작업 사용법과 실기기 검증 |
-| [Android 통합](android/README.md) | OAuth, Host Bridge, Provider adapter와 manifest |
-| [Runtime SDK 모듈](docs/alpine-runtime-sdk-modules.md) | 19개 artifact 역할과 권장 조합 |
-| [Runtime Host 통합](docs/alpine-runtime-host-integration.md) | Application owner, FGS, terminal, package, recovery |
-| [Alpine package catalog snapshot](docs/alpine-package-catalog-20260808.md) | allowlist package license·payload estimate와 live preflight 경계 |
-| [Provider OAuth adapter](docs/provider-oauth-adapters.md) | 제품 OIDC/BFF와 compatibility direct OAuth 경계 |
-| [Codex App Server 통합](docs/codex-appserver-integration.md) | pinned artifact, managed ChatGPT login, synthetic agent, Samsung E2E·rollback |
-| [UI 디자인 적용 범위](docs/ui-design-coverage-and-proposal.md) | 미적용 화면 코드 분석과 권장 이식 순서 |
-| [Provider 계정 E2E](docs/provider-account-e2e-runbook.md) | opt-in 실제 계정 검증 절차 |
-| [Samsung lifecycle E2E](docs/samsung-background-lifecycle-e2e.md) | reboot·Doze·process-kill 검증 절차 |
-| [배포 가이드](docs/sdk-publication-and-distribution.md) | Maven bundle, source, Play와 공개 gate |
-| [OSS 경계](distribution/PROJECT_CODE_OSS_BOUNDARY.md) | 프로젝트 코드와 PRoot/Alpine OSS 분리 |
-| [라이선스 상태](distribution/PROJECT_LICENSE_STATUS.md) | 프로젝트 전체 라이선스 미확정 상태 |
-| [GitHub CI 상태](distribution/GITHUB_CI_STATUS.md) | 원격 성공 기준선과 로컬 차이 |
-| [개발 계획](dev-plan/) | Phase별 구현·검증 이력 |
+| 범주 | 문서 | 설명 |
+|---|---|---|
+| 정본 | [HANDOFF.md](HANDOFF.md) | 최신 제품 상태, Git, 검증, 배포 보류와 재개 조건 |
+| 앱 | [통합 앱 가이드](integrated-app/README.md) | 빠른 채팅·Alpine 작업·Codex Agent 사용과 build |
+| Android | [Host/Provider 통합](android/README.md) | OAuth, Host Bridge, Provider adapter와 manifest |
+| SDK | [Runtime SDK 모듈](docs/alpine-runtime-sdk-modules.md) | publication artifact 19개 역할과 조합 |
+| Runtime | [Runtime Host 통합](docs/alpine-runtime-host-integration.md) | Application owner, FGS, PTY, package와 recovery |
+| Codex | [Codex App Server 통합](docs/codex-appserver-integration.md) | pinned artifact, auth, stdio RPC, Samsung E2E와 rollback |
+| Codex | [구현 완료 감사](docs/codex-appserver-completion-audit-20260815.md) | PASS·NOT_RUN·BLOCKED 정밀 판정 |
+| UI | [UI 디자인 상태](docs/ui-design-coverage-and-proposal.md) | 현재 품질 판정과 GUI/UX 개선 우선순위 |
+| Provider | [OAuth adapter 경계](docs/provider-oauth-adapters.md) | 제품 registration과 compatibility direct OAuth 구분 |
+| E2E | [Provider 계정 runbook](docs/provider-account-e2e-runbook.md) | opt-in 실제 계정 검증 절차 |
+| E2E | [Samsung lifecycle runbook](docs/samsung-background-lifecycle-e2e.md) | reboot·Doze·process-kill 승인형 검증 |
+| Distribution | [SDK·배포 가이드](docs/sdk-publication-and-distribution.md) | Maven bundle, source, Play와 readiness gate |
+| Compliance | [프로젝트 라이선스 상태](distribution/PROJECT_LICENSE_STATUS.md) | 루트 라이선스와 재배포 허가 상태 |
+| Compliance | [OSS 경계](distribution/PROJECT_CODE_OSS_BOUNDARY.md) | 프로젝트 코드와 PRoot/Alpine OSS 분리 |
+| CI | [GitHub CI 상태](distribution/GITHUB_CI_STATUS.md) | 원격 성공 기준선과 로컬 차이 |
+| Plans | [개발 계획](dev-plan/) | Phase별 구현·검증 이력 |
+
+## 🤝 도움과 변경 원칙
+
+- 버그·개선 제안은 저장소 접근 권한이 있는 사용자가 [GitHub Issues](https://github.com/coreline-ai/alpine-llm-gateway/issues)에 기록합니다.
+- credential, OAuth URL/query, token, account, prompt/response, 실제 terminal output은 issue·log·screenshot에 첨부하지 않습니다.
+- 기능 변경은 기존 Provider·Runtime·Codex 경계를 유지하고, 자동 fallback·replay를 추가하지 않습니다.
+- 파괴 테스트, release/tag, signing 변경과 외부 upload는 명시적 승인 없이 실행하지 않습니다.
 
 ## 📄 라이선스와 배포
 
-이 저장소에는 현재 프로젝트 전체 코드에 적용되는 루트 `LICENSE`가 없습니다. 따라서 코드를 공개 사용·재배포할 수 있다는 허가를 이 README가 부여하지 않습니다.
+> **라이선스 주의 —** 이 저장소에는 프로젝트 전체 코드에 적용되는 루트 `LICENSE`가 없습니다. 코드를 공개 사용·수정·재배포할 수 있다는 허가를 이 README가 부여하지 않습니다.
 
-PRoot/talloc source bundle 생성과 라이선스 고지는 구현되어 있지만 Alpine rootfs package-level exact source mirror와 최종 OSS 검토가 남아 있습니다. 생성되는 `dist/alpine-sdk-0.3.0/`은 `INTERNAL_ONLY`이며 `external_distribution_ready=false`입니다.
+PRoot/talloc source bundle 생성과 제3자 고지는 구현되어 있지만 Alpine rootfs package-level exact source mirror와 최종 OSS 검토가 남아 있습니다. `dist/alpine-sdk-0.3.0/`은 `INTERNAL_ONLY`, `external_distribution_ready=false`입니다.
 
-자세한 내용은 [프로젝트 라이선스 상태](distribution/PROJECT_LICENSE_STATUS.md), [corresponding source 상태](distribution/SOURCE_OFFER_STATUS.md), [제3자 고지](distribution/THIRD_PARTY_NOTICES.md)를 확인하세요.
+- [프로젝트 라이선스 상태](distribution/PROJECT_LICENSE_STATUS.md)
+- [Corresponding source 상태](distribution/SOURCE_OFFER_STATUS.md)
+- [제3자 고지](distribution/THIRD_PARTY_NOTICES.md)
+- [현재 배포 보류 상태](distribution/README.md)
+
+---
+
+<div align="center">
+  <sub>Built for evidence-driven Android + Alpine integration · Current focus: GUI/UX redesign</sub>
+</div>

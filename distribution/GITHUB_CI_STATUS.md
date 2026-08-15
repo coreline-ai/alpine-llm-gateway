@@ -75,3 +75,14 @@ blocker는 owner/evidence 없이 변경하지 않는다. 이 gate 상태 commit�
 - run `30744482850`부터 report 생성 단계가 포함됐다.
 
 위 이력은 현재 기준선 판정이 아니며, 최신 판정에는 run `31797601916`을 사용한다.
+
+
+## 2026-08-15 최신 상태 추가
+
+- publication evidence commit: `main@f26931a39bae4083cd6692d919d9c281fa214a5c`
+- CI run: `31875767445`, `completed / success`
+- branch sync: `main...origin/main = 0 ahead / 0 behind`
+- product status: `INTERNAL_DEVELOPMENT_ONLY` / `NO_DEPLOYMENT_PLANNED`
+- private `v0.3.0` publication은 내부 검증 이력이며, GUI/UX 개선 전 추가 배포를 진행하지 않는다.
+
+이 절이 위의 과거 공개 배포 판정보다 우선한다.

@@ -1,4 +1,4 @@
-# Phase 7 배포 고지
+# 배포 증거와 현재 보류 상태
 
 이 디렉터리는 SDK release bundle에 포함할 고지와 제3자 라이선스 원문을 관리한다.
 
@@ -15,19 +15,21 @@
 inventory, compliance report와 SHA-256 목록을 하나의 `dist/alpine-sdk-<version>/` 디렉터리로 묶는다.
 검증된 native source bundle이 있으면 `oss-sources/native/`에 별도 artifact로 포함한다.
 
-기존 evidence-ready mode는 `INTERNAL_ONLY`이며 `manifest.json`의
-`external_distribution_ready=false`를 유지한다. 이 값과 별도로 프로젝트 소유자는
-`CURRENT_STATE_OWNER_DECISION` 경로의 전체 제품 공개 배포를 승인했다. readiness Gate를 `PASS`로
-재분류하지 않고 다음 명령에서만 `distribution_authorized=true`가 된다.
+evidence-ready mode는 `INTERNAL_ONLY`이며 `manifest.json`의
+`external_distribution_ready=false`를 유지한다. 과거 `CURRENT_STATE_OWNER_DECISION` 경로의
+`PROCEED_CURRENT_STATE` 승인은 2026-08-15 최신 소유자 지시로 대체되었다. 현재 상태는
+`NO_DEPLOYMENT_PLANNED`이며 아래 명령은 역사적 검증 재현용일 뿐, 새 배포 승인으로 사용하지 않는다.
 
-```bash
-python3.11 scripts/verify-release-readiness.py \
-  distribution/release-readiness.json \
-  --check-evidence \
-  --allow-current-state-release \
-  --require-distribution-authorized
-```
+과거 authorization override 명령은 현재 실행하지 않는다. readiness 상태 조회가 필요하면 override 없이
+`scripts/verify-release-readiness.py`의 일반 감사 경로만 사용한다.
 
 현재 deliverable 기준 release-blocking gate 7개는 모두 `BLOCKED`다. 과거 GitHub remote CI 성공은
 이전 baseline만 증명하며, 미커밋 또는 새 commit 변경은 명시적 Push와 해당 SHA workflow 성공 전까지
 `GITHUB_CURRENT_HEAD_CI_NOT_VERIFIED`로 유지한다.
+
+## 최신 소유자 방침
+
+- GUI/UX 품질 개선 전까지 공개 배포, Play 등록, 신규 release/tag/publication을 진행하지 않는다.
+- private `v0.3.0` Release와 signed artifact는 내부 검증 이력으로만 보존한다.
+- JSON 결정 파일은 과거 시점 증거이며 현재 승인 상태의 정본은 [`HANDOFF.md`](../HANDOFF.md)다.
+- 배포를 재개하려면 소유자의 새로운 명시적 지시와 당시 readiness 재감사가 필요하다.

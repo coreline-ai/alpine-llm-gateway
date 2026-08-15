@@ -283,20 +283,17 @@ python3.11 scripts/verify-codex-appserver-e2e-report.py /path/to/report.json --r
 
 process kill, Doze, network loss, force-stop, data clear는 별도 파괴 테스트 승인 전 실행하지 않는다.
 
-## 현재 release Gate
+## 현재 distribution Gate — 보류
 
-프로젝트 소유자는 `distribution/current-state-release-decision.json`에서 현재 검증 상태 그대로 전체 제품
-공개 배포를 진행하도록 결정했다. 따라서 전체 배포 결정은 `CURRENT_STATE_OWNER_AUTHORIZED`다. 아래 항목은
-배포 결정을 `NO-GO`로 되돌리는 목록이 아니라, 미실행·미승인 증거를 `PASS`로 조작하지 않고 보존한 감사
-상태다. verifier의 `release_ready=false`와 별도로 명시적 결정 경로는
-`distribution_authorized=true`, `authorization_mode=CURRENT_STATE_OWNER_DECISION`을 반환한다.
+`distribution/current-state-release-decision.json`의 `PROCEED_CURRENT_STATE`는 과거 시점 결정이다.
+2026-08-15 최신 소유자 지시에 따라 현재 제품은 `INTERNAL_DEVELOPMENT_ONLY` /
+`NO_DEPLOYMENT_PLANNED`이며 GUI/UX 개선 전 공개 배포, Play 등록, 신규 tag/Release를 진행하지 않는다.
 
-Codex ON production APK/AAB는 다음 명령으로 생성한다. unsigned candidate는 exact artifact 검증용이며
-실제 upload에는 durable release signing과 destination credential이 필요하다.
-
-```bash
-scripts/build-current-state-public-release.sh --unsigned-candidate
-```
+- verifier의 `release_ready=false`, `NOT_RUN`, `BLOCKED` 증거를 그대로 유지한다.
+- 과거 `distribution_authorized=true` 결과를 현재 배포 승인으로 해석하지 않는다.
+- `scripts/build-current-state-public-release.sh`과 production signing 경로는 내부 재현 가능성만 보존하며
+  별도 배포 재개 지시 전에는 실행하지 않는다.
+- 이미 게시된 private `v0.3.0`과 signed artifact는 내부 검증 이력으로만 취급한다.
 
 - local artifact/process와 Android CA/DNS bridge: 검증됨
 - Samsung 공식 browser callback, `account/read=CHATGPT`, model list, explicit credential refresh: PASS

@@ -1,13 +1,20 @@
 # Codex App Server 구현 완료 감사 — 2026-08-15
 
-기준 계획: [`dev-plan/implement_20260815_072222.md`](../dev-plan/implement_20260815_072222.md) Revision 2
-감사 기준 HEAD: `fc8b483416728579e69f5b914c32e7c395f7cfec`
+기준 계획: [`dev-plan/implement_20260815_072222.md`](../dev-plan/implement_20260815_072222.md) Revision 3
+감사 시작 base: `fc8b483416728579e69f5b914c32e7c395f7cfec`
+검증 release source: `a4ccd4ff56338511a63ff75734d53695e285e5e5`
+최신 문서 기준 commit: `f26931a39bae4083cd6692d919d9c281fa214a5c`
 대상 기기: Samsung `SM-S931N`, Android 16/API 36, `arm64-v8a`, `PAGE_SIZE=4096`
-판정 시각: `2026-08-15 13:31 KST`
+기술 감사 시각: `2026-08-15 13:31 KST`
+최신 제품 상태 반영: `2026-08-15 20:04 KST`
 
 이 문서는 “구현을 더 하면 닫을 수 있는 항목”과 “계정·기기·법무·배포 입력 없이는 닫을 수 없는 항목”을
 분리한 완료 감사 기록이다. 미실행 항목을 PASS로 바꾸지 않으며, 로그인 계정·OAuth URL/query·token·prompt·
 response·auth 파일 내용은 기록하지 않는다.
+
+> **최신 상태 정정:** 소유자는 GUI/UX 품질이 배포 기준에 미달한다고 판단해 현재 배포 계획을
+> 철회했다. 현재 상태는 `INTERNAL_DEVELOPMENT_ONLY` / `NO_DEPLOYMENT_PLANNED`이며, 아래 기술 PASS는
+> 배포 승인으로 해석하지 않는다. 과거 `PROCEED_CURRENT_STATE` 기록은 역사적 증거로만 보존한다.
 
 ## 1. 결론
 
@@ -20,8 +27,8 @@ response·auth 파일 내용은 기록하지 않는다.
 | Phase 7 최종 account E2E report | `IN_PROGRESS` | 실제 logout/data isolation과 feature-OFF 실기기 rollback은 명시 승인 필요 |
 | ARM64 16 KiB 실제 실행 | `BLOCKED` | 현재 Samsung은 4 KiB이며 대체 가능한 16 KiB 환경이 없음 |
 | Codex 법무/provenance | `BLOCKED` | upstream tag unsigned, reviewer와 approval reference 없음 |
-| 전체 제품 공개 배포 결정 | `CURRENT_STATE_OWNER_AUTHORIZED` | 소유자 `PROCEED_CURRENT_STATE`; 증거 Gate 상태는 변경하지 않음 |
-| production release artifact | `VERIFIED_UNSIGNED_CANDIDATE` | Codex ON APK/AAB 생성·exact artifact 검증 PASS; durable signing/destination 입력 없음 |
+| 전체 제품 공개 배포 결정 | `WITHDRAWN / ON_HOLD` | 최신 소유자 지시: GUI/UX 개선 전 배포 예정 없음 |
+| signed artifact | `INTERNAL_EVIDENCE_ONLY` | signed APK/AAB와 private GitHub Release가 존재하지만 배포 의사와 분리해 보존 |
 
 현재 환경에서 비파괴적으로 구현·검증 가능한 범위는 완료됐다. 남은 항목은 실패 원인을 모르는 대기 상태가
 아니라, 아래의 명시적인 상태 변경 승인 또는 외부 입력을 요구하는 Gate다.
@@ -45,7 +52,7 @@ response·auth 파일 내용은 기록하지 않는다.
 | feature OFF 실기기 rollback | `APPROVAL_REQUIRED` | logout 뒤 실행해야 하며 앱을 OFF·signed-out 상태로 남김 |
 | Samsung AAB delivery | `PASS` | 4 split 설치, download `111,029,355` bytes, installed `156,006,761` bytes, login/data 유지 |
 | ARM64 16 KiB | `STATIC PASS / DEVICE BLOCKED` | ELF `[65536,65536]`, zipalign PASS; `PAGE_SIZE=16384` 실행 환경 없음 |
-| 전체 제품 공개 배포 | `OWNER AUTHORIZED` | 현재 상태 진행 결정 완료; signing/destination은 실제 upload에 필요한 외부 입력 |
+| 전체 제품 공개 배포 | `ON_HOLD` | GUI/UX 품질 개선 전 배포·Play 등록·추가 publication을 진행하지 않음 |
 
 ## 3. callback 미전달 원인과 수정
 
@@ -95,10 +102,12 @@ response·auth 파일 내용은 기록하지 않는다.
 - 설치 split `4`, 합계 `156,006,761` bytes, 로그인 유지, 최종 child `1`/전체 `1`
 - 현재 `/data` 여유 `159,164,616 KiB`; 저용량 조건 조작은 하지 않아 `NOT_RUN`
 - logout/data isolation·feature-OFF 실기기 설치는 별도 명시 승인 없이는 실행하지 않아 로그인/ON 상태를 보존
+- 이후 release/publication 검증 확장에서 Python unittest `148/148`, pytest `155/155`, release source CI
+  run `31866945292`, publication evidence CI run `31875767445`가 PASS했다.
 
 최신 artifact SHA-256은 [`HANDOFF.md`](../HANDOFF.md)의 “최종 로컬 검증”을 정본으로 사용한다.
 
-## 5. 현재 환경에서 더 진행할 수 없는 항목
+## 5. 잔여 승인·외부 입력과 최신 완료 근거
 
 | 항목 | 필요한 입력 | 이유 |
 |---|---|---|
@@ -107,13 +116,15 @@ response·auth 파일 내용은 기록하지 않는다.
 | process kill/Doze/network loss/force-stop/저용량 | 별도 파괴 테스트 승인 | 앱·기기 상태를 강제로 변경하므로 비파괴 범위 밖 |
 | ARM64 16 KiB E2E | `PAGE_SIZE=16384` Samsung/RTL/ARM64 환경 | 4 KiB 결과와 정적 alignment로 대체할 수 없음 |
 | legal/provenance | reviewer, 시각, approval reference, unsigned-tag exception 결정 | engineering NOTICE/SBOM만으로 재배포 승인이 아님 |
-| 최종 CI/evidence link | 최종 commit SHA와 CI 실행 | 현재 구현은 미커밋이며 사용자 재요청 전 commit/push 금지 |
-| 실제 외부 upload | release keystore 4개 값과 Play/GitHub 등 destination credential | unsigned Android artifact는 배포 채널에 업로드할 수 없음 |
+| 최종 CI/evidence link | `main@f26931a`, run `31875767445` | publication evidence commit의 원격 CI success 확인 |
+| 추가 외부 upload | 새로운 소유자 배포 재개 지시 | 현재는 Play/GitHub 추가 배포·재게시를 진행하지 않음 |
 
 `x86_64` emulator는 arm64-only 제품 필수 조건이 아니다. 16 KiB는 ARM64 `PAGE_SIZE=16384` 환경으로
 검증해야 한다.
 
-## 6. 재개 명령과 순서
+## 6. 배포 재개 시에만 사용할 명령과 순서
+
+> 현재는 배포 재개 지시가 없으므로 이 절의 release/upload 명령을 실행하지 않는다.
 
 1. logout과 OFF rollback 상태 변경을 승인한 경우에만 다음을 실행한다.
 
@@ -136,7 +147,7 @@ response·auth 파일 내용은 기록하지 않는다.
    `--require-approved` verifier를 통과시킨다.
 5. 최종 commit/CI/evidence link를 고정하고, 현재 상태 소유자 결정 경로와 증거 readiness를 별도 판정한다.
 
-현재 상태 배포 artifact 생성 명령:
+과거 current-state artifact 재현 명령(현재 실행 보류):
 
 ```bash
 scripts/build-current-state-public-release.sh --unsigned-candidate
@@ -154,6 +165,8 @@ scripts/build-current-state-public-release.sh --unsigned-candidate
   child `1`/전체 child `1`
 - 상태 변경 승인 대기: `logout/data isolation`, `feature-OFF 실기기 rollback`, 파괴 테스트
 - 외부 환경·조직 증거 대기: ARM64 16 KiB, legal/provenance
-- 전체 제품 공개 배포 결정: `CURRENT_STATE_OWNER_AUTHORIZED`
-- production artifact: `VERIFIED_UNSIGNED_CANDIDATE`
-- 실제 upload: `RELEASE_SIGNING_AND_DESTINATION_REQUIRED`
+- 제품 단계: `INTERNAL_DEVELOPMENT_ONLY`
+- 배포 계획: `NO_DEPLOYMENT_PLANNED`
+- 배포 보류 사유: GUI/UX 품질 미달
+- 기존 signed artifact/private GitHub Release: `INTERNAL_EVIDENCE_ONLY`
+- 다음 우선순위: GUI/UX 감사·재설계·Samsung 실기기 사용성/접근성 QA

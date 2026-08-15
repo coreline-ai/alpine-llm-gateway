@@ -1,12 +1,17 @@
 # Alpine LLM Gateway — Codex App Server 구현 핸드오프
 
-갱신: `2026-08-15 13:55 KST`
+갱신: `2026-08-15 20:04 KST`
 작업 트리: `/Volumes/Eprojects/project_202607/alpine-llm-gateway`
 
 이 문서는 OpenAI 공식 Codex App Server 기반 `Codex Agent (ChatGPT 로그인)` 구현의 현재 상태
 정본이다. 과거 OAuth 호환 실험 문서와 충돌하면 아래 문서 순서로 판단한다.
 
-1. [`dev-plan/implement_20260815_072222.md`](dev-plan/implement_20260815_072222.md) Revision 2
+> **최신 소유자 방침 (2026-08-15 20:04 KST)**
+> 현재 제품은 **배포 예정이 없는 내부 개발·검증 단계**다. GUI/UX 품질이 배포 수준에
+> 도달하지 않았으며, 별도 지시 전까지 Play Store 등록·공개 릴리스·추가 배포 자동화를
+> 진행하지 않는다. 과거 `PROCEED_CURRENT_STATE` 결정은 이 지시로 대체되었다.
+
+1. [`dev-plan/implement_20260815_072222.md`](dev-plan/implement_20260815_072222.md) Revision 3
 2. [`docs/codex-appserver-completion-audit-20260815.md`](docs/codex-appserver-completion-audit-20260815.md)
 3. [`docs/codex-appserver-integration.md`](docs/codex-appserver-integration.md)
 4. 이 문서
@@ -17,8 +22,9 @@
 |---|---|
 | branch | `main` |
 | 구현 시작 base | `fc8b483416728579e69f5b914c32e7c395f7cfec` |
-| 최신 remote 상태 | 인계 시 `git fetch origin main`과 `git log -1 origin/main`으로 확인 |
-| working tree | 현재 상태는 `git status --short`를 정본으로 사용 |
+| 최신 확인 commit | `f26931a39bae4083cd6692d919d9c281fa214a5c` |
+| remote 동기화 | `main...origin/main = 0 ahead / 0 behind` |
+| working tree | 최신 상태 문서 수정 중; `git status --short`를 정본으로 사용 |
 
 금지 사항:
 
@@ -34,8 +40,8 @@
 - Android는 auth credential 파일의 내용을 읽기·복사·로그하지 않는다.
 - synthetic Provider profile, `FAST_CHAT`, 빈 private workspace만 허용한다.
 - 기존 ProviderProfile, Alpine Runtime public API, direct/Alpine backend 동작을 보존한다.
-- feature 기본값은 OFF이며 ON release는 기본적으로 fail-closed한다. 프로젝트 소유자의 명시적인
-  `CURRENT_STATE_OWNER_DECISION` 경로에서만 현재 상태 release artifact 생성을 허용한다.
+- feature 기본값은 OFF이며 ON release는 기본적으로 fail-closed한다. 코드에는 과거
+  `CURRENT_STATE_OWNER_DECISION` 경로가 남아 있으나, 최신 배포 보류 지시에 따라 현재 사용하지 않는다.
 - 자동 fallback, replay, model 보정, approval/tool action, shell, WebSocket은 금지한다.
 
 ## 3. 구현 완료 범위
@@ -94,8 +100,8 @@
 | feature ON AAB standalone 기준 | 기존 `343/343 task PASS`; 최종 AAB는 위 737-task run에 포함 |
 | same-package feature OFF rollback 전체 회귀 | 최신 확장 실행 `1821/1821 task PASS`; 기존 focused `729/729 PASS` |
 | controlled restart/orphan targeted | unit/compile `250 task PASS`, AndroidTest compile `218 task PASS`, 종료 보강 `240 task PASS` |
-| Python unittest | `140/140 PASS` |
-| Pytest | `147/147 PASS` |
+| Python unittest | completion baseline `140/140`; 최종 publication 확장 `148/148 PASS` |
+| Pytest | completion baseline `147/147`; 최종 publication 확장 `155/155 PASS` |
 | ON APK/AAB exact binary | `PASS`, version `0.147.0`, PT_LOAD `[65536,65536]` |
 | rollback binary 금지 | `PASS` |
 | APK 16 KiB zipalign | ON/rollback `PASS` |
@@ -199,57 +205,35 @@ instrumentation은 app preferences에 영향을 줄 수 있으므로 실제 계�
 승인형 test harness는 이미 구현·컴파일됐다. 승인 argument가 없으면 live logout/rollback class는 skip되며,
 runner는 raw instrumentation output을 저장·출력하지 않는다.
 
-## 8. 현재 상태 배포 결정과 release 입력
+## 8. 배포 보류 결정과 기존 산출물
 
-readiness verifier 현재 결과: `13 Gate / 11 BLOCKED / 9 release blocker`, `release_ready=false`.
-이 값은 증거 상태를 그대로 보존하는 감사 결과이며 현재 배포 결정 자체를 `NO-GO`로 만들지 않는다.
+현재 제품 판정은 `INTERNAL_DEVELOPMENT_ONLY` / `NO_DEPLOYMENT_PLANNED`다.
 
-프로젝트 소유자는 `2026-08-15 13:39 KST`에 현재 구현 상태 그대로 전체 제품 공개 배포를 진행하는
-`PROCEED_CURRENT_STATE` 결정을 기록했다.
+- 소유자가 `2026-08-15 20:04 KST`에 GUI/UX 품질 미달을 이유로 배포 계획이 없음을 명확히 지시했다.
+- `2026-08-15 13:39 KST` 기록의 `PROCEED_CURRENT_STATE`는 과거 결정이며 최신 지시로 대체되었다.
+- `distribution/current-state-release-decision.json`은 과거 승인 증거다. 현재 배포 승인으로
+  해석하거나 `--allow-current-state-release`를 사용하지 않는다.
+- GitHub private Release `v0.3.0`과 signed APK/AAB는 이미 생성·게시된 **내부 검증 산출물**로만
+  보존한다. 별도 지시 없이 삭제·교체·재게시하지 않는다.
+- Play submission local package `dist/play-submission-v0.3.0/`는 참고 자료로만 보존하고,
+  Play Console 계정 등록·AAB upload·테스트 트랙·공개 트랙을 진행하지 않는다.
+- 신규 release build, tag, GitHub Release, Play 등록, 서명 자료 변경은 사용자의 새로운
+  명시적 지시가 있을 때만 재개한다.
 
-- 결정 정본: `distribution/current-state-release-decision.json`
-- verifier 결과: `distribution_authorized=true`, `authorization_mode=CURRENT_STATE_OWNER_DECISION`
-- 미실행 검증은 `NOT_RUN`, 미승인 review는 `BLOCKED`로 그대로 보존하며 `PASS`로 조작하지 않는다.
-- Codex ON production APK/AAB 빌드 경로:
+기존 내부 검증 산출물:
 
-  ```bash
-  scripts/build-current-state-public-release.sh --unsigned-candidate
-  ```
+| 항목 | 값 |
+|---|---|
+| source | `v0.3.0@a4ccd4ff56338511a63ff75734d53695e285e5e5` |
+| signed APK SHA-256 | `6173d23517ba6a2715098022c145cebb6c6b08193c01d6df8204f1eee0e263d6` |
+| signed AAB SHA-256 | `b022a218d02eb7ba3d767014030239399dcd97b02f85768ad5b268927c6a4358` |
+| signing certificate SHA-256 | `32364f692c1b3151a409720fcd3e6f86d17658bf7e60e90e15fa2955d4f1fcdd` |
+| private GitHub Release | `https://github.com/coreline-ai/alpine-llm-gateway/releases/tag/v0.3.0` |
+| release source CI | run `31866945292` `SUCCESS` |
+| publication evidence CI | `main@f26931a`, run `31875767445` `SUCCESS` |
 
-- pre-signing 검증 candidate APK SHA-256:
-  `fe848583764c968621d1f826337e662ed5117bbfd97fa1869ff20c5e25736b12`
-- pre-signing 검증 candidate AAB SHA-256:
-  `84676f7d5c016a492c24b0168f34f9b9540b870d6d3454849e5c90c1aee4c798`
-- 실제 upload는 debug key를 대체 사용하지 않으며 다음 네 환경 변수로 durable release key를 주입한다.
-
-  ```text
-  ALPINE_RELEASE_KEYSTORE
-  ALPINE_RELEASE_KEY_ALIAS
-  ALPINE_RELEASE_STORE_PASSWORD
-  ALPINE_RELEASE_KEY_PASSWORD
-  ```
-
-- macOS 정본은 `scripts/configure-macos-release-signing.sh`이 repository 밖 Application Support에 PKCS12
-  key를 두고 비밀번호를 Keychain에만 저장한다. `scripts/build-current-state-signed-release-macos.sh`은 해당
-  값을 process-local 환경으로 주입한 뒤 APK/AAB signer fingerprint 일치까지 확인한다.
-- v0.3.0 release certificate SHA-256:
-  `32364f692c1b3151a409720fcd3e6f86d17658bf7e60e90e15fa2955d4f1fcdd`
-
-- durable release key와 Keychain secret을 구성하고 signed APK/AAB를 생성했다.
-- signed APK SHA-256:
-  `6173d23517ba6a2715098022c145cebb6c6b08193c01d6df8204f1eee0e263d6`
-- signed AAB SHA-256:
-  `b022a218d02eb7ba3d767014030239399dcd97b02f85768ad5b268927c6a4358`
-- release source: `v0.3.0@a4ccd4ff56338511a63ff75734d53695e285e5e5`
-- remote CI run `31866945292`: Python/Android 전체 `SUCCESS`
-- GitHub Release: `https://github.com/coreline-ai/alpine-llm-gateway/releases/tag/v0.3.0`
-  - production-signed APK/AAB, SHA256SUMS, build manifest, publication record 5개 업로드 완료
-  - repository가 private이므로 배포 범위는 `REPOSITORY_ACCESS`
-- Samsung production package에 signed APK 설치와 signed AAB 4-split update를 모두 완료했다.
-  versionCode `1`, signer fingerprint 일치, 기존 로그인된 `.codexdebug` package 보존을 확인했다.
-- Play submission local package는 `dist/play-submission-v0.3.0/`에 AAB, ko-KR listing, icon과 15개
-  screenshot으로 준비했다. Chrome Play Console은 로그인됐지만 developer account 생성 화면이므로 계정 유형,
-  조직 정보와 등록 절차를 사용자가 완료해야 Play upload가 가능하다.
+산출물 존재는 현재 배포 의사를 의미하지 않는다. readiness verifier는 계속
+`release_ready=false`를 유지하며 미실행 검증은 `NOT_RUN`, 미승인 review는 `BLOCKED`로 보존한다.
 
 미완료 증거 항목:
 
@@ -262,11 +246,11 @@ readiness verifier 현재 결과: `13 Gate / 11 BLOCKED / 9 release blocker`, `r
 artifact lock 정합성을 유지한 채 모든 결정을 승인하고 approval reference를 기록해야 한다. 단순
 LICENSE/NOTICE/SBOM 존재나 readiness JSON 수동 변경만으로는 Gate가 READY가 되지 않는다.
 
-현재 상태 배포와 별개로 남아 있는 증거:
+현재 내부 개발 상태에서 남아 있는 증거:
 
 - Samsung 파괴 테스트 승인
 - 프로젝트 LICENSE / exact corresponding source
-- Provider approval / Play track / release destination owner
+- Provider approval / Play track / release destination owner가 필요한 작업은 배포 재개 전까지 보류
 - guest SIGWINCH 반복 stress 환경
 
 `x86_64 emulator`는 arm64-only Codex release 필수 조건이 아니다. x86_64 ABI를 지원할 때만 별도
@@ -280,12 +264,15 @@ artifact/test 계획으로 진행한다.
   executed report를 계정 검증의 마지막 순서로 실행해야 함
 - Samsung 4 KiB AAB device delivery/실제 실행: `PASS`; 저용량 설치·rollback 측정은 pending
 - 16 KiB 실제 기기 및 legal provenance: `BLOCKED`
-- 전체 제품 공개 배포 결정: `CURRENT_STATE_OWNER_AUTHORIZED`
-- 현재 산출물: Codex ON production APK/AAB `VERIFIED_UNSIGNED_CANDIDATE`
-- 실제 upload: `RELEASE_SIGNING_AND_DESTINATION_REQUIRED`
+- 제품 단계: `INTERNAL_DEVELOPMENT_ONLY`
+- 배포 계획: `NO_DEPLOYMENT_PLANNED`
+- 배포 중단 사유: GUI/UX 품질이 배포 기준에 미달
+- 기존 `v0.3.0` private GitHub Release/signed artifact: 내부 검증 이력으로만 보존
+- 다음 제품 우선순위: GUI/UX 현황 감사 → 디자인 방향 확정 → 화면 구조/상태 흐름 개편 →
+  Samsung 실기기 사용성·접근성·회귀 QA
 
 요구사항별 완료 근거와 “현재 환경에서 구현 가능”/“승인·외부 입력 필요” 경계는
 [`docs/codex-appserver-completion-audit-20260815.md`](docs/codex-appserver-completion-audit-20260815.md)에
 고정했다. 현재 남은 항목은 원인 미상의 대기가 아니라 실제 로그인 삭제·OFF 설치 승인, ARM64 16 KiB
-실행 환경과 legal/provenance 입력이 필요한 증거 Gate다. 이 Gate들은 현재 소유자 배포 결정을
-`NO-GO`로 되돌리지 않지만 미실행·미승인 사실은 계속 명시한다.
+실행 환경과 legal/provenance 입력이 필요한 증거 Gate다. 이 Gate들은 배포 재개 요건으로만
+보존하며, 현재 우선순위는 GUI/UX 개선이다.
