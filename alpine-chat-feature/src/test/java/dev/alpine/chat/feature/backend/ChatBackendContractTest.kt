@@ -1,6 +1,7 @@
 package dev.alpine.chat.feature.backend
 
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
@@ -35,6 +36,29 @@ class ChatBackendContractTest {
                 session = session,
             )
         }
+    }
+
+    @Test
+    fun `contextual session receives stable host identifiers`() = runTest {
+        var captured: ChatBackendRequestContext? = null
+        val session = object : ContextualChatBackendSession {
+            override val descriptor = descriptor("contextual")
+            override suspend fun stream(request: ChatBackendRequestContext): ChatBackendStreamResult {
+                captured = request
+                return ChatBackendStreamResult()
+            }
+        }
+
+        session.stream(
+            ChatBackendRequestContext(
+                conversationId = "conversation-1",
+                actionId = "action-1",
+                requestJson = "{}",
+            ),
+        )
+
+        assertEquals("conversation-1", captured?.conversationId)
+        assertEquals("action-1", captured?.actionId)
     }
 
     private fun descriptor(id: String) = ChatBackendDescriptor(

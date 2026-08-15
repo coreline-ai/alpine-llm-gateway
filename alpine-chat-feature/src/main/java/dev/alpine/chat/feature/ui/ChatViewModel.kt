@@ -5,7 +5,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import dev.alpine.chat.feature.backend.ChatBackendConnection
 import dev.alpine.chat.feature.backend.ChatBackendConnectionState
+import dev.alpine.chat.feature.backend.ChatBackendRequestContext
+import dev.alpine.chat.feature.backend.ChatBackendRequestPolicy
 import dev.alpine.chat.feature.backend.ChatBackendSession
+import dev.alpine.chat.feature.backend.ContextualChatBackendSession
 import dev.alpine.chat.routing.ChatExecutionMode
 import dev.alpine.chat.feature.assistant.AssistantCatalog
 import dev.alpine.chat.feature.assistant.AssistantPromptComposer
@@ -103,6 +106,7 @@ class ChatViewModel(
     )
     private var providerOptions: List<ConnectedProviderOption> = emptyList()
     private val activeJobs = linkedMapOf<String, Job>()
+    private val activeSessionProfiles = mutableMapOf<String, String>()
     private val streamGenerations = mutableMapOf<String, Long>()
     private val runtimeStates = mutableMapOf<String, RuntimeState>()
     private var delayedPersistenceJob: Job? = null
@@ -446,6 +450,29 @@ class ChatViewModel(
         job.cancel()
     }
 
+    /**
+     * Stops every active generation owned by one backend profile, then invokes [onStopped] only
+     * after each backend has completed its cancellation cleanup.
+     */
+    fun stopStreamingByProfile(profileId: String, onStopped: () -> Unit) {
+        val targets = activeJobs.filterKeys { conversationId ->
+            activeSessionProfiles[conversationId] == profileId
+        }
+        if (targets.isEmpty()) {
+            onStopped()
+            return
+        }
+        targets.keys.forEach { conversationId ->
+            runtimeStates[conversationId] = RuntimeState(statusMessage = "Stopping…")
+        }
+        publish()
+        targets.values.forEach(Job::cancel)
+        viewModelScope.launch {
+            targets.values.forEach { it.join() }
+            onStopped()
+        }
+    }
+
     fun flushPersistence() {
         if (!isLoading) persistImmediately()
     }
@@ -486,6 +513,13 @@ class ChatViewModel(
         schedulePersistence(STREAM_PERSIST_DEBOUNCE_MS)
 
         val job = viewModelScope.launch(start = CoroutineStart.LAZY) {
+            val maximumCorrections = if (
+                (session as? ChatBackendRequestPolicy)?.allowsAutomaticCorrection == false
+            ) {
+                0
+            } else {
+                MAX_RESPONSE_CORRECTIONS
+            }
             var correctionAttempt = 0
             var fallbackText: String? = null
             var previousViolations = emptyList<ResponseConstraintViolation>()
@@ -499,13 +533,22 @@ class ChatViewModel(
                         ),
                         previousViolation = previousFreshnessViolation,
                     )
-                    val result = session.stream(
-                        ChatRequestBuilder.build(
-                            model = session.descriptor.model,
-                            messages = requestMessages,
-                            systemInstruction = responseInstruction,
-                        ),
+                    val requestJson = ChatRequestBuilder.build(
+                        model = session.descriptor.model,
+                        messages = requestMessages,
+                        systemInstruction = responseInstruction,
                     )
+                    val result = if (session is ContextualChatBackendSession) {
+                        session.stream(
+                            ChatBackendRequestContext(
+                                conversationId = conversationId,
+                                actionId = assistant.id,
+                                requestJson = requestJson,
+                            ),
+                        )
+                    } else {
+                        session.stream(requestJson)
+                    }
                     if (!isCurrentGeneration(conversationId, generation)) return@launch
                     if (result.statusCode !in 200..299) {
                         throw SafeProviderStatusException(SafeProviderStatus(result.statusCode))
@@ -522,7 +565,7 @@ class ChatViewModel(
                     val violations = responseConstraints.validate(answer)
                     val freshnessViolation = responseFreshnessGuard.validate(answer)
                     val hasViolation = violations.isNotEmpty() || freshnessViolation != null
-                    if (!hasViolation || correctionAttempt >= MAX_RESPONSE_CORRECTIONS) {
+                    if (!hasViolation || correctionAttempt >= maximumCorrections) {
                         finishAssistant(
                             conversationId = conversationId,
                             assistantMessageId = assistant.id,
@@ -639,11 +682,13 @@ class ChatViewModel(
             } finally {
                 if (isCurrentGeneration(conversationId, generation)) {
                     activeJobs.remove(conversationId)
+                    activeSessionProfiles.remove(conversationId)
                     publish()
                 }
             }
         }
         activeJobs[conversationId] = job
+        activeSessionProfiles[conversationId] = session.descriptor.profileId
         publish()
         job.start()
     }
@@ -918,6 +963,7 @@ class ChatViewModel(
         delayedPersistenceJob?.cancel()
         activeJobs.values.toList().forEach(Job::cancel)
         activeJobs.clear()
+        activeSessionProfiles.clear()
         super.onCleared()
     }
 

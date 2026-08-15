@@ -120,6 +120,14 @@ object ChatFailureMapper {
             kind = ChatFailureKind.FALLBACK_DECLINED,
             recoveryAction = ChatRecoveryAction.RESTART_RUNTIME,
         )
+        ChatBackendFailureCode.UNSUPPORTED_AGENT_ACTION -> ChatFailure(
+            kind = ChatFailureKind.UNSUPPORTED_AGENT_ACTION,
+            recoveryAction = ChatRecoveryAction.CHECK_SETTINGS,
+        )
+        ChatBackendFailureCode.THREAD_REATTACH_REQUIRED -> ChatFailure(
+            kind = ChatFailureKind.THREAD_REATTACH_REQUIRED,
+            recoveryAction = ChatRecoveryAction.CHECK_SETTINGS,
+        )
         ChatBackendFailureCode.UNKNOWN -> ChatFailure(
             kind = ChatFailureKind.UNKNOWN,
             recoveryAction = ChatRecoveryAction.CHECK_SETTINGS,

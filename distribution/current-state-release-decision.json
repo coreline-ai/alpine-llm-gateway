@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "decision_state": "PROCEED_CURRENT_STATE",
+  "scope": "FULL_PRODUCT_PUBLIC_DISTRIBUTION",
+  "decided_at": "2026-08-15T04:39:21Z",
+  "decided_by_role": "PROJECT_OWNER",
+  "evidence_reference": "distribution/evidence/current-state-release-owner-decision-20260815.md",
+  "acceptance": {
+    "current_evidence_as_is": true,
+    "unexecuted_checks_remain_not_run": true,
+    "blocked_reviews_remain_blocked": true,
+    "signing_and_destination_still_required_for_upload": true
+  }
+}

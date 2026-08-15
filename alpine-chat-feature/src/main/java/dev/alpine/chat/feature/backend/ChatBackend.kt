@@ -2,6 +2,7 @@ package dev.alpine.chat.feature.backend
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import java.util.UUID
 
 /** Backend-neutral identity captured by a conversation and rendered by the common UI. */
 data class ChatBackendDescriptor(
@@ -58,6 +59,37 @@ interface ChatBackendSession {
     suspend fun stream(requestJson: String): ChatBackendStreamResult
 }
 
+/** Stable host context for backends that own a remote/native conversation lifecycle. */
+data class ChatBackendRequestContext(
+    val conversationId: String,
+    val actionId: String,
+    val requestJson: String,
+) {
+    init {
+        require(conversationId.isNotBlank()) { "conversationId is required" }
+        require(actionId.isNotBlank()) { "actionId is required" }
+        require(requestJson.isNotBlank()) { "requestJson is required" }
+    }
+}
+
+/** Additive contract; legacy Direct and Alpine sessions continue to receive the original JSON. */
+interface ContextualChatBackendSession : ChatBackendSession {
+    suspend fun stream(request: ChatBackendRequestContext): ChatBackendStreamResult
+
+    override suspend fun stream(requestJson: String): ChatBackendStreamResult = stream(
+        ChatBackendRequestContext(
+            conversationId = "ephemeral-${UUID.randomUUID()}",
+            actionId = "action-${UUID.randomUUID()}",
+            requestJson = requestJson,
+        ),
+    )
+}
+
+/** Backends can opt out of host-generated corrective replay without affecting other sessions. */
+interface ChatBackendRequestPolicy {
+    val allowsAutomaticCorrection: Boolean
+}
+
 enum class ChatBackendFailureCode {
     REAUTHENTICATION_REQUIRED,
     TIMEOUT,
@@ -72,6 +104,8 @@ enum class ChatBackendFailureCode {
     RUNTIME_BUSY,
     RUNTIME_START_FAILED,
     FALLBACK_DECLINED,
+    UNSUPPORTED_AGENT_ACTION,
+    THREAD_REATTACH_REQUIRED,
     UNKNOWN,
 }
 

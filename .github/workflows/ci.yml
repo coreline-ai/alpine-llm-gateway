@@ -44,8 +44,24 @@ jobs:
         run: python scripts/verify-play-e2e-report.py integration-fixtures/play-e2e/report.template.json
       - name: Verify redacted Samsung lifecycle template
         run: python scripts/verify-samsung-lifecycle-report.py integration-fixtures/samsung-lifecycle/report.template.json
+      - name: Verify redacted Codex App Server E2E template
+        run: python scripts/verify-codex-appserver-e2e-report.py integration-fixtures/codex-appserver-e2e/report.template.json
+      - name: Verify redacted Codex App Server ARM64 16 KiB template
+        run: python scripts/verify-codex-appserver-16k-report.py integration-fixtures/codex-appserver-16k/report.template.json
+      - name: Verify fail-closed Codex App Server legal status
+        run: python scripts/verify-codex-appserver-legal-status.py
       - name: Verify fail-closed release readiness
         run: python scripts/verify-release-readiness.py distribution/release-readiness.json --check-evidence
+      - name: Verify explicit current-state release authorization
+        run: |
+          python scripts/verify-current-state-release-decision.py --check-evidence
+          python scripts/verify-release-readiness.py \
+            distribution/release-readiness.json \
+            --check-evidence \
+            --allow-current-state-release \
+            --require-distribution-authorized
+      - name: Verify pinned Codex metadata and source policy
+        run: python scripts/verify-codex-appserver.py
 
   android:
     name: Android modules
@@ -113,6 +129,15 @@ jobs:
           :alpine-chat-backend-alpine:testDebugUnitTest
           :alpine-chat-backend-alpine:assembleRelease
           :alpine-chat-backend-alpine:lintDebug
+          :alpine-codex-appserver-pack-android:testDebugUnitTest
+          :alpine-codex-appserver-pack-android:assembleRelease
+          :alpine-codex-appserver-pack-android:lintDebug
+          :alpine-codex-appserver-android:testDebugUnitTest
+          :alpine-codex-appserver-android:assembleRelease
+          :alpine-codex-appserver-android:lintDebug
+          :alpine-chat-backend-codex:testDebugUnitTest
+          :alpine-chat-backend-codex:assembleRelease
+          :alpine-chat-backend-codex:lintDebug
           :alpine-workspace-api:check
           :alpine-workspace-android:testDebugUnitTest
           :alpine-workspace-android:assembleRelease
@@ -130,16 +155,46 @@ jobs:
           :alpine-integration-sample:lintDebug
           :integrated-app:assembleDebug
           :integrated-app:assembleDebugAndroidTest
+          :integrated-app:testDebugUnitTest
           :integrated-app:lintDebug
           :alpine-llm-bridge-probe:assembleDebug
           :alpine-llm-bridge-probe:lintDebug
           --no-daemon
           --stacktrace
       - name: Verify integrated APK OAuth and app-boundary policy
-        run: >-
-          python3 scripts/verify-integrated-oauth-release.py
-          --require-default-roots
-          --allow-approved-openminis-debug
+        run: |
+          python3 scripts/verify-integrated-oauth-release.py \
+            --require-default-roots \
+            --allow-approved-openminis-debug
+          python3 scripts/verify-codex-appserver.py \
+            --archive integrated-app/build/outputs/apk/debug/integrated-app-debug.apk \
+            --forbid-binary
+      - name: Build and verify Codex same-package rollback APK
+        run: |
+          ./gradlew \
+            :integrated-app:testDebugUnitTest \
+            :integrated-app:assembleDebug \
+            -PcodexAppServerRollbackBuild=true \
+            --no-daemon \
+            --stacktrace
+          python3 scripts/verify-codex-appserver.py \
+            --archive integrated-app/build/outputs/apk/debug/integrated-app-debug.apk \
+            --forbid-binary
+      - name: Verify Codex release and executable-pack negative gates
+        run: |
+          if ./gradlew :integrated-app:preReleaseBuild \
+            -PcodexAppServerEnabled=true \
+            --no-daemon; then
+            echo "Codex ON release gate unexpectedly passed" >&2
+            exit 1
+          fi
+          if ./gradlew help \
+            -PcodexAppServerEnabled=true \
+            -PcodexAppServerPackEnabled=false \
+            --no-daemon; then
+            echo "Codex ON build without executable pack unexpectedly passed" >&2
+            exit 1
+          fi
       - name: Audit Gradle 9 readiness
         run: scripts/audit-gradle9-readiness.sh
       - name: Publish reusable SDK artifacts

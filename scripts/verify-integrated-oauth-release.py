@@ -9,6 +9,7 @@ import re
 import sys
 import zipfile
 from pathlib import Path
+from pathlib import PurePosixPath
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ROOTS = (
@@ -63,6 +64,17 @@ SECRET_PATTERNS = (
     (re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"), "private key"),
 )
 REGISTRATION_CANDIDATE = re.compile(rb"[A-Za-z0-9_-]{20,80}")
+CODEX_BINARY_SHA256 = "e23d0be344d2496986c985cd3db61e6f649b1ddd900e6afc1b5aaabbffcbb4e2"
+CODEX_BINARY_SIZE = 222_231_296
+
+
+def is_codex_binary_member(name: str) -> bool:
+    parts = PurePosixPath(name).parts
+    return len(parts) >= 3 and parts[-3:] == (
+        "lib",
+        "arm64-v8a",
+        "libcodex_app_server.so",
+    )
 
 
 def iter_files(root: Path):
@@ -107,7 +119,10 @@ def scan_file(path: Path, allow_approved_openminis_debug: bool = False) -> list[
         data = path.read_bytes()
     except OSError as error:
         return [f"{path}: cannot read ({error})"]
-    debug_compatibility_path = path.name == "integrated-app-debug.apk" or (
+    debug_compatibility_path = path.name in {
+        "integrated-app-debug.apk",
+        "integrated-app-debug.aab",
+    } or (
         "src" in path.parts and "debug" in path.parts
     )
     allowed_fragments = (
@@ -120,24 +135,39 @@ def scan_file(path: Path, allow_approved_openminis_debug: bool = False) -> list[
         if allow_approved_openminis_debug and debug_compatibility_path
         else frozenset()
     )
-    findings = scan_bytes(
-        str(path),
-        data,
-        allowed_fragments,
-        allowed_registration_sha256,
+    is_archive = path.suffix.lower() in {".apk", ".aab", ".ipa", ".zip"}
+    findings = [] if is_archive else scan_bytes(
+        str(path), data, allowed_fragments, allowed_registration_sha256,
     )
-    if path.suffix.lower() not in {".apk", ".aab", ".ipa", ".zip"}:
+    if not is_archive:
         return findings
     try:
         with zipfile.ZipFile(path) as archive:
             for member in archive.infolist():
                 if member.is_dir():
                     continue
+                findings.extend(
+                    scan_bytes(
+                        f"{path}!{member.filename}#name",
+                        member.filename.encode("utf-8", "replace"),
+                        allowed_fragments,
+                        allowed_registration_sha256,
+                    )
+                )
                 try:
                     member_data = archive.read(member)
                 except (OSError, RuntimeError, zipfile.BadZipFile) as error:
                     findings.append(f"{path}!{member.filename}: cannot read ({error})")
                     continue
+                if is_codex_binary_member(member.filename):
+                    digest = hashlib.sha256(member_data).hexdigest()
+                    if len(member_data) == CODEX_BINARY_SIZE and digest == CODEX_BINARY_SHA256:
+                        # The pinned opaque executable is verified as a whole. No source, DEX,
+                        # resource, or differently named archive entry receives this exception.
+                        continue
+                    findings.append(
+                        f"{path}!{member.filename}: unapproved Codex executable checksum/size"
+                    )
                 findings.extend(
                     scan_bytes(
                         f"{path}!{member.filename}",

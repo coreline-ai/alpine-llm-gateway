@@ -4,8 +4,11 @@ import dev.alpine.chat.feature.backend.ChatBackendConnection
 import dev.alpine.chat.feature.backend.ChatBackendConnectionState
 import dev.alpine.chat.feature.backend.ChatBackendDelta
 import dev.alpine.chat.feature.backend.ChatBackendDescriptor
+import dev.alpine.chat.feature.backend.ChatBackendRequestContext
+import dev.alpine.chat.feature.backend.ChatBackendRequestPolicy
 import dev.alpine.chat.feature.backend.ChatBackendSession
 import dev.alpine.chat.feature.backend.ChatBackendStreamResult
+import dev.alpine.chat.feature.backend.ContextualChatBackendSession
 import dev.alpine.chat.feature.data.ConversationRepository
 import dev.alpine.chat.feature.model.ConversationGenerationState
 import dev.alpine.chat.feature.model.ChatRole
@@ -117,6 +120,48 @@ class ChatGenerationStateTest {
         runCurrent()
         assertEquals(0, viewModel.state.value.activeGenerationCount)
         assertEquals(0, viewModel.state.value.backgroundGenerationCount)
+    }
+
+    @Test
+    fun `profile stop waits for matching cleanup and preserves unrelated background stream`() = runTest(
+        context = dispatcher,
+    ) {
+        val ids = listOf("conversation-a", "conversation-b").iterator()
+        val repository = ConversationRepository(clock = { 100L }, idFactory = ids::next)
+        val codex = BlockingSession(profileId = "codex")
+        val direct = BlockingSession(profileId = "direct")
+        val viewModel = ChatViewModel(repository)
+        viewModel.updateConnections(
+            listOf(
+                ChatBackendConnection(codex.descriptor, ChatBackendConnectionState.AVAILABLE, codex),
+                ChatBackendConnection(direct.descriptor, ChatBackendConnectionState.AVAILABLE, direct),
+            ),
+        )
+
+        viewModel.send("codex request", codex)
+        viewModel.newConversation()
+        viewModel.selectProvider("direct")
+        viewModel.send("direct request", direct)
+        runCurrent()
+        assertEquals(2, viewModel.state.value.activeGenerationCount)
+
+        var cleanupFinished = false
+        viewModel.stopStreamingByProfile("codex") { cleanupFinished = true }
+        assertFalse(cleanupFinished)
+        runCurrent()
+
+        assertTrue(cleanupFinished)
+        assertEquals(1, viewModel.state.value.activeGenerationCount)
+        assertEquals(
+            ConversationGenerationState.CANCELLED,
+            viewModel.state.value.conversations.single { it.id == "conversation-a" }.generationState,
+        )
+        assertEquals(
+            ConversationGenerationState.STREAMING,
+            viewModel.state.value.conversations.single { it.id == "conversation-b" }.generationState,
+        )
+        viewModel.stopStreamingByProfile("direct") {}
+        runCurrent()
     }
 
     @Test
@@ -322,6 +367,27 @@ class ChatGenerationStateTest {
     }
 
     @Test
+    fun `contextual backend gets conversation identity and opts out of correction replay`() = runTest(
+        context = dispatcher,
+    ) {
+        val repository = ConversationRepository(
+            clock = { 100L },
+            idFactory = { "conversation-context" },
+        )
+        val session = NoReplayContextualSession()
+        val viewModel = ChatViewModel(repository)
+        viewModel.updateConnections(listOf(session.connection()))
+
+        viewModel.send("Reply in one sentence.", session)
+        runCurrent()
+
+        assertEquals(1, session.requests.size)
+        assertEquals("conversation-context", session.requests.single().conversationId)
+        assertTrue(session.requests.single().actionId.isNotBlank())
+        assertEquals(ConversationGenerationState.COMPLETE, activeConversation(viewModel).generationState)
+    }
+
+    @Test
     fun `ten turn fake provider regression preserves model assistant selection stop retry and history`() = runTest(
         context = dispatcher,
     ) {
@@ -399,9 +465,9 @@ class ChatGenerationStateTest {
         assertEquals("balanced", assistant.assistantPersonaId)
     }
 
-    private class BlockingSession : ChatBackendSession {
+    private class BlockingSession(profileId: String = "provider") : ChatBackendSession {
         override val descriptor = ChatBackendDescriptor(
-            profileId = "provider",
+            profileId = profileId,
             label = "Provider",
             model = "model-a",
             modelOptions = listOf("model-a", "model-b"),
@@ -415,6 +481,31 @@ class ChatGenerationStateTest {
                     emit(ChatBackendDelta("partial"))
                     awaitCancellation()
                 },
+            )
+        }
+    }
+
+    private class NoReplayContextualSession :
+        ContextualChatBackendSession,
+        ChatBackendRequestPolicy {
+        override val descriptor = ChatBackendDescriptor(
+            profileId = "contextual",
+            label = "Contextual",
+            model = "model",
+        )
+        override val allowsAutomaticCorrection = false
+        val requests = mutableListOf<ChatBackendRequestContext>()
+
+        fun connection() = ChatBackendConnection(
+            descriptor,
+            ChatBackendConnectionState.AVAILABLE,
+            this,
+        )
+
+        override suspend fun stream(request: ChatBackendRequestContext): ChatBackendStreamResult {
+            requests += request
+            return ChatBackendStreamResult(
+                events = flowOf(ChatBackendDelta("First. Second.")),
             )
         }
     }

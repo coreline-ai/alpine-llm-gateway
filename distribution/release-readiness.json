@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-08-14T12:03:04Z",
+  "updated_at": "2026-08-15T02:00:10Z",
   "gates": [
     {
       "gate_id": "project_license",
@@ -123,6 +123,43 @@
       "evidence": [
         "scripts/audit-gradle9-readiness.sh",
         "dev-plan/alpine-runtime-remaining-verification-20260802.md"
+      ]
+    },
+    {
+      "gate_id": "codex_appserver_e2e",
+      "state": "BLOCKED",
+      "owner": "LOCAL_ENGINEERING",
+      "release_blocking": true,
+      "blocker_code": "CODEX_ACCOUNT_E2E_REQUIRED",
+      "evidence": [
+        "docs/codex-appserver-integration.md",
+        "dev-plan/implement_20260815_072222.md",
+        "integration-fixtures/codex-appserver-e2e/report.template.json"
+      ]
+    },
+    {
+      "gate_id": "codex_appserver_16k",
+      "state": "BLOCKED",
+      "owner": "LOCAL_ENGINEERING",
+      "release_blocking": true,
+      "blocker_code": "CODEX_16K_DEVICE_E2E_REQUIRED",
+      "evidence": [
+        "docs/codex-appserver-integration.md",
+        "dev-plan/implement_20260815_072222.md"
+      ]
+    },
+    {
+      "gate_id": "codex_appserver_legal",
+      "state": "BLOCKED",
+      "owner": "UNASSIGNED",
+      "release_blocking": true,
+      "blocker_code": "CODEX_DISTRIBUTION_LEGAL_REVIEW_REQUIRED",
+      "evidence": [
+        "distribution/codex-appserver-legal-status.json",
+        "alpine-codex-appserver-pack-android/src/main/resources/META-INF/codex-appserver/artifact-lock.json",
+        "alpine-codex-appserver-pack-android/src/main/resources/META-INF/codex-appserver/LICENSE",
+        "alpine-codex-appserver-pack-android/src/main/resources/META-INF/codex-appserver/NOTICE",
+        "alpine-codex-appserver-pack-android/src/main/resources/META-INF/codex-appserver/sbom.spdx.json"
       ]
     }
   ]

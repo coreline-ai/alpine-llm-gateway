@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "review_state": "BLOCKED",
+  "reviewed_at": null,
+  "reviewer": "UNASSIGNED",
+  "approval_reference": null,
+  "artifact": {
+    "codex_version": "0.147.0",
+    "source_tag": "rust-v0.147.0",
+    "source_tag_object": "3ed6f04f6bf8b7c46299d1cb1ff99c74ce21a51d",
+    "source_commit": "be6e8eac029b183056b7e4402879f15d2c85f61b",
+    "source_tag_signature": "unsigned",
+    "npm_package": "@openai/codex@0.147.0-linux-arm64",
+    "binary_sha256": "e23d0be344d2496986c985cd3db61e6f649b1ddd900e6afc1b5aaabbffcbb4e2",
+    "schema_sha256": "f3dec1e031d99a420b137b903f02196d4325eece57620c925bb7130b25f168d2",
+    "license_sha256": "d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc",
+    "notice_sha256": "9d71575ecfd9a843fc1677b0efb08053c6ba9fd686a0de1a6f5382fd3c220915"
+  },
+  "decisions": {
+    "binary_redistribution": "BLOCKED",
+    "license_notice": "BLOCKED",
+    "sbom": "BLOCKED",
+    "source_provenance": "BLOCKED",
+    "unsigned_tag_exception": "BLOCKED"
+  }
+}

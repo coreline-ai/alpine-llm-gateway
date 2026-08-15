@@ -1,0 +1,20 @@
+{
+  "format_version": 1,
+  "codex_version": "0.147.0",
+  "source_repository": "https://github.com/openai/codex",
+  "source_tag": "rust-v0.147.0",
+  "source_tag_object": "3ed6f04f6bf8b7c46299d1cb1ff99c74ce21a51d",
+  "source_commit": "be6e8eac029b183056b7e4402879f15d2c85f61b",
+  "source_tag_signature": "unsigned",
+  "npm_package": "@openai/codex@0.147.0-linux-arm64",
+  "npm_registry_integrity": "sha512-SLC1JXw2TYfr/c3HhrJubyyLelq7vTOLWVmiThFA+z0+WgzCPmaseJ/kzDD3Gge/TO7fCnnj7UcPmC0d2c8XAg==",
+  "npm_tarball_sha1": "be6c86b9f6c68ff13f8287a9436758fddac5b520",
+  "npm_tarball_sha256": "4d09bf000597768dfa070b0e7c612f0fc258ac7fab364e570104ea625f918546",
+  "binary_path_in_package": "vendor/aarch64-unknown-linux-musl/bin/codex",
+  "binary_size": 222231296,
+  "binary_sha256": "e23d0be344d2496986c985cd3db61e6f649b1ddd900e6afc1b5aaabbffcbb4e2",
+  "schema_path_in_source": "codex-rs/app-server-protocol/schema/json/codex_app_server_protocol.v2.schemas.json",
+  "schema_sha256": "f3dec1e031d99a420b137b903f02196d4325eece57620c925bb7130b25f168d2",
+  "license_sha256": "d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc",
+  "notice_sha256": "9d71575ecfd9a843fc1677b0efb08053c6ba9fd686a0de1a6f5382fd3c220915"
+}

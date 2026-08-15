@@ -167,6 +167,12 @@ GRADLE_TASKS=(
   integration-fixtures/play-e2e/report.template.json
 "$PYTHON_BIN" scripts/verify-samsung-lifecycle-report.py \
   integration-fixtures/samsung-lifecycle/report.template.json
+"$PYTHON_BIN" scripts/verify-codex-appserver-e2e-report.py \
+  integration-fixtures/codex-appserver-e2e/report.template.json
+"$PYTHON_BIN" scripts/verify-codex-appserver-16k-report.py \
+  integration-fixtures/codex-appserver-16k/report.template.json
+"$PYTHON_BIN" scripts/verify-codex-appserver.py
+"$PYTHON_BIN" scripts/verify-codex-appserver-legal-status.py
 "$PYTHON_BIN" scripts/verify-release-readiness.py \
   distribution/release-readiness.json --check-evidence
 scripts/audit-gradle9-readiness.sh

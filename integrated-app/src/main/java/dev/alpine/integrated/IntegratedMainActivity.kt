@@ -65,8 +65,10 @@ import dev.alpine.chat.feature.ui.screens.chat.AlpineChatScreen
 import dev.alpine.chat.feature.ui.theme.AlpineProductTheme
 import dev.alpine.chat.feature.ui.theme.AlpineTheme
 import dev.alpine.chat.provider.android.activity.ProviderProfilesActivity
+import dev.alpine.chat.backend.codex.CodexAgentChatSession
 import dev.alpine.chat.routing.ChatExecutionMode
 import dev.alpine.chat.feature.ui.state.ChatRecoveryAction
+import dev.alpine.codex.appserver.CodexAuthState
 import dev.alpine.runtime.api.RuntimePackageAllowlistPolicy
 import dev.alpine.runtime.api.RuntimePackageAction
 import dev.alpine.runtime.api.RuntimePackageApproval
@@ -91,6 +93,7 @@ import dev.alpine.workspace.api.WorkspaceOperationException
 import dev.alpine.workspace.api.WorkspacePath
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
+import java.net.URI
 
 class IntegratedMainActivity : ComponentActivity() {
     private val app by lazy { application as IntegratedApplication }
@@ -168,7 +171,12 @@ class IntegratedMainActivity : ComponentActivity() {
                 persistAssistantDefaults = assistantDefaults::save,
             ),
         )[ChatViewModel::class.java]
-        chatHost = IntegratedChatHostController(this, chatViewModel, app.alpineLlmHost)
+        chatHost = IntegratedChatHostController(
+            this,
+            chatViewModel,
+            app.alpineLlmHost,
+            app.codexAppServerRuntime,
+        )
         setContent {
             AlpineProductTheme {
                 IntegratedApp(
@@ -178,6 +186,8 @@ class IntegratedMainActivity : ComponentActivity() {
                     chatViewModel = chatViewModel,
                     chatHost = chatHost,
                     onManageProviders = ::openProviderProfiles,
+                    onOpenCodexAuthorization = ::openCodexAuthorization,
+                    onRestartCodex = chatHost::restartCodexConnection,
                     onStartAlpine = { startAlpineWithNotificationConsent() },
                     onRestartAlpine = { startAlpineWithNotificationConsent(restart = true) },
                     onRecoveryAction = ::handleRecoveryAction,
@@ -187,7 +197,7 @@ class IntegratedMainActivity : ComponentActivity() {
                     showModeGuideInitially = modeGuideStore.shouldShowGuide(),
                     onCompleteModeGuide = { selectedMode ->
                         modeGuideStore.markCompleted()
-                        chatViewModel.selectExecutionMode(selectedMode)
+                        chatHost.selectExecutionMode(selectedMode)
                     },
                 )
             }
@@ -212,6 +222,11 @@ class IntegratedMainActivity : ComponentActivity() {
     private fun openProviderProfiles() {
         startActivity(Intent(this, ProviderProfilesActivity::class.java))
     }
+
+    private fun openCodexAuthorization(uri: URI): Boolean =
+        runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(uri.toASCIIString())))
+        }.isSuccess
 
     private fun startAlpineWithNotificationConsent(
         restart: Boolean = false,
@@ -241,7 +256,13 @@ class IntegratedMainActivity : ComponentActivity() {
             ChatRecoveryAction.RETRY -> chatViewModel.retry()
             ChatRecoveryAction.RECONNECT,
             ChatRecoveryAction.CHECK_SETTINGS,
-            -> openProviderProfiles()
+            -> if (
+                chatViewModel.state.value.selectedProfileId == CodexAgentChatSession.PROFILE_ID
+            ) {
+                chatHost.retryCodexConnection()
+            } else {
+                openProviderProfiles()
+            }
             ChatRecoveryAction.INSTALL_RUNTIME -> {
                 app.runtimeController.install().whenComplete { _, error ->
                     if (error == null) {
@@ -327,6 +348,8 @@ private fun IntegratedApp(
     chatViewModel: ChatViewModel,
     chatHost: IntegratedChatHostController,
     onManageProviders: () -> Unit,
+    onOpenCodexAuthorization: (URI) -> Boolean,
+    onRestartCodex: () -> Unit,
     onStartAlpine: () -> Unit,
     onRestartAlpine: () -> Unit,
     onRecoveryAction: (ChatRecoveryAction) -> Unit,
@@ -359,6 +382,7 @@ private fun IntegratedApp(
         }
     }
     val pendingFallback = chatHost.pendingFallback.collectAsStateWithLifecycle().value
+    val codexAuth = chatHost.codexAuth.collectAsStateWithLifecycle().value
     var showModeGuide by rememberSaveable { mutableStateOf(showModeGuideInitially) }
 
     Scaffold(
@@ -379,7 +403,7 @@ private fun IntegratedApp(
             ModeSelector(
                 mode = mode,
                 onModeChanged = { selected ->
-                    chatViewModel.selectExecutionMode(selected)
+                    chatHost.selectExecutionMode(selected)
                 },
                 onOpenGuide = { showModeGuide = true },
                 modifier = Modifier
@@ -387,26 +411,47 @@ private fun IntegratedApp(
                     .testTag("mode_selector"),
             )
             when (mode) {
-                ChatExecutionMode.FAST_CHAT -> AlpineChatScreen(
-                    state = chatState,
-                    onSelectProvider = chatViewModel::selectProvider,
-                    onSelectModel = chatHost::selectModel,
-                    onSelectAssistantMode = chatViewModel::selectAssistantMode,
-                    onResetAssistantMode = chatViewModel::resetAssistantMode,
-                    onNewChat = chatViewModel::newConversation,
-                    onSelectConversation = chatViewModel::selectConversation,
-                    onRenameConversation = chatViewModel::renameConversation,
-                    onDeleteConversation = chatViewModel::deleteConversation,
-                    onStopConversation = chatViewModel::stopStreaming,
-                    onManageProviders = onManageProviders,
-                    onDraftChange = chatViewModel::updateDraft,
-                    onSend = chatHost::send,
-                    onStop = chatViewModel::stopStreaming,
-                    failure = chatState.failure,
-                    onDismissFailure = chatViewModel::dismissFailure,
-                    onRetry = chatViewModel::retry,
-                    modifier = Modifier.weight(1f),
-                )
+                ChatExecutionMode.FAST_CHAT -> Column(Modifier.weight(1f)) {
+                    if (chatHost.isCodexEnabled) {
+                        CodexLoginCard(
+                            state = codexAuth,
+                            onStartBrowser = {
+                                chatHost.startCodexBrowserLogin(onOpenCodexAuthorization)
+                            },
+                            onStartDeviceCode = {
+                                chatHost.startCodexDeviceCodeLogin(onOpenCodexAuthorization)
+                            },
+                            onOpenAuthorization = { uri ->
+                                chatHost.openCodexAuthorization(uri, onOpenCodexAuthorization)
+                            },
+                            onCancel = chatHost::cancelCodexLogin,
+                            onLogout = chatHost::logoutCodex,
+                            onRestart = onRestartCodex,
+                            onRetry = chatHost::retryCodexConnection,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        )
+                    }
+                    AlpineChatScreen(
+                        state = chatState,
+                        onSelectProvider = chatViewModel::selectProvider,
+                        onSelectModel = chatHost::selectModel,
+                        onSelectAssistantMode = chatViewModel::selectAssistantMode,
+                        onResetAssistantMode = chatViewModel::resetAssistantMode,
+                        onNewChat = chatViewModel::newConversation,
+                        onSelectConversation = chatViewModel::selectConversation,
+                        onRenameConversation = chatViewModel::renameConversation,
+                        onDeleteConversation = chatViewModel::deleteConversation,
+                        onStopConversation = chatViewModel::stopStreaming,
+                        onManageProviders = onManageProviders,
+                        onDraftChange = chatViewModel::updateDraft,
+                        onSend = chatHost::send,
+                        onStop = chatViewModel::stopStreaming,
+                        failure = chatState.failure,
+                        onDismissFailure = chatViewModel::dismissFailure,
+                        onRetry = chatViewModel::retry,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 ChatExecutionMode.ALPINE_WORKSPACE -> AlpineWorkspace(
                     runtimeState = runtimeState,
                     workspaceState = workspaceState,
@@ -451,6 +496,113 @@ private fun IntegratedApp(
                 showModeGuide = false
             },
         )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun CodexLoginCard(
+    state: CodexAuthState,
+    onStartBrowser: () -> Unit,
+    onStartDeviceCode: () -> Unit,
+    onOpenAuthorization: (URI) -> Unit,
+    onCancel: () -> Unit,
+    onLogout: () -> Unit,
+    onRestart: () -> Unit,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth().testTag("codex_login_card"),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Codex Agent", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        when (state) {
+                            CodexAuthState.Checking -> "공식 Codex 로그인을 확인하는 중입니다."
+                            CodexAuthState.SignedOut -> "ChatGPT 계정으로 별도 연결할 수 있습니다."
+                            CodexAuthState.SignedIn -> "ChatGPT 로그인 연결됨 · 빠른 채팅 전용"
+                            is CodexAuthState.BrowserPending ->
+                                "브라우저에서 로그인을 완료하세요."
+                            is CodexAuthState.DeviceCodePending ->
+                                "기기 코드 ${state.userCode}를 입력하세요."
+                            is CodexAuthState.Failed ->
+                                "Codex 연결을 확인한 뒤 다시 시도하세요. (${state.code.name})"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                when (state) {
+                    CodexAuthState.Checking -> Unit
+                    CodexAuthState.SignedOut -> {
+                        Button(onClick = onStartBrowser, modifier = Modifier.testTag("codex_login")) {
+                            Text("ChatGPT 로그인")
+                        }
+                        TextButton(
+                            onClick = onStartDeviceCode,
+                            modifier = Modifier.testTag("codex_device_login"),
+                        ) {
+                            Text("기기 코드")
+                        }
+                    }
+                    CodexAuthState.SignedIn -> {
+                        TextButton(
+                            onClick = onRestart,
+                            modifier = Modifier.testTag("codex_restart"),
+                        ) {
+                            Text("연결 다시 시작")
+                        }
+                        TextButton(
+                            onClick = onLogout,
+                            modifier = Modifier.testTag("codex_logout"),
+                        ) {
+                            Text("로그아웃")
+                        }
+                    }
+                    is CodexAuthState.BrowserPending -> {
+                        OutlinedButton(
+                            onClick = { onOpenAuthorization(state.authorizationUri) },
+                            modifier = Modifier.testTag("codex_open_login"),
+                        ) {
+                            Text("브라우저 다시 열기")
+                        }
+                        TextButton(onClick = onCancel) { Text("취소") }
+                    }
+                    is CodexAuthState.DeviceCodePending -> {
+                        OutlinedButton(
+                            onClick = { onOpenAuthorization(state.verificationUri) },
+                            modifier = Modifier.testTag("codex_open_device_login"),
+                        ) {
+                            Text("코드 입력 페이지")
+                        }
+                        TextButton(onClick = onCancel) { Text("취소") }
+                    }
+                    is CodexAuthState.Failed -> OutlinedButton(
+                        onClick = onRetry,
+                        modifier = Modifier.testTag("codex_retry_connection"),
+                    ) {
+                        Text("다시 확인")
+                    }
+                }
+            }
+        }
     }
 }
 

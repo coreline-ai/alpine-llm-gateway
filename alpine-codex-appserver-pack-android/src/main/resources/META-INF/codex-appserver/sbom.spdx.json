@@ -1,0 +1,55 @@
+{
+  "spdxVersion": "SPDX-2.3",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "alpine-codex-appserver-pack-android-0.147.0",
+  "documentNamespace": "https://dev.alpine.invalid/spdx/codex-appserver/0.147.0",
+  "creationInfo": {
+    "created": "2026-08-15T00:00:00Z",
+    "creators": ["Tool: alpine-llm-gateway-artifact-lock-v1"]
+  },
+  "packages": [
+    {
+      "name": "OpenAI Codex",
+      "SPDXID": "SPDXRef-Package-Codex",
+      "versionInfo": "0.147.0-linux-arm64",
+      "downloadLocation": "https://registry.npmjs.org/@openai/codex",
+      "filesAnalyzed": true,
+      "licenseConcluded": "Apache-2.0",
+      "licenseDeclared": "Apache-2.0",
+      "copyrightText": "Copyright 2025 OpenAI",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "e23d0be344d2496986c985cd3db61e6f649b1ddd900e6afc1b5aaabbffcbb4e2"
+        }
+      ]
+    }
+  ],
+  "files": [
+    {
+      "fileName": "lib/arm64-v8a/libcodex_app_server.so",
+      "SPDXID": "SPDXRef-File-Codex-App-Server",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "e23d0be344d2496986c985cd3db61e6f649b1ddd900e6afc1b5aaabbffcbb4e2"
+        }
+      ],
+      "licenseConcluded": "Apache-2.0",
+      "copyrightText": "Copyright 2025 OpenAI"
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-Codex"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-Codex",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-File-Codex-App-Server"
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 package dev.alpine.chat.provider.android
 
 import android.content.Context
+import dev.alpine.chat.feature.backend.ChatBackendConnection
 import dev.alpine.chat.feature.ui.ChatViewModel
 import dev.alpine.chat.provider.android.data.ProviderProfileStore
 import dev.alpine.chat.provider.android.model.ProviderProfile
@@ -30,6 +31,11 @@ class DirectChatHostController(
     private var sessions: Map<String, ChatCompletionSession> = emptyMap()
 
     fun refreshConnections() {
+        viewModel.updateConnections(snapshotConnections())
+    }
+
+    /** Additive snapshot API used by product hosts that merge a synthetic backend. */
+    fun snapshotConnections(): List<ChatBackendConnection> {
         val profiles = store.load()
         val enabledSessionKeys = profiles.flatMap { profile ->
             profile.enabledModelIds().map { model -> ProviderSessionKey.from(profile, model) }
@@ -41,18 +47,32 @@ class DirectChatHostController(
         )
         val connections = registry.snapshot(profiles)
         sessions = connections.associate { it.profile.id to it.session }
-        viewModel.updateConnections(connections.map { it.asChatBackendConnection() })
+        return connections.map { it.asChatBackendConnection() }
     }
 
     fun selectModel(profileId: String, model: String) {
-        val option = viewModel.state.value.providers.firstOrNull { it.profileId == profileId }
-            ?: return
-        if (model !in option.modelOptions || option.model == model) return
+        if (!persistModelSelection(profileId, model)) return
+        refreshConnections()
+    }
 
-        val profile = store.find(profileId) ?: return
+    /**
+     * Additive composition API: applies the same direct-provider model selection without
+     * publishing a temporary direct-only connection list to the shared ViewModel.
+     */
+    fun selectModelAndSnapshot(profileId: String, model: String): List<ChatBackendConnection> {
+        persistModelSelection(profileId, model)
+        return snapshotConnections()
+    }
+
+    private fun persistModelSelection(profileId: String, model: String): Boolean {
+        val option = viewModel.state.value.providers.firstOrNull { it.profileId == profileId }
+            ?: return false
+        if (model !in option.modelOptions || option.model == model) return false
+
+        val profile = store.find(profileId) ?: return false
         viewModel.selectModel(profileId, model)
         store.upsert(profile.copy(model = model))
-        refreshConnections()
+        return true
     }
 
     fun send(text: String) {

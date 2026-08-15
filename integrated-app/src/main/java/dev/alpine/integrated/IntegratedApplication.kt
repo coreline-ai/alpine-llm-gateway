@@ -1,6 +1,7 @@
 package dev.alpine.integrated
 
 import android.app.Application
+import dev.alpine.codex.appserver.CodexAppServerRuntime
 import dev.alpine.runtime.android.AndroidRuntimeConfiguration
 import dev.alpine.runtime.android.DefaultAndroidAlpineRuntimeFactory
 import dev.alpine.runtime.api.AlpineRuntimeManager
@@ -32,6 +33,9 @@ open class IntegratedApplication : Application() {
         private set
     lateinit var workspaceController: WorkspaceHostController
         private set
+    val codexAppServerRuntime: CodexAppServerRuntime? by lazy {
+        if (BuildConfig.CODEX_APP_SERVER_ENABLED) CodexAppServerRuntime(this) else null
+    }
     private lateinit var bridgeEndpointRegistry: LlmBridgeEndpointRegistry
     private var backgroundBinding: RuntimeSubscription? = null
 
@@ -82,6 +86,7 @@ open class IntegratedApplication : Application() {
     }
 
     override fun onTerminate() {
+        codexAppServerRuntime?.close()
         backgroundBinding?.close()
         backgroundController.stop()
         alpineLlmHost.close()

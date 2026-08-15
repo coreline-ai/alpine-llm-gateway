@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/badge/version-0.3.0-B9F227?style=flat-square&labelColor=10120F)](../gradle.properties)
 ![Android](https://img.shields.io/badge/Android-API%2026--36-3DDC84?style=flat-square&logo=android&logoColor=white)
 ![Modes](https://img.shields.io/badge/modes-Fast%20Chat%20%7C%20Alpine%20Work-31372F?style=flat-square)
-![Distribution](https://img.shields.io/badge/distribution-INTERNAL%20ONLY-F59E0B?style=flat-square)
+![Distribution](https://img.shields.io/badge/distribution-OWNER%20AUTHORIZED-2563EB?style=flat-square)
 
 `dev.alpine.integrated`는 재사용 Chat·Provider·Runtime·Bridge SDK를 한 Android 앱에 조립하는 제품 통합 Host다. 검정·아이보리·라임 디자인 시스템을 사용하며 시스템 dynamic color와 무관하게 동일한 제품 팔레트를 유지한다.
 
@@ -76,6 +76,28 @@ lifecycle marker만 정리하며 정상 연결과 token을 유지한다.
 
 Anthropic/Codex/xAI direct OAuth 유형은 compatibility/reference 경로다. 다른 앱·CLI의 client ID를 복사해 제품 connector로 사용하지 않는다. 실제 출시 인증 경계는 [Provider OAuth adapter 요구사항](../docs/provider-oauth-adapters.md)을 따른다.
 
+## Codex Agent 내부 검증
+
+`Codex Agent (ChatGPT 로그인)`은 위 direct Codex Provider와 다른 synthetic connection이다. 공식 Codex
+App Server가 browser callback, credential refresh, logout을 소유하며 앱은 token이나 credential 파일을
+읽지 않는다. 이 경로는 빠른 채팅 전용이고 기본 build에서는 OFF다.
+
+```bash
+python3.11 scripts/import-codex-appserver-artifact.py /path/to/openai-codex-0.147.0-linux-arm64.tgz
+./gradlew :integrated-app:assembleDebug -PcodexAppServerEnabled=true
+```
+
+ON debug build는 기존 `dev.alpine.integrated.debug`의 data를 보존하도록
+`dev.alpine.integrated.codexdebug` side-by-side package를 사용한다. 상세 artifact lock, security boundary,
+Samsung E2E와 rollback은 [Codex App Server Android 통합](../docs/codex-appserver-integration.md)을 따른다.
+
+같은 `dev.alpine.integrated.codexdebug` package를 uninstall/data clear 없이 기능 OFF로 되돌리는 검증 APK는
+`-PcodexAppServerRollbackBuild=true`로 빌드한다. 이 property는 UI와 executable을 켜지 않는다.
+
+Codex ON property는 기본적으로 fail-closed다. `codexCurrentStatePublicRelease=true`는 프로젝트 소유자의
+명시적 현재 상태 배포 결정을 검증한 뒤에만 ON release 생성을 허용하며, 미완료 account/16 KiB/legal
+증거를 `PASS`로 바꾸지 않는다. 공개 artifact builder는 `scripts/build-current-state-public-release.sh`다.
+
 ## Alpine 작업 시작 순서
 
 1. Provider profile에 로그인하고 사용할 모델을 선택한다.
@@ -131,6 +153,7 @@ ANDROID_SERIAL=<device-serial> \
 | Integrated OAuth/app boundary scan | **Local PASS** — consumer/CLI fingerprint, known copied registration/API key/private key 및 demo/probe/sample package fail-closed 검사 |
 | 빠른 채팅·Gateway·Runtime·패키지 화면 | Samsung portrait 확인 |
 | 실제 Provider 계정 OAuth/API E2E | `NOT_RUN` — 외부 승인 필요 |
+| Codex App Server | **부분 PASS** — Samsung process/initialize/account-read와 official browser OAuth 시작 PASS. 실제 account callback/model/turn/logout은 사용자 완료 필요 |
 
 Instrumentation은 실제 credential을 사용하지 않는 fake Provider로 로그인→모델 선택→stream→모드 왕복→Stop→503→retry, 대화 복원과 Alpine fallback 승인·거절 전 direct Provider 미호출을 검증한다. OAuth lifecycle 회귀는 Activity 재생성, orphaned encrypted transaction 폐기, 성공 token 우선, stale attempt 격리와 명시적 재로그인을 검증한다. Gateway 자동 복구는 user Stop·owner swap 직후 queued/in-flight restart에 recovery lease가 남지 않는지 단위 회귀로 검증하며, 취소 경로는 prompt·terminal command·direct Provider fallback을 호출하지 않는다. 추가 접근성 회귀는 한국어 icon label, 메시지 sender/status semantics, History·Assistant 닫기, 48dp action과 한글 IME 단일 전송을 검증한다. 장치 probe는 실제 PRoot Runtime, loopback HostBridge, bundled Python Gateway, `llmctl`, stream·cancel과 capability 회전을 별도로 검증한다.
 
@@ -143,6 +166,9 @@ Instrumentation은 실제 credential을 사용하지 않는 fake Provider로 로
 - terminal process 종료 뒤 module-level Samsung FGS/notification 제거는 통과했다. 다만 통합 제품의 사용자가 선택한 notification permission UX와 OEM Doze/reboot/battery restriction lifecycle은 `NOT_RUN`이다.
 - Provider·Chat·History·Assistant·first-run guide의 semantics, 48dp, 한글 IME와 200% font·compact 자동 검증은 통과했지만 실제 TalkBack 음성·focus gesture, Switch Access와 foldable 화면은 확장 QA가 남아 있다.
 - 실제 Provider 계정 browser callback 도중 process kill, refresh/logout과 OEM background 정책은 승인된 계정·기기 창에서 추가 검증해야 한다.
+- Codex App Server의 16 KiB page device E2E, unsigned source tag와 SBOM/license legal review는 미완료
+  증거다. 프로젝트 소유자는 현재 상태 전체 배포를 별도로 승인했다.
 - Gemini 외 direct Provider는 Provider가 승인한 model catalog를 아직 번들하지 않는다. 앱 소유 OAuth·endpoint·scope·model을 명시 입력해도 실계정 OAuth/API E2E 전에는 `NOT_RUN`이다.
 - x86_64 Runtime은 emulator E2E 전까지 실험 상태다.
-- 공개 배포는 프로젝트 라이선스와 corresponding source gate로 차단되어 있다.
+- 프로젝트 라이선스와 corresponding source gate는 감사상 `BLOCKED`로 유지되며 현재 상태 소유자 배포
+  결정과 분리해 표시한다.

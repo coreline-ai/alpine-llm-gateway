@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "executed": false,
+  "executed_at": null,
+  "build_commit": "NOT_RECORDED",
+  "artifact_sha256": "NOT_RECORDED",
+  "device": {
+    "manufacturer": "NOT_RECORDED",
+    "model": "NOT_RECORDED",
+    "api_level": null,
+    "page_size": null,
+    "abi": "arm64-v8a"
+  },
+  "measurements": {},
+  "checks": {}
+}

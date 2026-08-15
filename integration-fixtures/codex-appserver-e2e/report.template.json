@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "executed": false,
+  "executed_at": null,
+  "build_commit": "NOT_RECORDED",
+  "device": {
+    "manufacturer": "Samsung",
+    "model": "NOT_RECORDED",
+    "api_level": null,
+    "page_size": null
+  },
+  "checks": {},
+  "destructive_tests_approved": false,
+  "destructive_checks": {}
+}

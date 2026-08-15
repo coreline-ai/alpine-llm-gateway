@@ -62,6 +62,15 @@ def test_openminis_xai_material_is_allowed_only_for_an_explicit_debug_scan() -> 
         assert approved_debug.returncode == 0
 
 
+def test_openminis_material_in_debug_aab_requires_explicit_approval() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        aab = Path(directory) / "integrated-app-debug.aab"
+        with zipfile.ZipFile(aab, "w") as archive:
+            archive.writestr("base/dex/classes.dex", b"grok-cli:access")
+        assert run_scan(aab).returncode == 1
+        assert run_scan(aab, allow_approved_openminis_debug=True).returncode == 0
+
+
 def test_openminis_claude_material_is_allowed_only_for_an_explicit_debug_scan() -> None:
     with tempfile.TemporaryDirectory() as directory:
         apk = Path(directory) / "integrated-app-debug.apk"
@@ -74,3 +83,16 @@ def test_openminis_claude_material_is_allowed_only_for_an_explicit_debug_scan() 
         assert strict.returncode == 1
         assert "Claude consumer compatibility endpoint" in strict.stderr
         assert approved_debug.returncode == 0
+
+
+def test_codex_named_binary_requires_exact_opaque_artifact() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        apk = Path(directory) / "integrated-product.apk"
+        with zipfile.ZipFile(apk, "w", compression=zipfile.ZIP_STORED) as archive:
+            archive.writestr(
+                "lib/arm64-v8a/libcodex_app_server.so",
+                b"codex_cli_rs chatgpt.com/backend-api wrong-binary",
+            )
+        result = run_scan(apk)
+        assert result.returncode == 1
+        assert "unapproved Codex executable checksum/size" in result.stderr

@@ -11,3 +11,4 @@ local.properties
 config.json
 *.log
 .DS_Store
+.codex-artifacts/

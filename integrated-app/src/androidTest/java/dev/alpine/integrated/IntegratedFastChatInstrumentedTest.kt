@@ -54,6 +54,7 @@ import dev.alpine.chat.routing.ChatFailureStage
 import dev.alpine.chat.routing.ChatStreamEmitter
 import dev.alpine.chat.routing.SafeChatRouter
 import dev.alpine.chat.feature.ui.theme.AlpineProductTheme
+import dev.alpine.codex.appserver.CodexAuthState
 import dev.alpine.llm.OAuthAuthenticationState
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -201,6 +202,72 @@ class IntegratedFastChatInstrumentedTest {
         compose.onNodeWithTag("model_quick_switcher").assertDoesNotExist()
         compose.onNodeWithTag("assistant_mode_selector").assertDoesNotExist()
         compose.onNodeWithTag("message_input").assertIsDisplayed()
+    }
+
+    @Test
+    fun codexAgentUiIsBuildGatedAndFastChatOnly() {
+        if (BuildConfig.CODEX_APP_SERVER_ROLLBACK_BUILD) {
+            assertFalse(BuildConfig.CODEX_APP_SERVER_ENABLED)
+            assertEquals("dev.alpine.integrated.codexdebug", context.packageName)
+        }
+        launch()
+
+        if (BuildConfig.CODEX_APP_SERVER_ENABLED) {
+            compose.onNodeWithTag("codex_login_card").assertIsDisplayed()
+            compose.onNodeWithText("Codex Agent").assertIsDisplayed()
+        } else {
+            compose.onNodeWithTag("codex_login_card").assertDoesNotExist()
+        }
+
+        compose.onNodeWithTag("mode_alpine_workspace").performClick()
+        compose.onNodeWithTag("codex_login_card").assertDoesNotExist()
+
+        compose.onNodeWithTag("mode_fast_chat").performClick()
+        if (BuildConfig.CODEX_APP_SERVER_ENABLED) {
+            compose.onNodeWithTag("codex_login_card").assertIsDisplayed()
+        } else {
+            compose.onNodeWithTag("codex_login_card").assertDoesNotExist()
+        }
+    }
+
+    @Test
+    fun codexSignedInRestartAndLogoutRemainReachableAtTwoHundredPercentFont() {
+        launch()
+        val activity = checkNotNull(currentActivity) as ComponentActivity
+        var restartCount = 0
+        var logoutCount = 0
+        instrumentation.runOnMainSync {
+            activity.setContent {
+                CompositionLocalProvider(LocalDensity provides Density(3f, 2f)) {
+                    AlpineProductTheme {
+                        CodexLoginCard(
+                            state = CodexAuthState.SignedIn,
+                            onStartBrowser = {},
+                            onStartDeviceCode = {},
+                            onOpenAuthorization = {},
+                            onCancel = {},
+                            onLogout = { logoutCount += 1 },
+                            onRestart = { restartCount += 1 },
+                            onRetry = {},
+                        )
+                    }
+                }
+            }
+        }
+        compose.waitForIdle()
+
+        compose.onNodeWithTag("codex_restart")
+            .assertIsDisplayed()
+            .assertHeightIsAtLeast(48.dp)
+            .performClick()
+        compose.onNodeWithTag("codex_logout")
+            .assertIsDisplayed()
+            .assertHeightIsAtLeast(48.dp)
+            .performClick()
+        compose.runOnIdle {
+            assertEquals(1, restartCount)
+            assertEquals(1, logoutCount)
+        }
     }
 
     @Test
