@@ -4,6 +4,8 @@
   </a>
 
   <h1>Alpine AI Workspace</h1>
+  
+<img width="2752" height="1536" alt="스마트한_모바일_시스템_작업_환경" src="https://github.com/user-attachments/assets/66ccb049-7e38-42eb-87e1-c333c1122037" />
 
   <p><strong>Android LLM 채팅과 로컬 Alpine Linux 작업 환경을 하나의 안전한 모듈형 워크스페이스로.</strong></p>
   <p>빠른 Provider 채팅, 공식 Codex App Server 로그인, PRoot Runtime, Python Gateway와 재사용 Android SDK를 한 저장소에서 개발합니다.</p>
