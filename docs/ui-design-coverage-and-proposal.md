@@ -1,6 +1,6 @@
 # UI 디자인 적용 범위와 검증 기준
 
-갱신 일시: `2026-08-16 10:08 KST`
+갱신 일시: `2026-08-16 10:29 KST`
 
 ## 목적
 
@@ -44,8 +44,8 @@
 | 구분 | 개수 | 해상도 | 용도 |
 |---|---:|---|---|
 | README 대표 화면 | 3 | 원본 비율 유지 | 모드 안내, 빠른 채팅, Runtime·Linux terminal |
-| Samsung 원본 검증 캡처 | 10 | `1080 × 2340` | 기능·회귀 증거 archive |
-| PD20 원본 검증 캡처 | 5 | `1080 × 2160` | compact 화면·상태 증거 archive |
+| Samsung 원본 검증 캡처 | 11 | `1080 × 2340` | 기능·회귀 증거 archive |
+| PD20 원본 검증 캡처 | 4 | `1080 × 2160` | compact 화면·상태 증거 archive |
 
 원본 15개는 `docs/assets/screenshots/`에 유지한다. README 대표 화면은 `width="260"`만 지정해 원본 세로 비율을 보존한다. `scripts/verify-ui-design-contract.py`는 전체 asset 수·해상도·PNG chunk와 README 대표 3개의 exact allowlist·중복·경로를 각각 검사한다.
 
