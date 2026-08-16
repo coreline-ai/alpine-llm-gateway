@@ -75,7 +75,7 @@
 |---|---|---|
 | 공식 Codex App Server 로그인 | ✅ `PASS` | Samsung에서 browser callback, account/model, credential refresh와 cold start 유지 확인 |
 | Codex 채팅 lifecycle | ✅ `PASS` | multi-turn, stream, Stop, no-replay, controlled restart, Activity recreation 확인 |
-| 기존 Provider·Alpine 회귀 | ✅ `PASS` | 확장 ON/OFF 각각 `1821/1821`, 최신 로컬 unittest `150/150`, pytest `157/157` |
+| 기존 Provider·Alpine 회귀 | ✅ `PASS` | 확장 ON/OFF 각각 `1821/1821`, 최신 로컬 unittest `OK (150 run, 4 skipped)`, pytest `157 passed` |
 | Runtime·PTY·Bridge | ✅ `PASS` | ARM64 Samsung에서 PRoot, initial PTY size, Gateway lifecycle, repair/restart 확인 |
 | SDK publication matrix | ✅ `PASS` | publication `19/19`, 외부 consumer 조합 `8/8` |
 | GUI/UX | 🚧 `REDESIGN REQUIRED` | token·접근성 자동 계약은 통과했지만 정보 구조·시각 위계·핵심 흐름 재설계 필요 |
@@ -297,7 +297,7 @@ Streaming은 Provider HTTP 연결·status 단계까지만 재시도합니다. st
 | 검증 축 | 결과 | 최신 근거 |
 |---|---|---|
 | GitHub Actions | ✅ `SUCCESS` | `main@f26931a`, run `31875767445` |
-| Python | ✅ `PASS` | 최신 로컬 unittest `150/150`, pytest `157/157`; publication baseline `148/148`, `155/155` |
+| Python | ✅ `PASS` | 최신 로컬 unittest `OK (150 run, 4 skipped)`, pytest `157 passed`; publication baseline `148/148`, `155/155` |
 | Android Codex ON/OFF | ✅ `PASS` | 각각 `1821/1821` task |
 | Default feature-OFF release | ✅ `PASS` | `595/595`, Codex binary 부재 |
 | SDK publication/consumer | ✅ `PASS` | `19/19`, `8/8` |
