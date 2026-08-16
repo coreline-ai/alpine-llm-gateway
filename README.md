@@ -75,7 +75,7 @@
 |---|---|---|
 | 공식 Codex App Server 로그인 | ✅ `PASS` | Samsung에서 browser callback, account/model, credential refresh와 cold start 유지 확인 |
 | Codex 채팅 lifecycle | ✅ `PASS` | multi-turn, stream, Stop, no-replay, controlled restart, Activity recreation 확인 |
-| 기존 Provider·Alpine 회귀 | ✅ `PASS` | 확장 ON/OFF 각각 `1821/1821`, Python 최종 `148/148`, pytest `155/155` |
+| 기존 Provider·Alpine 회귀 | ✅ `PASS` | 확장 ON/OFF 각각 `1821/1821`, 최신 로컬 unittest `150/150`, pytest `157/157` |
 | Runtime·PTY·Bridge | ✅ `PASS` | ARM64 Samsung에서 PRoot, initial PTY size, Gateway lifecycle, repair/restart 확인 |
 | SDK publication matrix | ✅ `PASS` | publication `19/19`, 외부 consumer 조합 `8/8` |
 | GUI/UX | 🚧 `REDESIGN REQUIRED` | token·접근성 자동 계약은 통과했지만 정보 구조·시각 위계·핵심 흐름 재설계 필요 |
@@ -92,50 +92,17 @@ Production-signed `v0.3.0` APK/AAB와 [private GitHub Release](https://github.co
 <a id="screens"></a>
 ## 📱 앱 화면
 
-현재 내부 개발 빌드에서 캡처한 **공개 가능한 핵심 화면 15개**입니다. 기능 위치를 설명하는 개발 증거이며 최종 GUI 시안이 아닙니다. OAuth 계정·client ID·token·기기 serial·실사용 terminal 출력은 포함하지 않았습니다.
+현재 내부 개발 빌드를 대표하는 **핵심 화면 3개**만 선별했습니다. 기능 위치를 설명하는 개발 증거이며 최종 GUI 시안이 아닙니다. OAuth 계정·client ID·token·기기 serial·실사용 terminal 출력은 포함하지 않았습니다.
 
-캡처는 각 기기의 원본 비율을 보존합니다. Samsung 기준 `1080 × 2340` 10개와 PD20 기준 `1080 × 2160` 5개이며, 이미지를 누르면 원본을 볼 수 있습니다.
-
-<details open>
-<summary><strong>공개 가능한 핵심 화면 갤러리 펼치기</strong></summary>
-<br>
 <table>
   <tr>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/10-mode-guide.png"><img src="docs/assets/screenshots/10-mode-guide.png" width="260" alt="첫 실행 모드 안내"></a><br><strong>첫 실행 모드 안내</strong><br><sub>빠른 채팅과 Alpine 작업의 경로·제한 비교</sub></td>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/14-provider-empty-state.png"><img src="docs/assets/screenshots/14-provider-empty-state.png" width="260" alt="Provider 연결 빈 상태"></a><br><strong>LLM 연결</strong><br><sub>OAuth Provider가 없을 때의 안전한 시작점</sub></td>
-  </tr>
-  <tr>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/01-fast-chat.png"><img src="docs/assets/screenshots/01-fast-chat.png" width="260" alt="빠른 채팅 연결 전 화면"></a><br><strong>빠른 채팅</strong><br><sub>Provider 연결 전 안내와 실행 모드 전환</sub></td>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/02-conversation-history.png"><img src="docs/assets/screenshots/02-conversation-history.png" width="260" alt="대화 기록 drawer"></a><br><strong>암호화 대화 기록</strong><br><sub>기존 대화 검색·선택·관리</sub></td>
-  </tr>
-  <tr>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/03-assistant-mode.png"><img src="docs/assets/screenshots/03-assistant-mode.png" width="260" alt="Assistant skill 선택"></a><br><strong>Assistant Skill</strong><br><sub>현재 대화의 응답 방식 선택</sub></td>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/04-assistant-personas.png"><img src="docs/assets/screenshots/04-assistant-personas.png" width="260" alt="Skill과 Persona 목록"></a><br><strong>Skill · Persona 카탈로그</strong><br><sub>기본 Skill과 Persona 탐색</sub></td>
-  </tr>
-  <tr>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/05-assistant-defaults.png"><img src="docs/assets/screenshots/05-assistant-defaults.png" width="260" alt="Persona와 기본값 설정"></a><br><strong>Persona · 기본값</strong><br><sub>대화별 선택과 기본값 저장</sub></td>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/06-provider-connections.png"><img src="docs/assets/screenshots/06-provider-connections.png" width="260" alt="LLM 연결 목록"></a><br><strong>LLM 연결 관리</strong><br><sub>OAuth Provider profile 상태</sub></td>
-  </tr>
-  <tr>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/06a-provider-types.png"><img src="docs/assets/screenshots/06a-provider-types.png" width="260" alt="Provider 유형 선택"></a><br><strong>Provider 유형</strong><br><sub>Codex·Claude·Gemini·Grok 연결 경로</sub></td>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/07-alpine-gateway-chat.png"><img src="docs/assets/screenshots/07-alpine-gateway-chat.png" width="260" alt="Alpine Gateway 채팅 화면"></a><br><strong>Gateway 채팅</strong><br><sub>Alpine Gateway 기반 대화</sub></td>
-  </tr>
-  <tr>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/11-alpine-workspace-gateway.png"><img src="docs/assets/screenshots/11-alpine-workspace-gateway.png" width="260" alt="Alpine 작업 Gateway 준비 상태"></a><br><strong>Alpine 작업 준비</strong><br><sub>Runtime 설치 전 Gateway·Provider 의존성 안내</sub></td>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/12-runtime-install-dashboard.png"><img src="docs/assets/screenshots/12-runtime-install-dashboard.png" width="260" alt="Runtime 설치 대시보드"></a><br><strong>Runtime 설치 대시보드</strong><br><sub>설치 필요 상태와 다음 action</sub></td>
-  </tr>
-  <tr>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/13-runtime-terminal-command.png"><img src="docs/assets/screenshots/13-runtime-terminal-command.png" width="260" alt="Linux terminal 명령 패널"></a><br><strong>Linux terminal 명령 패널</strong><br><sub>출력 viewport·명령 입력·중단 control</sub></td>
-    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/08-alpine-runtime-tools.png"><img src="docs/assets/screenshots/08-alpine-runtime-tools.png" width="260" alt="Runtime과 Linux 터미널"></a><br><strong>Runtime · Linux terminal</strong><br><sub>설치·복구·PTY terminal 제어</sub></td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center" valign="top"><a href="docs/assets/screenshots/09-runtime-package-manager.png"><img src="docs/assets/screenshots/09-runtime-package-manager.png" width="260" alt="Alpine 패키지 설치 UI"></a><br><strong>패키지 allowlist UI</strong><br><sub>승인된 Alpine 패키지 설치</sub></td>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/10-mode-guide.png"><img src="docs/assets/screenshots/10-mode-guide.png" width="260" alt="빠른 채팅과 Alpine 작업 모드 안내"></a><br><strong>모드 안내</strong><br><sub>빠른 채팅과 Alpine 작업의 실행 경로·준비 조건</sub></td>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/01-fast-chat.png"><img src="docs/assets/screenshots/01-fast-chat.png" width="260" alt="Alpine AI Workspace 빠른 채팅 화면"></a><br><strong>빠른 채팅</strong><br><sub>Provider 연결·모델 선택과 독립 실행 경로</sub></td>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/08-alpine-runtime-tools.png"><img src="docs/assets/screenshots/08-alpine-runtime-tools.png" width="260" alt="Alpine Runtime과 Linux 터미널 화면"></a><br><strong>Runtime · Linux terminal</strong><br><sub>Alpine 설치·복구·PTY terminal 작업</sub></td>
   </tr>
 </table>
 
-
-> **의도적으로 제외한 상태** — 실제 OAuth 브라우저·callback, 계정 정보, public client ID 입력값, token/credential, 사용자 workspace 경로·terminal 출력, 파괴적 package/Runtime 확인 dialog는 저장소 이미지로 남기지 않습니다. 이 갤러리는 모든 사용자별·민감 상태가 아니라, 현재 검토 가능한 제품 핵심 플로우를 보여 줍니다. CI는 preview 크기·link·PNG CRC와 허용된 image/color chunk만 검사해 EXIF·text·time metadata가 포함된 screenshot을 거부합니다. 단, visible pixel의 공개 가능 여부는 계속 사람이 검토합니다.
-</details>
+> **캡처 정책 —** README에는 위 대표 화면 3개만 노출합니다. 검증용 원본 캡처 15개는 `docs/assets/screenshots/`에 유지하며 CI가 해상도·PNG CRC·허용 chunk와 대표 이미지 exact allowlist를 검사합니다. 실제 OAuth 브라우저·callback, 계정, public client ID 입력값, token/credential, 사용자 workspace 경로·terminal 출력은 저장소 이미지로 남기지 않습니다.
 
 ## 🧭 두 가지 실행 모드
 
@@ -330,13 +297,13 @@ Streaming은 Provider HTTP 연결·status 단계까지만 재시도합니다. st
 | 검증 축 | 결과 | 최신 근거 |
 |---|---|---|
 | GitHub Actions | ✅ `SUCCESS` | `main@f26931a`, run `31875767445` |
-| Python | ✅ `PASS` | unittest `148/148`, pytest `155/155` |
+| Python | ✅ `PASS` | 최신 로컬 unittest `150/150`, pytest `157/157`; publication baseline `148/148`, `155/155` |
 | Android Codex ON/OFF | ✅ `PASS` | 각각 `1821/1821` task |
 | Default feature-OFF release | ✅ `PASS` | `595/595`, Codex binary 부재 |
 | SDK publication/consumer | ✅ `PASS` | `19/19`, `8/8` |
 | Samsung Codex account/chat | ✅ `PASS` | callback, refresh, multi-turn, Stop, restart, lifecycle |
 | Samsung AAB delivery | ✅ `PASS` | ARM64 4 split, signer와 login/data 유지 |
-| UI 자동 계약 | ✅ `PASS` | token, screenshot metadata/CRC, semantics·IME·200% font |
+| UI 자동 계약 | ✅ `PASS` | token, 대표 3개/원본 15개 screenshot 계약, metadata/CRC, semantics·IME·200% font |
 | GUI 제품 품질 | 🚧 `REDESIGN REQUIRED` | 소유자 시각·사용성 검토 미승인 |
 
 ### 로컬 회귀

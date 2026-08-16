@@ -37,7 +37,13 @@
       ]
     ],
     "preview_width": 260,
-    "count": 15,
+    "asset_count": 15,
+    "readme_featured_count": 3,
+    "readme_featured_files": [
+      "10-mode-guide.png",
+      "01-fast-chat.png",
+      "08-alpine-runtime-tools.png"
+    ],
     "max_file_bytes": 8388608,
     "allowed_png_chunks": [
       "IHDR",

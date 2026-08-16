@@ -189,8 +189,9 @@ def verify_screenshots(tokens: dict[str, object]) -> None:
     if max_file_bytes <= 0:
         fail("readme_screenshot.max_file_bytes must be positive")
     screenshots = sorted(SCREENSHOT_DIR.glob("*.png"))
-    if len(screenshots) != int(contract["count"]):
-        fail(f"expected {contract['count']} screenshots, found {len(screenshots)}")
+    asset_count = int(contract["asset_count"])
+    if len(screenshots) != asset_count:
+        fail(f"expected {asset_count} screenshot assets, found {len(screenshots)}")
     for screenshot in screenshots:
         actual = png_dimensions(screenshot)
         if actual not in allowed_dimensions:
@@ -211,10 +212,26 @@ def verify_screenshots(tokens: dict[str, object]) -> None:
         r'<img\b[^>]*src="(docs/assets/screenshots/[^"]+\.png)"[^>]*>',
         section,
     )
-    if len(image_tags) != int(contract["count"]):
-        fail(f"README expected {contract['count']} screenshot tags, found {len(image_tags)}")
+    featured_count = int(contract.get("readme_featured_count", asset_count))
+    if len(image_tags) != featured_count:
+        fail(f"README expected {featured_count} featured screenshot tags, found {len(image_tags)}")
     if len(set(image_tags)) != len(image_tags):
         fail("README screenshot references must be unique")
+
+    featured_files_raw = contract.get("readme_featured_files")
+    if (
+        not isinstance(featured_files_raw, list)
+        or len(featured_files_raw) != featured_count
+    ):
+        fail(
+            "readme_screenshot.readme_featured_files must match "
+            "readme_featured_count"
+        )
+    expected_featured = [
+        f"docs/assets/screenshots/{str(name)}" for name in featured_files_raw
+    ]
+    if image_tags != expected_featured:
+        fail(f"README featured screenshot drift: expected={expected_featured} actual={image_tags}")
 
     preview_width = int(contract["preview_width"])
     full_tags = re.findall(r"<img\b[^>]*docs/assets/screenshots/[^>]+>", section)

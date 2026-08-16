@@ -1,6 +1,6 @@
 # UI 디자인 적용 범위와 검증 기준
 
-갱신 일시: `2026-08-15 20:04 KST`
+갱신 일시: `2026-08-16 10:08 KST`
 
 ## 목적
 
@@ -39,14 +39,15 @@
 
 ## README 실제 화면 캡처
 
-루트 [`README.md`](../README.md#screens)는 사용자 정보가 없는 **15개 실제 Android PNG**를 참조한다.
+루트 [`README.md`](../README.md#screens)는 전체 검증 캡처 15개 중 프로젝트를 대표하는 **3개 실제 Android PNG**만 노출한다.
 
-| 구분 | 개수 | 해상도 | 포함 화면 |
+| 구분 | 개수 | 해상도 | 용도 |
 |---|---:|---|---|
-| Alpine AI Workspace 기존 실기기 캡처 | 10 | `1080 × 2340` | 빠른 채팅, History, Assistant, Provider, Gateway, Runtime, package |
-| Alpine AI Workspace 2026-08-09 PD20 캡처 | 5 | `1080 × 2160` | first-run guide, Provider 빈 상태, Gateway 준비, Runtime 설치, terminal 명령 패널 |
+| README 대표 화면 | 3 | 원본 비율 유지 | 모드 안내, 빠른 채팅, Runtime·Linux terminal |
+| Samsung 원본 검증 캡처 | 10 | `1080 × 2340` | 기능·회귀 증거 archive |
+| PD20 원본 검증 캡처 | 5 | `1080 × 2160` | compact 화면·상태 증거 archive |
 
-원본 이미지는 `docs/assets/screenshots/`에 둔다. README는 `width="260"`만 지정해 기기별 실제 세로 비율을 보존한다. 캡처 해상도 허용 목록·파일 수·경로·중복 참조는 `scripts/verify-ui-design-contract.py`로 CI에서 검사한다.
+원본 15개는 `docs/assets/screenshots/`에 유지한다. README 대표 화면은 `width="260"`만 지정해 원본 세로 비율을 보존한다. `scripts/verify-ui-design-contract.py`는 전체 asset 수·해상도·PNG chunk와 README 대표 3개의 exact allowlist·중복·경로를 각각 검사한다.
 
 ### 캡처 제외 규칙
 
